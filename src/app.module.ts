@@ -10,11 +10,13 @@ import { VehiclesModule } from './vehicles/vehicles.module';
 import { ServicesModule } from './services/services.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
+import { BotModule } from './bot/bot.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
   imports: [
     PrismaModule,
+    BotModule,
     AuthModule,
     UsersModule,
     OrganizationsModule,
