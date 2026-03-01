@@ -85,10 +85,10 @@ export class OrdersService {
     }
 
     const servicePriceMap = new Map<string, number>(
-      services.map((s) => [s.id, Number(s.price)]),
+      services.map((s) => [s.id, Number(s.price)] as [string, number]),
     );
     const productPriceMap = new Map<string, number>(
-      productRecords.map((p) => [p.id, Number(p.sale_price)]),
+      productRecords.map((p) => [p.id, Number(p.sale_price)] as [string, number]),
     );
 
     return this.prisma.$transaction(async (tx) => {
