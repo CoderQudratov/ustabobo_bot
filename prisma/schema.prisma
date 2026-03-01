@@ -1,0 +1,166 @@
+// AVTO-PRO-SYSTEM — Prisma schema (PostgreSQL)
+// Based on TZ.md section 4) MA'LUMOTLAR BAZASI
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  boss
+  master
+  driver
+}
+
+enum OrderStatus {
+  draft
+  waiting_confirmation
+  broadcasted
+  accepted
+  delivered_by_driver
+  received_by_master
+  working
+  waiting_customer_confirmation
+  completed
+  cancelled
+}
+
+enum PaymentType {
+  cash
+  corporate_debt
+}
+
+enum OrderItemType {
+  product
+  service
+  manual_product
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  fullname      String
+  phone         String    @unique
+  username      String?
+  login         String    @unique
+  password_hash String
+  role          Role
+  tg_id         String?   @unique
+  percent_rate  Decimal   @db.Decimal(10, 4)
+  balance       Decimal   @db.Decimal(12, 2)
+  is_active     Boolean   @default(true)
+
+  ordersAsMaster Order[]     @relation("OrderMaster")
+  ordersAsDriver Order[]     @relation("OrderDriver")
+  orderEvents    OrderEvent[]
+}
+
+model Organization {
+  id             String       @id @default(uuid()) @db.Uuid
+  name           String
+  contact_person String
+  phone          String
+  payment_type   PaymentType
+  balance_due    Decimal      @db.Decimal(12, 2)
+  is_active      Boolean      @default(true)
+
+  vehicles Vehicle[]
+  orders   Order[]
+}
+
+model Vehicle {
+  id           String   @id @default(uuid()) @db.Uuid
+  org_id       String   @db.Uuid
+  plate_number String
+  model        String
+  is_active    Boolean  @default(true)
+
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Restrict)
+  orders       Order[]
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  cost_price  Decimal  @db.Decimal(12, 2)
+  sale_price  Decimal  @db.Decimal(12, 2)
+  stock_count Int
+  min_limit   Int
+  created_at  DateTime @default(now())
+
+  orderItems OrderItem[]
+}
+
+model Service {
+  id    String  @id @default(uuid()) @db.Uuid
+  name  String
+  price Decimal @db.Decimal(12, 2)
+
+  orderItems OrderItem[]
+}
+
+model Order {
+  id                 String       @id @default(uuid()) @db.Uuid
+  master_id          String       @db.Uuid
+  driver_id          String?      @db.Uuid
+  organization_id    String?      @db.Uuid
+  vehicle_id         String?      @db.Uuid
+  client_name        String
+  client_phone       String
+  car_number         String
+  car_model          String?
+  car_photo_url      String?
+  lat                Decimal?     @db.Decimal(10, 7)
+  lng                Decimal?     @db.Decimal(10, 7)
+  delivery_needed    Boolean
+  status             OrderStatus
+  total_amount       Decimal      @db.Decimal(12, 2)
+  confirm_token      String?      @db.Uuid
+  created_at         DateTime     @default(now())
+  completed_at       DateTime?
+
+  master       User          @relation("OrderMaster", fields: [master_id], references: [id], onDelete: Restrict)
+  driver       User?         @relation("OrderDriver", fields: [driver_id], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+  vehicle      Vehicle?      @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
+  orderItems   OrderItem[]
+  orderEvents  OrderEvent[]
+}
+
+model OrderItem {
+  id            String        @id @default(uuid()) @db.Uuid
+  order_id      String        @db.Uuid
+  item_type     OrderItemType
+  product_id    String?       @db.Uuid
+  service_id    String?       @db.Uuid
+  item_name     String?
+  quantity      Int
+  price_at_time Decimal       @db.Decimal(12, 2)
+
+  order   Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [product_id], references: [id], onDelete: SetNull)
+  service Service? @relation(fields: [service_id], references: [id], onDelete: SetNull)
+}
+
+model OrderEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  order_id       String   @db.Uuid
+  actor_user_id  String?  @db.Uuid
+  event_type     String
+  payload        Json?
+  created_at     DateTime @default(now())
+
+  order  Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  actor  User? @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
+}
