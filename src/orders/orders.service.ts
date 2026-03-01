@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { BroadcastProducer } from '../broadcast/broadcast-producer.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
 import { OrderStatus, OrderItemType } from '../../generated/prisma/client';
@@ -14,7 +15,10 @@ const DELIVERY_FEE = 30_000;
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly broadcastProducer: BroadcastProducer,
+  ) {}
 
 
   async createDraft(masterId: string, dto: CreateOrderDto) {
@@ -249,6 +253,11 @@ export class OrdersService {
         },
       }),
     ]);
+
+    if (order.delivery_needed && newStatus === OrderStatus.broadcasted) {
+      this.broadcastProducer.broadcastOrder(orderId);
+    }
+
     return updated;
   }
 

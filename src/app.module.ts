@@ -10,6 +10,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
 import { ServicesModule } from './services/services.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
+import { BroadcastModule } from './broadcast/broadcast.module';
 import { BotModule } from './bot/bot.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -24,6 +25,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ServicesModule,
     ProductsModule,
     OrdersModule,
+    BroadcastModule,
   ],
   controllers: [AppController],
   providers: [
