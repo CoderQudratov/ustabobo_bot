@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastProducer } from '../broadcast/broadcast-producer.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
-import { OrderStatus, OrderItemType } from '../../generated/prisma/client';
+import { OrderStatus, OrderItemType, Prisma } from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 const DELIVERY_FEE = 30_000;
 
@@ -91,9 +91,8 @@ export class OrdersService {
       productRecords.map((p) => [p.id, Number(p.sale_price)] as [string, number]),
     );
 
-    return this.prisma.$transaction(async (tx) => {
-      const prismaTx = tx as unknown as PrismaService;
-      const order = await prismaTx.order.create({
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const order = await tx.order.create({
         data: {
           master_id: masterId,
           organization_id: dto.organization_id ?? null,
@@ -120,7 +119,7 @@ export class OrdersService {
       }> = [];
 
       for (const serviceId of serviceIds) {
-        const price: number = servicePriceMap.get(serviceId) ?? 0;
+        const price = Number(servicePriceMap.get(serviceId) ?? 0);
         itemData.push({
           order_id: order.id,
           item_type: OrderItemType.service,
@@ -130,7 +129,7 @@ export class OrdersService {
         });
       }
       for (const p of products) {
-        const price: number = productPriceMap.get(p.product_id) ?? 0;
+        const price = Number(productPriceMap.get(p.product_id) ?? 0);
         itemData.push({
           order_id: order.id,
           item_type: OrderItemType.product,
@@ -145,11 +144,11 @@ export class OrdersService {
           item_type: OrderItemType.manual_product,
           item_name: mp.name,
           quantity: mp.quantity,
-          price_at_time: mp.price,
+          price_at_time: Number(mp.price),
         });
       }
 
-      await prismaTx.orderItem.createMany({
+      await tx.orderItem.createMany({
         data: itemData.map((d) => ({
           order_id: d.order_id,
           item_type: d.item_type,
@@ -157,11 +156,20 @@ export class OrdersService {
           service_id: d.service_id,
           item_name: d.item_name,
           quantity: d.quantity,
-          price_at_time: d.price_at_time,
+          price_at_time: Number(d.price_at_time),
         })),
       });
 
-      return prismaTx.order.findUnique({
+      await tx.orderEvent.create({
+        data: {
+          order_id: order.id,
+          actor_user_id: masterId,
+          event_type: 'draft_created',
+          payload: { status: OrderStatus.draft },
+        },
+      });
+
+      return tx.order.findUnique({
         where: { id: order.id },
         include: { orderItems: true },
       });

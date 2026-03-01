@@ -18,6 +18,7 @@ import { OrdersModule } from '../orders/orders.module';
         }
         return {
           token,
+          // Session must run first so Stage/wizard can use ctx.session (required for ctx.wizard.state)
           middlewares: [session()],
           include: [BotModule],
         };

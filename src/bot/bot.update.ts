@@ -5,6 +5,7 @@ import { Scenes } from 'telegraf';
 import { getMainMenuKeyboard } from './keyboards';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { OrderStatus } from '../../generated/prisma/client';
 
 @Update()
 @Injectable()
@@ -17,22 +18,35 @@ export class BotUpdate {
   @Start()
   async onStart(@Ctx() ctx: Context): Promise<void> {
     try {
+      const sceneCtx = ctx as Scenes.SceneContext<Scenes.SceneSessionData>;
+      if (sceneCtx.scene) {
+        await sceneCtx.scene.leave().catch(() => {});
+        console.log('[Bot] /start – left any active scene');
+      }
+
       const tgId = ctx.from?.id?.toString();
       if (!tgId) {
         await ctx.reply('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
         return;
       }
+
       const user = await this.prisma.user.findFirst({
         where: { tg_id: tgId, is_active: true },
       });
       if (user) {
+        console.log('[Bot] /start – already logged in, showing menu');
         await ctx.reply('Asosiy menyu', getMainMenuKeyboard()).catch(() => {});
         return;
       }
-      await (ctx as Scenes.SceneContext<Scenes.SceneSessionData>).scene.enter('auth');
-      await ctx.reply('Botga kirish uchun login kiriting:').catch(() => {});
+
+      if (sceneCtx.scene) {
+        console.log('[Bot] /start – entering auth scene (first message from scene)');
+        await sceneCtx.scene.enter('auth');
+      } else {
+        await ctx.reply('Xatolik: sessiya ishlamayapti. Qaytadan urinib ko‘ring.').catch(() => {});
+      }
     } catch (err) {
-      console.error('Start error:', err);
+      console.error('[Bot] Start error:', err);
       await ctx.reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
     }
   }
@@ -87,13 +101,22 @@ export class BotUpdate {
         return;
       }
       const { latitude: lat, longitude: lng } = location;
-      // Placeholder: find active draft order for this master and call POST /orders/:id/location with lat, lng
-      // await this.ordersService.setLocation(orderId, user.id, { lat, lng });
-      console.log(`[Bot] Location from tg_id=${tgId} (user ${user.id}): lat=${lat}, lng=${lng} – placeholder: update draft order and call location API`);
-      await ctx.reply('Lokatsiya qabul qilindi. (API ulanishi keyingi versiyada).').catch(() => {});
+
+      const draftOrder = await this.prisma.order.findFirst({
+        where: { master_id: user.id, status: OrderStatus.draft },
+        orderBy: { created_at: 'desc' },
+      });
+
+      if (!draftOrder) {
+        await ctx.reply('Aktiv draft buyurtma topilmadi. Avval yangi buyurtma yarating (WebApp).').catch(() => {});
+        return;
+      }
+
+      await this.ordersService.setLocation(draftOrder.id, user.id, { lat, lng });
+      await ctx.reply('Lokatsiya qabul qilindi. Buyurtma tasdiqlashga tayyor.').catch(() => {});
     } catch (err) {
       console.error('onLocation error:', err);
-      await ctx.reply('Xatolik yuz berdi.').catch(() => {});
+      await ctx.reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
     }
   }
 

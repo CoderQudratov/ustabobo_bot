@@ -1,5 +1,18 @@
 # Loyihani ishga tushirish va test qilish
 
+## Tez ishga tushirish (PostgreSQL + Redis allaqachon ishlayapti bo‘lsa)
+
+```bash
+cd /home/doston/avto-pro-backend
+npm run db:push
+npm run db:seed
+npm run start:dev
+```
+
+Keyin Telegram da botni oching → **/start** → login: **usta1** → parol: **admin123**.
+
+---
+
 ## Kerakli narsalar
 
 - Node.js 18+
@@ -100,7 +113,7 @@ npm run db:seed
 npm run start:dev
 ```
 
-Server odatda **http://localhost:3000** da ishlaydi.
+Server odatda **http://localhost:3000** da ishlaydi. (Prisma client avtomatik patch qilinadi — `exports is not defined` xatosi bo‘lmasligi kerak.)
 
 ---
 
