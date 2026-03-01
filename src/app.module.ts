@@ -5,10 +5,24 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { VehiclesModule } from './vehicles/vehicles.module';
+import { ServicesModule } from './services/services.module';
+import { ProductsModule } from './products/products.module';
+import { OrdersModule } from './orders/orders.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    OrganizationsModule,
+    VehiclesModule,
+    ServicesModule,
+    ProductsModule,
+    OrdersModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,
