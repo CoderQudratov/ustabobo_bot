@@ -1,13 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { AuthScene } from './auth.scene';
 import { BotUpdate } from './bot.update';
 import { PrismaModule } from '../prisma/prisma.module';
+import { OrdersModule } from '../orders/orders.module';
 
 @Module({
   imports: [
     PrismaModule,
+    forwardRef(() => OrdersModule),
     TelegrafModule.forRootAsync({
       useFactory: () => {
         const token = process.env.BOT_TOKEN;

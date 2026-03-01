@@ -12,6 +12,7 @@ import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { BroadcastModule } from './broadcast/broadcast.module';
 import { BotModule } from './bot/bot.module';
+import { AdminModule } from './admin/admin.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -26,6 +27,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     ProductsModule,
     OrdersModule,
     BroadcastModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [
