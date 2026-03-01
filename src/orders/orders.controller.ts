@@ -52,4 +52,9 @@ export class OrdersController {
   finish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     return this.ordersService.finish(id, req.user.id);
   }
+
+  @Post(':id/receive')
+  receive(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
+    return this.ordersService.receive(id, req.user.id);
+  }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,7 +10,6 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
 import { OrderStatus, OrderItemType } from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
-
 const DELIVERY_FEE = 30_000;
 
 @Injectable()
@@ -289,5 +289,180 @@ export class OrdersService {
     ]);
 
     return { confirm_token: confirmToken };
+  }
+
+  async driverAccept(orderId: string, driverId: string) {
+    const result = await this.prisma.$queryRaw<
+      Array<{ id: string }>
+    >`UPDATE "Order" SET driver_id = ${driverId}, status = 'accepted' WHERE id = ${orderId} AND status = 'broadcasted' RETURNING id`;
+    if (!result || result.length === 0) {
+      throw new ConflictException('Order already taken');
+    }
+    await this.prisma.orderEvent.create({
+      data: {
+        order_id: orderId,
+        actor_user_id: driverId,
+        event_type: 'driver_accepted',
+        payload: { driver_id: driverId },
+      },
+    });
+    return this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true, master: true },
+    });
+  }
+
+  async driverDelivered(orderId: string, driverId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.driver_id !== driverId) {
+      throw new ForbiddenException('You can only update orders you accepted');
+    }
+    if (order.status !== OrderStatus.accepted) {
+      throw new BadRequestException(
+        `Order must be in accepted status. Current status: ${order.status}`,
+      );
+    }
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.delivered_by_driver },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: driverId,
+          event_type: 'driver_delivered',
+          payload: {},
+        },
+      }),
+    ]);
+    return updated;
+  }
+
+  async receive(orderId: string, masterId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.master_id !== masterId) {
+      throw new ForbiddenException('You can only receive your own orders');
+    }
+    if (order.status !== OrderStatus.delivered_by_driver) {
+      throw new BadRequestException(
+        `Order must be in delivered_by_driver status. Current status: ${order.status}`,
+      );
+    }
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.working },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: masterId,
+          event_type: 'received_by_master',
+          payload: {},
+        },
+      }),
+    ]);
+    return updated;
+  }
+
+  async customerConfirm(token: string) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        confirm_token: token,
+        status: OrderStatus.waiting_customer_confirmation,
+      },
+      include: {
+        orderItems: true,
+        master: true,
+        driver: true,
+        organization: true,
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Invalid or expired confirmation token');
+    }
+
+    const servicesSum = order.orderItems
+      .filter((i) => i.item_type === OrderItemType.service)
+      .reduce(
+        (sum, i) => sum + Number(i.price_at_time) * i.quantity,
+        0,
+      );
+    const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
+    const masterPercent = Number(order.master.percent_rate);
+    const driverPercent = order.driver
+      ? Number(order.driver.percent_rate)
+      : 0;
+    const masterFee = (servicesSum * masterPercent) / 100;
+    const driverFee = (deliveryFee * driverPercent) / 100;
+    const totalAmount = Number(order.total_amount);
+
+    await this.prisma.$transaction(async (tx) => {
+      const prismaTx = tx as unknown as PrismaService;
+
+      await prismaTx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.completed,
+          completed_at: new Date(),
+        },
+      });
+
+      const productItems = order.orderItems.filter(
+        (i) => i.item_type === OrderItemType.product && i.product_id,
+      );
+      for (const item of productItems) {
+        if (!item.product_id) continue;
+        await prismaTx.product.update({
+          where: { id: item.product_id },
+          data: {
+            stock_count: { decrement: item.quantity },
+          },
+        });
+      }
+
+      if (order.organization_id) {
+        await prismaTx.organization.update({
+          where: { id: order.organization_id },
+          data: {
+            balance_due: { increment: totalAmount },
+          },
+        });
+      }
+
+      await prismaTx.orderEvent.create({
+        data: {
+          order_id: order.id,
+          actor_user_id: null,
+          event_type: 'customer_completed',
+          payload: {
+            master_fee: masterFee,
+            driver_fee: driverFee,
+            services_sum: servicesSum,
+            delivery_fee: deliveryFee,
+            total_amount: totalAmount,
+            organization_balance_added: order.organization_id
+              ? totalAmount
+              : null,
+          },
+        },
+      });
+    });
+
+    return this.prisma.order.findUnique({
+      where: { id: order.id },
+      include: { orderItems: true, master: true },
+    });
   }
 }
