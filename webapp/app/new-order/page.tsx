@@ -14,7 +14,7 @@ import {
 } from "@/utils/api";
 
 const MAX_INIT_RETRIES = 3;
-const RETRY_DELAY_MS = 1500;
+const RETRY_DELAY_MS = 2000;
 
 const screenStyle = {
   backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)",
@@ -39,7 +39,7 @@ function getErrorMessage(e: unknown, fallback: string): string {
 }
 
 export default function NewOrderPage() {
-  const { initData } = useTelegram();
+  const { isReady } = useTelegram();
   const [init, setInit] = useState<WebAppInitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -65,7 +65,7 @@ export default function NewOrderPage() {
     setLoading(true);
 
     const attempt = (retryCount: number): void => {
-      fetchWebAppInit(initData)
+      fetchWebAppInit()
         .then((data) => {
           setInit(data);
           setLoading(false);
@@ -77,7 +77,7 @@ export default function NewOrderPage() {
           }
           if (isNetworkError(e)) {
             setError(
-              `Backend ga ulanish xato. Tekshiring: NEXT_PUBLIC_API_URL (${getApiUrl("")}), tarmoq va CORS.`
+              `Backend ga ulanish xato. Tekshiring: ${getApiUrl("")}, tarmoq va CORS.`
             );
           } else {
             setError(getErrorMessage(e, "Init xato"));
@@ -87,11 +87,15 @@ export default function NewOrderPage() {
     };
 
     attempt(0);
-  }, [initData]);
+  }, []);
 
   useEffect(() => {
+    if (!isReady) return;
+    if (typeof window !== "undefined" && window.Telegram?.WebApp?.ready) {
+      window.Telegram.WebApp.ready();
+    }
     loadInit();
-  }, [loadInit]);
+  }, [isReady, loadInit]);
 
   const toggleService = useCallback((id: string) => {
     setSelectedServiceIds((prev) =>
@@ -159,7 +163,7 @@ export default function NewOrderPage() {
 
       setSubmitLoading(true);
       try {
-        await createOrder(payload, initData);
+        await createOrder(payload);
         if (typeof window !== "undefined" && window.Telegram?.WebApp?.close) {
           window.Telegram.WebApp.close();
         } else {
@@ -190,7 +194,6 @@ export default function NewOrderPage() {
       selectedServiceIds,
       products,
       manualProducts,
-      initData,
     ]
   );
 

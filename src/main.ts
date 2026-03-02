@@ -13,8 +13,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
     origin: [
-      'https://avtopro-doston-unique-2026.loca.lt',
-      'https://avtoproapi.loca.lt',
+      'https://avtopro-webapp-doston-x9.loca.lt',
+      'https://avtopro-api-doston-x9.loca.lt',
       'http://localhost:3001',
     ],
     credentials: true,

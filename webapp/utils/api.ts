@@ -1,26 +1,42 @@
 /**
- * Backend API — NEXT_PUBLIC_API_URL orqali ulash (masalan https://avtoproapi.loca.lt).
- * Trailing slash olib tashlanadi. O'rnatilmasa: http://localhost:3000.
+ * Backend API client. Hardcoded tunnel URL to avoid env issues; every request sends X-Telegram-Init-Data from window.Telegram.WebApp.initData.
  */
-const getBaseUrl = (): string => {
-  const url = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
-  if (url) return String(url).replace(/\/$/, "");
-  return "http://localhost:3000";
-};
+const BASE_URL = 'https://avtopro-api-doston-x9.loca.lt';
+
+function getBaseUrl(): string {
+  return BASE_URL;
+}
+
+/**
+ * Reads Telegram WebApp initData from the current window. Must be called in browser.
+ * Attached to every API request as X-Telegram-Init-Data.
+ */
+function getTelegramInitData(): string {
+  if (typeof window === 'undefined') return '';
+  return window.Telegram?.WebApp?.initData ?? '';
+}
 
 export function getApiUrl(path: string): string {
   const base = getBaseUrl();
-  const p = path.startsWith("/") ? path : `/${path}`;
+  const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
 }
 
 const defaultFetchOptions: RequestInit = {
-  mode: "cors",
-  credentials: "include",
+  mode: 'cors',
+  credentials: 'include',
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
 };
+
+function buildHeaders(initData?: string): HeadersInit {
+  const data = initData ?? getTelegramInitData();
+  return {
+    ...defaultFetchOptions.headers,
+    'X-Telegram-Init-Data': data,
+  } as HeadersInit;
+}
 
 export interface WebAppInitResponse {
   services: { id: string; name: string; price: number }[];
@@ -29,15 +45,12 @@ export interface WebAppInitResponse {
   vehicles: { id: string; org_id: string; plate_number: string; model: string | null }[];
 }
 
-export async function fetchWebAppInit(initData: string): Promise<WebAppInitResponse> {
-  const url = getApiUrl("webapp/init");
+export async function fetchWebAppInit(): Promise<WebAppInitResponse> {
+  const url = getApiUrl('webapp/init');
   const res = await fetch(url, {
     ...defaultFetchOptions,
-    method: "GET",
-    headers: {
-      ...defaultFetchOptions.headers,
-      "X-Telegram-Init-Data": initData,
-    } as HeadersInit,
+    method: 'GET',
+    headers: buildHeaders(),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -57,7 +70,7 @@ export interface CreateOrderManualProductItem {
   quantity: number;
 }
 
-/** TZ 6.2.7 — Backend POST /orders uchun payload */
+/** TZ 6.2.7 — Backend POST /orders payload */
 export interface CreateOrderPayload {
   client_name: string;
   client_phone: string;
@@ -72,18 +85,12 @@ export interface CreateOrderPayload {
   manual_products?: CreateOrderManualProductItem[];
 }
 
-export async function createOrder(
-  payload: CreateOrderPayload,
-  initData: string
-): Promise<{ id: string }> {
-  const url = getApiUrl("orders");
+export async function createOrder(payload: CreateOrderPayload): Promise<{ id: string }> {
+  const url = getApiUrl('orders');
   const res = await fetch(url, {
     ...defaultFetchOptions,
-    method: "POST",
-    headers: {
-      ...defaultFetchOptions.headers,
-      "X-Telegram-Init-Data": initData,
-    } as HeadersInit,
+    method: 'POST',
+    headers: buildHeaders(),
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
