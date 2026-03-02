@@ -14,6 +14,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   canActivate(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest();
+    if (request.method === 'OPTIONS') return true;
     if ((context.getType() as string) === 'telegraf') {
       return true;
     }

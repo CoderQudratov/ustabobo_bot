@@ -1,10 +1,12 @@
 /**
- * Backend API client. Hardcoded tunnel URL to avoid env issues; every request sends X-Telegram-Init-Data from window.Telegram.WebApp.initData.
+ * Backend API client. Uses NEXT_PUBLIC_API_URL (Cloudflare Tunnel / local); every request sends X-Telegram-Init-Data.
  */
-const BASE_URL = 'https://avtopro-api-doston-x9.loca.lt';
+const FALLBACK_BASE_URL = 'http://localhost:3000';
 
 function getBaseUrl(): string {
-  return BASE_URL;
+  const url = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_URL : undefined;
+  if (url && String(url).trim()) return String(url).replace(/\/$/, '');
+  return FALLBACK_BASE_URL;
 }
 
 /**

@@ -1,11 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Action, Ctx, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
-import { Scenes } from 'telegraf';
+import { Markup, Scenes } from 'telegraf';
 import { getMainMenuKeyboard } from './keyboards';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { OrderStatus } from '../../generated/prisma/client';
 
 @Update()
 @Injectable()
@@ -83,16 +82,9 @@ export class BotUpdate {
   @On('location')
   async onLocation(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
+      const telegramId = ctx.from?.id;
+      if (telegramId == null) {
         await ctx.reply('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
-        return;
-      }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.reply('Avval /start orqali kirish qiling.').catch(() => {});
         return;
       }
       const location = ctx.message && 'location' in ctx.message ? ctx.message.location : null;
@@ -102,21 +94,107 @@ export class BotUpdate {
       }
       const { latitude: lat, longitude: lng } = location;
 
-      const draftOrder = await this.prisma.order.findFirst({
-        where: { master_id: user.id, status: OrderStatus.draft },
-        orderBy: { created_at: 'desc' },
-      });
+      const result = await this.ordersService.addLocationToDraft(telegramId, lat, lng);
 
-      if (!draftOrder) {
+      if (!result) {
         await ctx.reply('Aktiv draft buyurtma topilmadi. Avval yangi buyurtma yarating (WebApp).').catch(() => {});
         return;
       }
 
-      await this.ordersService.setLocation(draftOrder.id, user.id, { lat, lng });
-      await ctx.reply('Lokatsiya qabul qilindi. Buyurtma tasdiqlashga tayyor.').catch(() => {});
+      const orderId = result.id;
+      const keyboard = Markup.inlineKeyboard([
+        [
+          Markup.button.callback('✅ Tasdiqlash', `confirm_order_${orderId}`),
+          Markup.button.callback('❌ Bekor qilish', `cancel_order_${orderId}`),
+        ],
+      ]);
+
+      await ctx.reply(
+        '📍 Lokatsiya qabul qilindi. Buyurtma tasdiqlashga tayyor.',
+        keyboard,
+      ).catch(() => {});
     } catch (err) {
       console.error('onLocation error:', err);
       await ctx.reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+    }
+  }
+
+  @Action(/^confirm_order_(.+)$/)
+  async onConfirmOrder(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const tgId = ctx.from?.id?.toString();
+      if (!tgId) {
+        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(/^confirm_order_(.+)$/);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
+      await this.ordersService.confirm(orderId, user.id);
+      await ctx.answerCbQuery('Tasdiqlandi!').catch(() => {});
+      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        await ctx.editMessageText('✅ Buyurtmangiz muvaffaqiyatli tasdiqlandi va haydovchilarga yuborildi!').catch(() => {});
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
+        const msg = err instanceof Error ? err.message : 'Buyurtmani tasdiqlash mumkin emas.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+          await ctx.editMessageText(`❌ ${msg}`).catch(() => {});
+        }
+        return;
+      }
+      console.error('onConfirmOrder error:', err);
+      await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+    }
+  }
+
+  @Action(/^cancel_order_(.+)$/)
+  async onCancelOrder(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const tgId = ctx.from?.id?.toString();
+      if (!tgId) {
+        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(/^cancel_order_(.+)$/);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
+      await this.ordersService.cancelOrder(orderId, user.id);
+      await ctx.answerCbQuery('Bekor qilindi.').catch(() => {});
+      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        await ctx.editMessageText('❌ Buyurtma bekor qilindi.').catch(() => {});
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
+        const msg = err instanceof Error ? err.message : 'Buyurtmani bekor qilish mumkin emas.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        return;
+      }
+      console.error('onCancelOrder error:', err);
+      await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
     }
   }
 

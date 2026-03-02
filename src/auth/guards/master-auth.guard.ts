@@ -30,6 +30,8 @@ export class MasterAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request>();
+    if (request.method === 'OPTIONS') return true;
     if ((context.getType() as string) === 'telegraf') {
       return true;
     }
@@ -40,7 +42,6 @@ export class MasterAuthGuard implements CanActivate {
     if (!isPublic) {
       return toPromise(this.jwtGuard.canActivate(context));
     }
-    const request = context.switchToHttp().getRequest<Request>();
     const bearer = request.headers.authorization;
     if (bearer?.startsWith('Bearer ')) {
       return toPromise(this.jwtGuard.canActivate(context));

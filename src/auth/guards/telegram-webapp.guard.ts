@@ -22,10 +22,11 @@ export class TelegramWebAppGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request>();
+    if (request.method === 'OPTIONS') return true;
     if ((context.getType() as string) === 'telegraf') {
       return true;
     }
-    const request = context.switchToHttp().getRequest<Request>();
     const initData = request.headers[INIT_DATA_HEADER];
     const raw =
       typeof initData === 'string'

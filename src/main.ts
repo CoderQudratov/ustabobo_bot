@@ -12,14 +12,19 @@ process.on('unhandledRejection', (reason: unknown) => {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: [
-      'https://avtopro-webapp-doston-x9.loca.lt',
-      'https://avtopro-api-doston-x9.loca.lt',
-      'http://localhost:3001',
-    ],
+    origin: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Telegram-Init-Data',
+      'Accept',
+      'Origin',
+      'Accept-Language',
+    ],
+    optionsSuccessStatus: 200,
+    preflightContinue: false,
   });
   app.useGlobalPipes(
     new ValidationPipe({

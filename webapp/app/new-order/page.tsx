@@ -164,7 +164,8 @@ export default function NewOrderPage() {
       setSubmitLoading(true);
       try {
         await createOrder(payload);
-        if (typeof window !== "undefined" && window.Telegram?.WebApp?.close) {
+        console.log("Order saved to Prisma successfully. Closing WebApp...");
+        if (typeof window !== "undefined" && window.Telegram?.WebApp) {
           window.Telegram.WebApp.close();
         } else {
           window.location.href = "/";

@@ -176,6 +176,31 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Find active draft order for master by Telegram ID, add location and move to waiting_confirmation.
+   * Used by the bot when user sends location. Returns null if no draft found.
+   */
+  async addLocationToDraft(
+    telegramId: number,
+    lat: number,
+    lon: number,
+  ): Promise<{ id: string; master_id: string } | null> {
+    const tgIdStr = String(telegramId);
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgIdStr, is_active: true },
+    });
+    if (!user) return null;
+
+    const draft = await this.prisma.order.findFirst({
+      where: { master_id: user.id, status: OrderStatus.draft },
+      orderBy: { created_at: 'desc' },
+    });
+    if (!draft) return null;
+
+    const updated = await this.setLocation(draft.id, user.id, { lat, lng });
+    return { id: updated.id, master_id: updated.master_id };
+  }
+
   async setLocation(orderId: string, masterId: string, dto: LocationDto) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -266,6 +291,40 @@ export class OrdersService {
       this.broadcastProducer.broadcastOrder(orderId);
     }
 
+    return updated;
+  }
+
+  /** Cancel order (draft or waiting_confirmation). Used by bot "Bekor qilish" button. */
+  async cancelOrder(orderId: string, masterId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.master_id !== masterId) {
+      throw new ForbiddenException('You can only cancel your own orders');
+    }
+    if (order.status !== OrderStatus.draft && order.status !== OrderStatus.waiting_confirmation) {
+      throw new BadRequestException(
+        `Order can only be cancelled in draft or waiting_confirmation. Current: ${order.status}`,
+      );
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.cancelled },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: masterId,
+          event_type: 'cancelled',
+          payload: { previous_status: order.status },
+        },
+      }),
+    ]);
     return updated;
   }
 
