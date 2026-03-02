@@ -21,6 +21,7 @@ export interface TelegramWebApp {
   expand: () => void;
   close: () => void;
   enableClosingConfirmation: () => void;
+  showAlert?: (message: string) => void;
 }
 
 declare global {

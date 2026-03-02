@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
+  Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -35,6 +38,33 @@ export class OrdersController {
   createDraft(@Req() req: Request & { user: JwtUser }, @Body() dto: CreateOrderDto) {
     const masterId = req.user.id;
     return this.ordersService.createDraft(masterId, dto);
+  }
+
+  @Get('my/:telegramId')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.master, Role.boss)
+  async getMyOrders(
+    @Param('telegramId') telegramId: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    const master = await this.ordersService.findMasterByTelegramId(telegramId);
+    if (!master || master.id !== req.user.id) {
+      throw new ForbiddenException('Access denied');
+    }
+    return this.ordersService.getMyOrders(telegramId);
+  }
+
+  @Patch(':id/cancel')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.master, Role.boss)
+  async cancelOrder(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+    @Body() body: { telegramId?: string },
+  ) {
+    return this.ordersService.cancelOrder(id, req.user.id);
   }
 
   @Post(':id/location')

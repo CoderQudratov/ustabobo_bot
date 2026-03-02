@@ -3,6 +3,7 @@ import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { AuthScene } from './auth.scene';
 import { BotUpdate } from './bot.update';
+import { BotNotifyService } from './bot-notify.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { OrdersModule } from '../orders/orders.module';
 
@@ -31,6 +32,7 @@ import { OrdersModule } from '../orders/orders.module';
       },
     }),
   ],
-  providers: [AuthScene, BotUpdate],
+  providers: [AuthScene, BotUpdate, BotNotifyService],
+  exports: [BotNotifyService],
 })
 export class BotModule {}

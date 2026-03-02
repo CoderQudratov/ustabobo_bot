@@ -208,7 +208,7 @@ export default function NewOrderPage() {
           className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#2481cc)] border-t-transparent"
           aria-hidden
         />
-        <p className="text-sm opacity-90">Ma'lumotlar yuklanmoqda...</p>
+        <p className="text-sm opacity-90">Ma&apos;lumotlar yuklanmoqda...</p>
       </div>
     );
   }

@@ -15,8 +15,10 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return API status message', () => {
+      const msg = appController.getHello();
+      expect(msg).toContain('AVTO-PRO API');
+      expect(msg).toContain('Status: OK');
     });
   });
 });

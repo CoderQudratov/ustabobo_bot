@@ -5,6 +5,7 @@ import { Markup, Scenes } from 'telegraf';
 import { getMainMenuKeyboard } from './keyboards';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { OrderStatus } from '../../generated/prisma/client';
 
 @Update()
 @Injectable()
@@ -92,16 +93,41 @@ export class BotUpdate {
         await ctx.reply('Lokatsiya olinmadi.').catch(() => {});
         return;
       }
-      const { latitude: lat, longitude: lng } = location;
+      const tgIdStr = String(telegramId);
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgIdStr, is_active: true },
+      });
+      if (!user) {
+        await ctx.reply('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
 
-      const result = await this.ordersService.addLocationToDraft(telegramId, lat, lng);
+      const draft = await this.prisma.order.findFirst({
+        where: { master_id: user.id, status: OrderStatus.draft },
+        orderBy: { created_at: 'desc' },
+      });
 
-      if (!result) {
+      if (!draft) {
         await ctx.reply('Aktiv draft buyurtma topilmadi. Avval yangi buyurtma yarating (WebApp).').catch(() => {});
         return;
       }
 
+      if (!draft.delivery_needed) {
+        await ctx.reply(
+          "Bu buyurtma uchun yetkazib berish belgilanmagan. Iltimos, buyurtmani tasdiqlang.",
+        ).catch(() => {});
+        return;
+      }
+
+      const { latitude: lat, longitude: lng } = location;
+      const result = await this.ordersService.addLocationToDraft(telegramId, lat, lng);
+      if (!result) {
+        await ctx.reply('Xatolik: lokatsiya saqlanmadi.').catch(() => {});
+        return;
+      }
+
       const orderId = result.id;
+      const totalFormatted = result.total_amount.toLocaleString('uz-UZ');
       const keyboard = Markup.inlineKeyboard([
         [
           Markup.button.callback('✅ Tasdiqlash', `confirm_order_${orderId}`),
@@ -110,7 +136,7 @@ export class BotUpdate {
       ]);
 
       await ctx.reply(
-        '📍 Lokatsiya qabul qilindi. Buyurtma tasdiqlashga tayyor.',
+        `📍 Lokatsiya qabul qilindi.\n\nJami summa: ${totalFormatted} so'm. Tasdiqlaysizmi?`,
         keyboard,
       ).catch(() => {});
     } catch (err) {
@@ -144,7 +170,7 @@ export class BotUpdate {
       await this.ordersService.confirm(orderId, user.id);
       await ctx.answerCbQuery('Tasdiqlandi!').catch(() => {});
       if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText('✅ Buyurtmangiz muvaffaqiyatli tasdiqlandi va haydovchilarga yuborildi!').catch(() => {});
+        await ctx.editMessageText('✅ Buyurtmangiz tasdiqlandi!').catch(() => {});
       }
     } catch (err) {
       if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {

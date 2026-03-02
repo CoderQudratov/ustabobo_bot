@@ -101,3 +101,60 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ id: st
   }
   return res.json();
 }
+
+/** Order item with product/service (TZ OrderItem + relations) */
+export interface MyOrderItem {
+  id: string;
+  order_id: string;
+  item_type: string;
+  product_id: string | null;
+  service_id: string | null;
+  item_name: string | null;
+  quantity: number;
+  price_at_time: number;
+  product: { id: string; name: string } | null;
+  service: { id: string; name: string } | null;
+}
+
+/** Order for "My Orders" list (TZ Order + items) */
+export interface MyOrder {
+  id: string;
+  master_id: string;
+  client_name: string;
+  client_phone: string;
+  car_number: string;
+  car_model: string | null;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  orderItems: MyOrderItem[];
+}
+
+export async function fetchMyOrders(telegramId: string | number): Promise<MyOrder[]> {
+  const id = typeof telegramId === 'number' ? String(telegramId) : telegramId;
+  const url = getApiUrl(`orders/my/${encodeURIComponent(id)}`);
+  const res = await fetch(url, {
+    ...defaultFetchOptions,
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function cancelOrderApi(orderId: string): Promise<void> {
+  const url = getApiUrl(`orders/${encodeURIComponent(orderId)}/cancel`);
+  const res = await fetch(url, {
+    ...defaultFetchOptions,
+    method: 'PATCH',
+    headers: buildHeaders(),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+}

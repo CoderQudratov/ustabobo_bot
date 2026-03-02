@@ -11,10 +11,11 @@ function getWebAppUrl(): string {
 }
 
 export function getMainMenuKeyboard() {
+  const baseUrl = getWebAppUrl();
   return Markup.keyboard(
     [
-      Markup.button.webApp('➕ Yangi buyurtma', getWebAppUrl()),
-      '📋 Buyurtmalarim',
+      Markup.button.webApp('➕ Yangi buyurtma', baseUrl),
+      Markup.button.webApp('📦 Mening buyurtmalarim', `${baseUrl.replace(/\/$/, '')}/my-orders`),
       '📍 Lokatsiya yuborish',
       '📦 Qabul qildim',
       '🔵 Ishni yakunlash',

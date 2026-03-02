@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastProducer } from '../broadcast/broadcast-producer.service';
+import { BotNotifyService } from '../bot/bot-notify.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
 import { OrderStatus, OrderItemType, Prisma } from '../../generated/prisma/client';
@@ -18,6 +19,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly broadcastProducer: BroadcastProducer,
+    private readonly botNotify: BotNotifyService,
   ) {}
 
 
@@ -91,7 +93,7 @@ export class OrdersService {
       productRecords.map((p) => [p.id, Number(p.sale_price)] as [string, number]),
     );
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const order = await tx.order.create({
         data: {
           master_id: masterId,
@@ -174,6 +176,17 @@ export class OrdersService {
         include: { orderItems: true },
       });
     });
+    // Proactive bot message: branch on delivery_needed (ask location vs confirm keyboard)
+    if (created) {
+      this.botNotify
+        .sendMessageAfterDraft({
+          id: created.id,
+          master_id: created.master_id,
+          delivery_needed: created.delivery_needed,
+        })
+        .catch((err) => console.error('[OrdersService] sendMessageAfterDraft:', err));
+    }
+    return created!;
   }
 
   /**
@@ -184,7 +197,7 @@ export class OrdersService {
     telegramId: number,
     lat: number,
     lon: number,
-  ): Promise<{ id: string; master_id: string } | null> {
+  ): Promise<{ id: string; master_id: string; total_amount: number } | null> {
     const tgIdStr = String(telegramId);
     const user = await this.prisma.user.findFirst({
       where: { tg_id: tgIdStr, is_active: true },
@@ -197,8 +210,47 @@ export class OrdersService {
     });
     if (!draft) return null;
 
-    const updated = await this.setLocation(draft.id, user.id, { lat, lng });
-    return { id: updated.id, master_id: updated.master_id };
+    const updated = await this.setLocation(draft.id, user.id, { lat, lng: lon });
+    const totalAmount = Number(updated.total_amount);
+    return { id: updated.id, master_id: updated.master_id, total_amount: totalAmount };
+  }
+
+  /** Resolve master id from Telegram ID (Prisma tg_id is string; handle number/BigInt from client). */
+  async findMasterByTelegramId(telegramId: string | number): Promise<{ id: string } | null> {
+    const tgIdStr = typeof telegramId === 'number' || typeof telegramId === 'bigint'
+      ? String(telegramId)
+      : String(telegramId ?? '').trim();
+    if (!tgIdStr) return null;
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgIdStr, is_active: true },
+      select: { id: true },
+    });
+    return user ? { id: user.id } : null;
+  }
+
+  /** Fetch all orders for master by Telegram ID (for "My Orders" WebApp). Order by created_at DESC. */
+  async getMyOrders(telegramId: string | number) {
+    const master = await this.findMasterByTelegramId(telegramId);
+    if (!master) return [];
+    const tgIdStr = typeof telegramId === 'number' || typeof telegramId === 'bigint'
+      ? String(telegramId)
+      : String(telegramId ?? '').trim();
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgIdStr, is_active: true },
+    });
+    if (!user) return [];
+    return this.prisma.order.findMany({
+      where: { master_id: user.id },
+      orderBy: { created_at: 'desc' },
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+            service: true,
+          },
+        },
+      },
+    });
   }
 
   async setLocation(orderId: string, masterId: string, dto: LocationDto) {
@@ -251,6 +303,7 @@ export class OrdersService {
   async confirm(orderId: string, masterId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: { orderItems: true },
     });
     if (!order) {
       throw new NotFoundException(`Order with id "${orderId}" not found`);
@@ -258,9 +311,9 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only confirm your own orders');
     }
-    if (order.status !== OrderStatus.waiting_confirmation) {
+    if (order.status !== OrderStatus.waiting_confirmation && order.status !== OrderStatus.draft) {
       throw new BadRequestException(
-        `Order must be in waiting_confirmation status. Current status: ${order.status}`,
+        `Order must be in waiting_confirmation or draft status. Current status: ${order.status}`,
       );
     }
 
@@ -268,10 +321,22 @@ export class OrdersService {
       ? OrderStatus.broadcasted
       : OrderStatus.working;
 
+    // When confirming from draft (no location), total_amount may be 0 — compute from items
+    let totalAmount = Number(order.total_amount);
+    if (order.status === OrderStatus.draft && totalAmount === 0 && order.orderItems?.length) {
+      totalAmount = order.orderItems.reduce(
+        (sum, item) => sum + Number(item.price_at_time) * item.quantity,
+        0,
+      );
+      if (order.delivery_needed) {
+        totalAmount += DELIVERY_FEE;
+      }
+    }
+
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({
         where: { id: orderId },
-        data: { status: newStatus },
+        data: { status: newStatus, total_amount: totalAmount },
       }),
       this.prisma.orderEvent.create({
         data: {
@@ -307,7 +372,7 @@ export class OrdersService {
     }
     if (order.status !== OrderStatus.draft && order.status !== OrderStatus.waiting_confirmation) {
       throw new BadRequestException(
-        `Order can only be cancelled in draft or waiting_confirmation. Current: ${order.status}`,
+        "Usta yo'lga chiqqan yoki buyurtma yopilgan, bekor qilib bo'lmaydi",
       );
     }
 
