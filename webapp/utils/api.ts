@@ -29,15 +29,32 @@ const defaultFetchOptions: RequestInit = {
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
+    'bypass-tunnel-reminder': 'true',
+    'ngrok-skip-browser-warning': 'true',
   },
 };
 
-function buildHeaders(initData?: string): HeadersInit {
-  const data = initData ?? getTelegramInitData();
-  return {
-    ...defaultFetchOptions.headers,
-    'X-Telegram-Init-Data': data,
-  } as HeadersInit;
+/**
+ * Builds request headers. Always includes X-Telegram-Init-Data when available
+ * (window.Telegram.WebApp.initData when opened from Telegram). Call at request time.
+ */
+function buildHeaders(initDataOverride?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'bypass-tunnel-reminder': 'true',
+    'ngrok-skip-browser-warning': 'true',
+  };
+
+  const initData =
+    initDataOverride ??
+    (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData
+      ? window.Telegram.WebApp.initData
+      : '');
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
+  }
+
+  return headers as HeadersInit;
 }
 
 export interface WebAppInitResponse {

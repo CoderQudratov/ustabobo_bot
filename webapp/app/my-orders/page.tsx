@@ -74,23 +74,13 @@ function formatPrice(amount: number): string {
 }
 
 export default function MyOrdersPage() {
-  const { isReady } = useTelegram();
-  const [telegramId, setTelegramId] = useState<number | null>(null);
+  const { isReady, user: telegramUser } = useTelegram();
+  const telegramId = telegramUser?.id ?? null;
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const uid = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    if (uid != null) {
-      setTelegramId(uid);
-    } else {
-      setLoading(false);
-    }
-  }, [isReady]);
 
   const loadOrders = useCallback(async () => {
     if (telegramId == null) return;
@@ -112,10 +102,10 @@ export default function MyOrdersPage() {
     loadOrders();
   }, [telegramId, loadOrders]);
 
+  // When in Telegram but no user (e.g. test mode), stop loading so we show "open from bot" message
   useEffect(() => {
-    if (!isReady || typeof window === "undefined") return;
-    window.Telegram?.WebApp?.ready?.();
-  }, [isReady]);
+    if (isReady && telegramId == null) setLoading(false);
+  }, [isReady, telegramId]);
 
   const handleCancel = async (orderId: string) => {
     setCancellingId(orderId);

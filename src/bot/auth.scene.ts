@@ -138,6 +138,7 @@ export class AuthScene {
       });
       console.log(AUTH_LOG, 'Login success, tg_id saved for user:', user.id);
       await ctx.scene.leave().catch(() => {});
+      // Menu built from process.env.WEBAPP_URL at reply time — no stale links
       await ctx.reply('Muvaffaqiyatli kirildi!', getMainMenuKeyboard()).catch(() => {});
     } catch (err) {
       console.error(AUTH_LOG, 'Step 1 validate error:', err);

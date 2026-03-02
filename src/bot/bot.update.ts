@@ -35,6 +35,7 @@ export class BotUpdate {
       });
       if (user) {
         console.log('[Bot] /start – already logged in, showing menu');
+        // Menu is built fresh from process.env each time — no cached WebApp URLs
         await ctx.reply('Asosiy menyu', getMainMenuKeyboard()).catch(() => {});
         return;
       }
