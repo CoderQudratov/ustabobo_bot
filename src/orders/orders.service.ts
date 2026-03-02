@@ -228,7 +228,7 @@ export class OrdersService {
     return user ? { id: user.id } : null;
   }
 
-  /** Fetch all orders for master by Telegram ID (for "My Orders" WebApp). Order by created_at DESC. */
+  /** Fetch all orders for master by Telegram ID (for "My Orders" WebApp). Order by created_at DESC. Includes services, parts, master and driver. */
   async getMyOrders(telegramId: string | number) {
     const master = await this.findMasterByTelegramId(telegramId);
     if (!master) return [];
@@ -243,6 +243,8 @@ export class OrdersService {
       where: { master_id: user.id },
       orderBy: { created_at: 'desc' },
       include: {
+        master: { select: { id: true, fullname: true, login: true } },
+        driver: { select: { id: true, fullname: true } },
         orderItems: {
           include: {
             product: true,
@@ -311,6 +313,7 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only confirm your own orders');
     }
+    // TZ flow: allow draft -> waiting_confirmation (via location) and draft/waiting_confirmation -> broadcasted|working (confirm)
     if (order.status !== OrderStatus.waiting_confirmation && order.status !== OrderStatus.draft) {
       throw new BadRequestException(
         `Order must be in waiting_confirmation or draft status. Current status: ${order.status}`,
@@ -403,6 +406,7 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only finish your own orders');
     }
+    // TZ §4.1: Finish only when status is working (usta ishni yakunladi → waiting_customer_confirmation)
     if (order.status !== OrderStatus.working) {
       throw new BadRequestException(
         `Order must be in working status. Current status: ${order.status}`,
@@ -430,6 +434,14 @@ export class OrdersService {
     ]);
 
     return { confirm_token: confirmToken };
+  }
+
+  /**
+   * Deep-link confirmation helper for bot (/start conf_UUID).
+   * Delegates to customerConfirm, which implements TZ §§12–13 (stock + finance in $transaction).
+   */
+  async confirmByToken(token: string) {
+    return this.customerConfirm(token);
   }
 
   async driverAccept(orderId: string, driverId: string) {

@@ -35,9 +35,7 @@ export class TelegramWebAppGuard implements CanActivate {
           ? initData[0]
           : undefined;
     if (!raw?.trim()) {
-      throw new UnauthorizedException(
-        'X-Telegram-Init-Data header is required. Open the app from Telegram.',
-      );
+      throw new UnauthorizedException('Telegram orqali kiring');
     }
     const { tgId } = this.authService.validateTelegramInitData(raw);
     const user = await this.authService.getMasterByTgId(tgId);

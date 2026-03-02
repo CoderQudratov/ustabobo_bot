@@ -23,17 +23,16 @@ function getWebAppBaseUrl(): string {
 }
 
 /**
- * Master menu keyboard per TZ §6.1. Uses strict WebApp button type only (no url buttons).
- * URLs are built from process.env.WEBAPP_URL on every call — no cached/stale links.
+ * Master menu keyboard per TZ §6.1. NEVER caches URLs — reads process.env.WEBAPP_URL on every call.
+ * Uses ONLY Markup.button.webApp (never Markup.button.url) so Telegram injects initData.
+ * Both buttons point to base WEBAPP_URL (unified dashboard at /); no hardcoded paths.
  */
 export function getMainMenuKeyboard() {
   const baseUrl = getWebAppBaseUrl();
-  const newOrderUrl = `${baseUrl}/new-order`;
-  const myOrdersUrl = `${baseUrl}/my-orders`;
 
   return Markup.keyboard([
-    [Markup.button.webApp('➕ Yangi buyurtma', newOrderUrl)],
-    [Markup.button.webApp('📋 Buyurtmalarim', myOrdersUrl)],
+    [Markup.button.webApp('➕ Yangi buyurtma', baseUrl)],
+    [Markup.button.webApp('📦 Mening buyurtmalarim', baseUrl)],
     [Markup.button.locationRequest('📍 Lokatsiya yuborish')],
     ['📦 Qabul qildim'],
     ['🔵 Ishni yakunlash'],

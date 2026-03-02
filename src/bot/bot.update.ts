@@ -7,6 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus } from '../../generated/prisma/client';
 
+const DELIVERY_FEE = 30_000;
+
 @Update()
 @Injectable()
 export class BotUpdate {
@@ -22,6 +24,43 @@ export class BotUpdate {
       if (sceneCtx.scene) {
         await sceneCtx.scene.leave().catch(() => {});
         console.log('[Bot] /start – left any active scene');
+      }
+
+      // Deep link: /start conf_UUID (customer confirmation, TZ §§10–11)
+      const payload = (ctx as any).startPayload as string | undefined;
+      if (payload && payload.startsWith('conf_')) {
+        const token = payload.slice('conf_'.length);
+        if (!token) {
+          await ctx.reply('Noto‘g‘ri tasdiqlash linki.').catch(() => {});
+          return;
+        }
+        try {
+          // TZ §§11–13: customer confirmation must complete order, reduce stock, and apply finance in $transaction.
+          const order = await this.ordersService.customerConfirm(token);
+          await ctx.reply('✅ Xizmat muvaffaqiyatli tasdiqlandi! Rahmat.').catch(() => {});
+
+          if (order?.master?.id) {
+            const master = await this.prisma.user.findUnique({
+              where: { id: order.master.id },
+            });
+            if (master?.tg_id) {
+              await ctx.telegram
+                .sendMessage(
+                  master.tg_id,
+                  `🔔 Buyurtma #${order.id} mijoz tomonidan tasdiqlandi va yopildi.`,
+                )
+                .catch(() => {});
+            }
+          }
+        } catch (err) {
+          if (err instanceof NotFoundException) {
+            await ctx.reply('Tasdiqlash tokeni eskirgan yoki noto‘g‘ri.').catch(() => {});
+          } else {
+            console.error('[Bot] conf_ start error:', err);
+            await ctx.reply('Tasdiqlash jarayonida xatolik yuz berdi.').catch(() => {});
+          }
+        }
+        return;
       }
 
       const tgId = ctx.from?.id?.toString();
@@ -128,7 +167,28 @@ export class BotUpdate {
       }
 
       const orderId = result.id;
-      const totalFormatted = result.total_amount.toLocaleString('uz-UZ');
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: { orderItems: true },
+      });
+      if (!order) {
+        await ctx.reply('Xatolik: buyurtma topilmadi.').catch(() => {});
+        return;
+      }
+
+      const servicesSum = order.orderItems
+        .filter((i) => i.item_type === 'service')
+        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
+      const productsSum = order.orderItems
+        .filter((i) => i.item_type === 'product')
+        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
+      const manualSum = order.orderItems
+        .filter((i) => i.item_type === 'manual_product')
+        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
+
+      const itemsTotal = servicesSum + productsSum + manualSum;
+      const total = itemsTotal + (order.delivery_needed ? DELIVERY_FEE : 0);
+      const totalFormatted = total.toLocaleString('uz-UZ');
       const keyboard = Markup.inlineKeyboard([
         [
           Markup.button.callback('✅ Tasdiqlash', `confirm_order_${orderId}`),
@@ -137,7 +197,7 @@ export class BotUpdate {
       ]);
 
       await ctx.reply(
-        `📍 Lokatsiya qabul qilindi.\n\nJami summa: ${totalFormatted} so'm. Tasdiqlaysizmi?`,
+        `📝 Buyurtma ma'lumotlari qabul qilindi.\n\n💰 Jami summa: ${totalFormatted} so'm\n\nTasdiqlaysizmi?`,
         keyboard,
       ).catch(() => {});
     } catch (err) {

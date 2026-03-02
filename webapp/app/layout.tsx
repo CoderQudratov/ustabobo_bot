@@ -20,6 +20,7 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
+        {/* TelegramProvider calls window.Telegram.WebApp.ready() on mount */}
         <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>

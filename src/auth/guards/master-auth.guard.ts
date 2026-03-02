@@ -57,8 +57,6 @@ export class MasterAuthGuard implements CanActivate {
     if (hasInitData) {
       return toPromise(this.telegramGuard.canActivate(context));
     }
-    throw new UnauthorizedException(
-      'Authorization Bearer token or X-Telegram-Init-Data header required',
-    );
+    throw new UnauthorizedException('Telegram orqali kiring');
   }
 }

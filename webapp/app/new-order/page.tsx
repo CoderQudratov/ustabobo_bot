@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTelegram } from "@/hooks/useTelegram";
 import {
   fetchWebAppInit,
@@ -40,6 +41,7 @@ function getErrorMessage(e: unknown, fallback: string): string {
 
 export default function NewOrderPage() {
   const { isReady } = useTelegram();
+  const router = useRouter();
   const [init, setInit] = useState<WebAppInitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -59,6 +61,17 @@ export default function NewOrderPage() {
   const [carPhotoUrl, setCarPhotoUrl] = useState("");
 
   const vehiclesOfOrg = init?.vehicles.filter((v) => v.org_id === orgId) ?? [];
+
+  const [productQuery, setProductQuery] = useState("");
+  const [showProducts, setShowProducts] = useState(false);
+
+  const filteredProducts = useMemo(() => {
+    const list = init?.products ?? [];
+    if (!showProducts) return [];
+    const q = productQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((p) => p.name.toLowerCase().includes(q));
+  }, [init?.products, productQuery, showProducts]);
 
   const loadInit = useCallback(() => {
     setError(null);
@@ -164,12 +177,26 @@ export default function NewOrderPage() {
       setSubmitLoading(true);
       try {
         await createOrder(payload);
-        console.log("Order saved to Prisma successfully. Closing WebApp...");
-        if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-          window.Telegram.WebApp.close();
-        } else {
-          window.location.href = "/";
+        // FORM RESET (TZ §6): clear all inputs/states after successful save
+        setClientName("");
+        setClientPhone("");
+        setCarNumber("");
+        setCarModel("");
+        setIsOrgVehicle(false);
+        setOrgId("");
+        setVehicleId("");
+        setSelectedServiceIds([]);
+        setProducts([]);
+        setManualProducts([]);
+        setDeliveryNeeded(false);
+        setCarPhotoUrl("");
+        setProductQuery("");
+        setShowProducts(false);
+
+        if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+          window.Telegram.WebApp.showAlert("Buyurtma saqlandi!");
         }
+        router.push("/");
       } catch (err) {
         if (isNetworkError(err)) {
           setError(
@@ -214,236 +241,299 @@ export default function NewOrderPage() {
   }
 
   return (
-    <div className="min-h-screen p-6 pb-24" style={screenStyle}>
-      <div className="mb-6 flex items-center gap-4">
+    <div className="min-h-screen pb-24" style={screenStyle}>
+      <div className="sticky top-0 z-20 flex items-center gap-4 bg-[color:var(--tg-theme-bg-color,#1a1a1a)]/95 px-6 py-4 backdrop-blur">
         <Link
           href="/"
           className="rounded-xl px-3 py-2 text-sm font-medium"
           style={btnStyle}
         >
-          ← Orqaga
+          ⬅️ Orqaga
         </Link>
         <h1 className="text-lg font-semibold">Yangi buyurtma</h1>
       </div>
 
-      {error && (
-        <div
-          className="mb-4 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400"
-        >
-          {error}
-          {!init && (
-            <button
-              type="button"
-              onClick={loadInit}
-              className="ml-2 underline focus:outline-none"
-            >
-              Qayta urinish
-            </button>
-          )}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.1 Mijoz ma&apos;lumotlari
-          </h2>
-          <div className="space-y-3">
-            <input
-              type="text"
-              placeholder="Mijoz ismi/familiya *"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-              required
-            />
-            <input
-              type="tel"
-              placeholder="Telefon *"
-              value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Mashina raqami *"
-              value={carNumber}
-              onChange={(e) => setCarNumber(e.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Mashina modeli (ixtiyoriy)"
-              value={carModel}
-              onChange={(e) => setCarModel(e.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-            />
+      <div className="p-6 space-y-6">
+        {error && (
+          <div className="mb-2 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+            {error}
+            {!init && (
+              <button
+                type="button"
+                onClick={loadInit}
+                className="ml-2 underline focus:outline-none"
+              >
+                Qayta urinish
+              </button>
+            )}
           </div>
-        </section>
+        )}
 
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.2 Tashkilot mashinasi
-          </h2>
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={isOrgVehicle}
-              onChange={(e) => {
-                setIsOrgVehicle(e.target.checked);
-                if (!e.target.checked) {
-                  setOrgId("");
-                  setVehicleId("");
-                }
-              }}
-              className="h-5 w-5 rounded"
-            />
-            <span>Tashkilot mashinasi</span>
-          </label>
-          {isOrgVehicle && (
-            <div className="mt-3 space-y-3">
-              <select
-                value={orgId}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* 6.2.1 Mijoz ma'lumotlari */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.1 Mijoz ma&apos;lumotlari
+            </h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Mijoz ismi/familiya *"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                required
+              />
+              <input
+                type="tel"
+                placeholder="Telefon *"
+                value={clientPhone}
+                onChange={(e) => setClientPhone(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Mashina raqami *"
+                value={carNumber}
+                onChange={(e) => setCarNumber(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Mashina modeli (ixtiyoriy)"
+                value={carModel}
+                onChange={(e) => setCarModel(e.target.value)}
+                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+              />
+            </div>
+          </section>
+
+          {/* 6.2.2 Tashkilot mashinasi */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.2 Tashkilot mashinasi
+            </h2>
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={isOrgVehicle}
                 onChange={(e) => {
-                  setOrgId(e.target.value);
-                  setVehicleId("");
+                  setIsOrgVehicle(e.target.checked);
+                  if (!e.target.checked) {
+                    setOrgId("");
+                    setVehicleId("");
+                  }
+                }}
+                className="h-5 w-5 rounded"
+              />
+              <span>Tashkilot mashinasi</span>
+            </label>
+            {isOrgVehicle && (
+              <div className="mt-3 space-y-3">
+                <select
+                  value={orgId}
+                  onChange={(e) => {
+                    setOrgId(e.target.value);
+                    setVehicleId("");
+                  }}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                >
+                  <option value="">Tashkilotni tanlang</option>
+                  {init?.organizations.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={vehicleId}
+                  onChange={(e) => setVehicleId(e.target.value)}
+                  disabled={!orgId}
+                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)] disabled:opacity-50"
+                >
+                  <option value="">Mashinani tanlang</option>
+                  {vehiclesOfOrg.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plate_number} {v.model ? `— ${v.model}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </section>
+
+          {/* 6.2.3 Xizmatlar */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.3 Xizmatlar
+            </h2>
+            <div className="space-y-2">
+              {init?.services?.map((s) => (
+                <label key={s.id} className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedServiceIds.includes(s.id)}
+                    onChange={() => toggleService(s.id)}
+                    className="h-5 w-5 rounded"
+                  />
+                  <span>
+                    {s.name} — {s.price.toLocaleString()} so&apos;m
+                  </span>
+                </label>
+              ))}
+              {init?.services?.length === 0 && (
+                <p className="text-sm opacity-70">Xizmatlar ro&apos;yxati bo&apos;sh</p>
+              )}
+            </div>
+          </section>
+
+          {/* 6.2.4 Zapchastlar (ombor) */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.4 Zapchastlar (ombor)
+            </h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="🔍 Zapchast qidirish..."
+                value={productQuery}
+                onChange={(e) => {
+                  setProductQuery(e.target.value);
+                  setShowProducts(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === " ") {
+                    setShowProducts(true);
+                  }
                 }}
                 className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-              >
-                <option value="">Tashkilotni tanlang</option>
-                {init?.organizations.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                disabled={!orgId}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)] disabled:opacity-50"
-              >
-                <option value="">Mashinani tanlang</option>
-                {vehiclesOfOrg.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.plate_number} {v.model ? `— ${v.model}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.3 Xizmatlar
-          </h2>
-          <div className="space-y-2">
-            {init?.services?.map((s) => (
-              <label key={s.id} className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedServiceIds.includes(s.id)}
-                  onChange={() => toggleService(s.id)}
-                  className="h-5 w-5 rounded"
-                />
-                <span>
-                  {s.name} — {s.price.toLocaleString()} so&apos;m
-                </span>
-              </label>
-            ))}
-            {init?.services?.length === 0 && (
-              <p className="text-sm opacity-70">Xizmatlar ro&apos;yxati bo&apos;sh</p>
-            )}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.4 Zapchastlar (ombor)
-          </h2>
-          <div className="space-y-2">
-            {init?.products?.map((p) => (
-              <ProductRow
-                key={p.id}
-                name={p.name}
-                salePrice={p.sale_price}
-                stockCount={p.stock_count}
-                quantity={products.find((x) => x.product_id === p.id)?.quantity ?? 0}
-                onQuantityChange={(q) => addProduct(p.id, q)}
               />
-            ))}
-            {init?.products?.length === 0 && (
-              <p className="text-sm opacity-70">Omborda mahsulot yo&apos;q</p>
-            )}
-          </div>
-        </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.4 Qo&apos;lda zapchast
-          </h2>
-          <ManualProductForm onAdd={addManualProduct} />
-          <ul className="mt-2 space-y-1">
-            {manualProducts.map((mp, i) => (
-              <li
-                key={i}
-                className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm"
-              >
-                <span>
-                  {mp.name} × {mp.quantity} — {mp.price * mp.quantity} so&apos;m
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeManualProduct(i)}
-                  className="text-red-400"
+              {showProducts && (
+                <div className="space-y-2">
+                  {filteredProducts.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          <p className="text-xs opacity-80">
+                            {p.sale_price.toLocaleString()} so&apos;m · qoldiq: {p.stock_count}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg px-3 py-2 text-xs font-medium"
+                          style={btnStyle}
+                          onClick={() => addProduct(p.id, Math.max(1, products.find((x) => x.product_id === p.id)?.quantity ?? 0) || 1)}
+                        >
+                          Tanlash
+                        </button>
+                      </div>
+
+                      {products.find((x) => x.product_id === p.id) && (
+                        <div className="mt-2">
+                          <ProductRow
+                            name={p.name}
+                            salePrice={p.sale_price}
+                            stockCount={p.stock_count}
+                            quantity={products.find((x) => x.product_id === p.id)?.quantity ?? 0}
+                            onQuantityChange={(q) => addProduct(p.id, q)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {filteredProducts.length === 0 && (
+                    <p className="text-sm opacity-70">Hech narsa topilmadi</p>
+                  )}
+                </div>
+              )}
+
+              {!showProducts && (
+                <p className="text-sm opacity-70">
+                  Qidiruvga yozing yoki SPACE bosing — zapchastlar chiqadi.
+                </p>
+              )}
+
+              {(init?.products?.length ?? 0) === 0 && (
+                <p className="text-sm opacity-70">Omborda mahsulot yo&apos;q</p>
+              )}
+            </div>
+          </section>
+
+          {/* 6.2.4 Qo'lda zapchast */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.4 Qo&apos;lda zapchast
+            </h2>
+            <ManualProductForm onAdd={addManualProduct} />
+            <ul className="mt-2 space-y-1">
+              {manualProducts.map((mp, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm"
                 >
-                  O&apos;chirish
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+                  <span>
+                    {mp.name} × {mp.quantity} — {mp.price * mp.quantity} so&apos;m
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeManualProduct(i)}
+                    className="text-red-400"
+                  >
+                    O&apos;chirish
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.5 Mashina rasmi
-          </h2>
-          <input
-            type="url"
-            placeholder="Rasm URL (keyincha kamera qo&#39;shiladi)"
-            value={carPhotoUrl}
-            onChange={(e) => setCarPhotoUrl(e.target.value)}
-            className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
-          />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-80">
-            6.2.6 Dostavka
-          </h2>
-          <label className="flex items-center gap-3">
+          {/* 6.2.5 Mashina rasmi */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.5 Mashina rasmi
+            </h2>
             <input
-              type="checkbox"
-              checked={deliveryNeeded}
-              onChange={(e) => setDeliveryNeeded(e.target.checked)}
-              className="h-5 w-5 rounded"
+              type="url"
+              placeholder="Rasm URL (keyincha kamera qo'shiladi)"
+              value={carPhotoUrl}
+              onChange={(e) => setCarPhotoUrl(e.target.value)}
+              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
             />
-            <span>Dostavka kerak</span>
-          </label>
-        </section>
+          </section>
 
-        <button
-          type="submit"
-          disabled={submitLoading}
-          className="w-full rounded-2xl py-4 text-lg font-medium disabled:opacity-70"
-          style={btnStyle}
-        >
-          {submitLoading ? "Saqlanmoqda..." : "6.2.7 Saqlash"}
-        </button>
-      </form>
+          {/* 6.2.6 Dostavka */}
+          <section>
+            <h2 className="mb-3 text-sm font-medium opacity-80">
+              6.2.6 Dostavka
+            </h2>
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={deliveryNeeded}
+                onChange={(e) => setDeliveryNeeded(e.target.checked)}
+                className="h-5 w-5 rounded"
+              />
+              <span>Dostavka kerak</span>
+            </label>
+          </section>
+
+          <button
+            type="submit"
+            disabled={submitLoading}
+            className="w-full rounded-2xl py-4 text-lg font-medium disabled:opacity-70"
+            style={btnStyle}
+          >
+            {submitLoading ? "Saqlanmoqda..." : "6.2.7 Saqlash"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -543,3 +633,4 @@ function ManualProductForm({
     </div>
   );
 }
+

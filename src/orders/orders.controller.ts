@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
   Get,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
@@ -86,14 +88,29 @@ export class OrdersController {
   }
 
   @Post(':id/finish')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.master, Role.boss)
-  finish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
-    return this.ordersService.finish(id, req.user.id);
+  async finish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
+    const result = await this.ordersService.finish(id, req.user.id);
+    const token = result?.confirm_token;
+    if (!token) {
+      throw new BadRequestException('Tasdiqlash tokeni yaratilmadi');
+    }
+    const username = String(process.env.TELEGRAM_BOT_USERNAME ?? '').trim();
+    if (!username) {
+      throw new InternalServerErrorException(
+        'Tizim sozlanmagan: .env faylida TELEGRAM_BOT_USERNAME kiritilmagan. ' +
+          'Developer: TELEGRAM_BOT_USERNAME ni .env ga qo‘shing (masalan: TELEGRAM_BOT_USERNAME=YourBotUserName).',
+      );
+    }
+    const deep_link = `https://t.me/${username}?start=conf_${token}`;
+    return { deep_link };
   }
 
   @Post(':id/receive')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.master, Role.boss)
   receive(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     return this.ordersService.receive(id, req.user.id);
