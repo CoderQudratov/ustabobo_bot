@@ -1,13 +1,19 @@
 import { Markup } from 'telegraf';
 
-/** WebApp URL for "Yangi buyurtma" (TZ 6.1). Use placeholder if not set. */
-const WEBAPP_URL =
-  process.env.WEBAPP_URL?.trim() || 'https://avto-pro-webapp.example.com';
+function getWebAppUrl(): string {
+  const url = process.env.WEBAPP_URL?.trim();
+  if (!url) {
+    throw new Error(
+      'WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni .env da WEBAPP_URL=... qilib qo\'ying.',
+    );
+  }
+  return url;
+}
 
 export function getMainMenuKeyboard() {
   return Markup.keyboard(
     [
-      Markup.button.webApp('➕ Yangi buyurtma', WEBAPP_URL),
+      Markup.button.webApp('➕ Yangi buyurtma', getWebAppUrl()),
       '📋 Buyurtmalarim',
       '📍 Lokatsiya yuborish',
       '📦 Qabul qildim',

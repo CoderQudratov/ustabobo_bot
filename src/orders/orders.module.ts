@@ -4,9 +4,10 @@ import { DriverOrdersController } from './driver-orders.controller';
 import { CustomerController } from './customer.controller';
 import { OrdersService } from './orders.service';
 import { BroadcastModule } from '../broadcast/broadcast.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [BroadcastModule],
+  imports: [BroadcastModule, AuthModule],
   controllers: [
     OrdersController,
     DriverOrdersController,

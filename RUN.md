@@ -82,6 +82,8 @@ cp .env.example .env
 - **DATABASE_URL** — PostgreSQL ulanish (docker-compose dagi postgres bilan mos)
 - **BOT_TOKEN** — Telegram bot token
 - **JWT_SECRET** — admin login JWT uchun (ixtiyoriy; boʻlmasa default ishlatiladi)
+- **PORT** — backend port (default 3001; Next.js webapp 3000 da)
+- **WEBAPP_URL** — Usta WebApp manzili (HTTPS). Botda "Yangi buyurtma" bosilganda shu URL ochiladi. Lokal test uchun: `ngrok http 3000` → `.env` da `WEBAPP_URL=https://xxx.ngrok.io`
 
 ---
 
@@ -113,7 +115,7 @@ npm run db:seed
 npm run start:dev
 ```
 
-Server odatda **http://localhost:3000** da ishlaydi. (Prisma client avtomatik patch qilinadi — `exports is not defined` xatosi bo‘lmasligi kerak.)
+Server odatda **http://localhost:3001** da ishlaydi (`.env` da `PORT=3001`). Faqat **bitta** backend instansiyasini ishga tushiring; ikkita ishga tushirilsa port band (EADDRINUSE) yoki Telegram 409 Conflict chiqadi.
 
 ---
 
@@ -124,7 +126,7 @@ Server odatda **http://localhost:3000** da ishlaydi. (Prisma client avtomatik pa
 **Login (JWT olish):**
 
 ```bash
-curl -X POST http://localhost:3000/admin/auth/login \
+curl -X POST http://localhost:3001/admin/auth/login \
   -H "Content-Type: application/json" \
   -d '{"login":"admin","password":"admin123"}'
 ```
@@ -132,7 +134,7 @@ curl -X POST http://localhost:3000/admin/auth/login \
 Javobda `access_token` keladi. Keyin reports:
 
 ```bash
-curl -X GET "http://localhost:3000/admin/reports" \
+curl -X GET "http://localhost:3001/admin/reports" \
   -H "Authorization: Bearer SIZNING_ACCESS_TOKEN"
 ```
 
@@ -167,8 +169,18 @@ curl -X GET "http://localhost:3000/admin/reports" \
 
 ---
 
+## Usta WebApp (Telegram ichida)
+
+1. WebApp (Next.js) ni ishga tushiring: `cd webapp && npm run dev` (port 3000).
+2. Telegram dan "Yangi buyurtma" ishlashi uchun WebApp **HTTPS** va internetdan ochiladigan boʻlishi kerak. Lokal test: `ngrok http 3000` ishga tushiring, berilgan `https://xxx.ngrok.io` ni `.env` da **WEBAPP_URL** ga yozing va backendni qayta ishga tushiring.
+3. `WEBAPP_URL` boʻlmasa yoki `avto-pro-webapp.example.com` boʻlsa, botda tugma bosilganda "Error resolving hostname" chiqadi.
+
+---
+
 ## Muammo boʻlsa
 
 - **Database connection error:** Docker ishlayaptimi? `docker ps` — postgres va redis koʻrinishi kerak.
 - **Bot javob bermayapti:** `BOT_TOKEN` toʻgʻri va backend ishlayotganini tekshiring.
-- **401 Unauthorized:** Admin uchun `login: admin`, `password: admin123` va JWT toʻgʻri yuborilganini tekshiring.
+- **401 Unauthorized:** Admin uchun `login: admin`, `password: admin123` va JWT toʻgʻri yuborilganini tekshiring. Brauzerda `http://localhost:3001` ochilsa endi 401 emas, API xabari chiqadi.
+- **EADDRINUSE / 409 Conflict:** Faqat **bitta** `npm run start:dev` ishlatiling; ikkita terminalda backend ishga tushirmang.
+- **WebApp "hostname not found":** `.env` da **WEBAPP_URL** ni haqiqiy HTTPS manzilga oʻrnating (masalan ngrok manzili).

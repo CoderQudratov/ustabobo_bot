@@ -4,6 +4,11 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { TelegramWebAppGuard } from './guards/telegram-webapp.guard';
+import { MasterAuthGuard } from './guards/master-auth.guard';
+import { WebappController } from './webapp.controller';
+import { WebappService } from './webapp.service';
 
 @Module({
   imports: [
@@ -13,8 +18,15 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       signOptions: { expiresIn: '1h' },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  controllers: [AuthController, WebappController],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    TelegramWebAppGuard,
+    MasterAuthGuard,
+    WebappService,
+  ],
+  exports: [AuthService, JwtAuthGuard, TelegramWebAppGuard, MasterAuthGuard],
 })
 export class AuthModule {}

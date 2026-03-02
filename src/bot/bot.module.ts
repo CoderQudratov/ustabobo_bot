@@ -12,9 +12,15 @@ import { OrdersModule } from '../orders/orders.module';
     forwardRef(() => OrdersModule),
     TelegrafModule.forRootAsync({
       useFactory: () => {
-        const token = process.env.BOT_TOKEN;
+        const token = process.env.BOT_TOKEN?.trim();
         if (!token) {
-          throw new Error('BOT_TOKEN is not set');
+          throw new Error('BOT_TOKEN is not set in .env');
+        }
+        const webappUrl = process.env.WEBAPP_URL?.trim();
+        if (!webappUrl) {
+          throw new Error(
+            'WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni WEBAPP_URL=... qilib qo\'ying.',
+          );
         }
         return {
           token,
