@@ -1,107 +1,119 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, useEffect, useMemo, useState } from "react";
 import type { TelegramWebAppUser } from "@/types/telegram";
+
+const SDK_WAIT_MS = 1800;
 
 type TelegramContextValue = {
   isReady: boolean;
   isTelegram: boolean;
+  isTestMode: boolean;
   user: TelegramWebAppUser | null;
   initData: string;
 };
 
 const TelegramContext = createContext<TelegramContextValue | null>(null);
 
-function getTelegramUser(): TelegramWebAppUser | null {
+function getWebApp() {
   if (typeof window === "undefined") return null;
-  const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  return user ?? null;
+  return window.Telegram?.WebApp ?? null;
+}
+
+function getTelegramUser(): TelegramWebAppUser | null {
+  const webApp = getWebApp();
+  return webApp?.initDataUnsafe?.user ?? null;
 }
 
 function getInitData(): string {
-  if (typeof window === "undefined") return "";
-  return window.Telegram?.WebApp?.initData ?? "";
+  const webApp = getWebApp();
+  return webApp?.initData ?? "";
 }
+
+const screenBg = { backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)" };
+const screenFg = { color: "var(--tg-theme-text-color, #fff)" };
+const secondaryBg = { backgroundColor: "var(--tg-theme-secondary-bg-color, #2b2b2b)" };
 
 export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<TelegramWebAppUser | null>(null);
   const [initData, setInitData] = useState("");
+  const [hasTelegramEnv, setHasTelegramEnv] = useState(false);
 
-  const isTelegram = !!user;
-
-  const init = useCallback(() => {
-    const u = getTelegramUser();
-    setUser(u);
-    setInitData(getInitData());
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
-    }
-    setIsReady(true);
-  }, []);
+  const isTelegram = hasTelegramEnv;
+  const isTestMode = isTelegram && !user;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.Telegram?.WebApp) {
-      init();
-      return;
-    }
-    const t = setInterval(() => {
-      if (window.Telegram?.WebApp) {
-        clearInterval(t);
-        init();
+    const timer = setTimeout(() => {
+      const webApp = getWebApp();
+      if (webApp) {
+        webApp.ready();
+        webApp.expand();
+        if (typeof webApp.enableClosingConfirmation === "function") {
+          webApp.enableClosingConfirmation();
+        }
+        setUser(getTelegramUser());
+        setInitData(getInitData());
+        setHasTelegramEnv(true);
       }
-    }, 50);
-    return () => clearInterval(t);
-  }, [init]);
+      setIsReady(true);
+    }, SDK_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const value = useMemo<TelegramContextValue>(
-    () => ({ isReady, isTelegram, user, initData }),
-    [isReady, isTelegram, user, initData]
+    () => ({ isReady, isTelegram, isTestMode, user, initData }),
+    [isReady, isTelegram, isTestMode, user, initData]
   );
+
+  if (!isReady) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
+        style={{ ...screenBg, ...screenFg }}
+      >
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#2481cc)] border-t-transparent"
+          aria-hidden
+        />
+        <p className="text-sm opacity-90">Yuklanmoqda...</p>
+      </div>
+    );
+  }
+
+  if (!isTelegram) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center"
+        style={{ ...screenBg, ...screenFg }}
+      >
+        <div
+          className="max-w-sm rounded-2xl p-6 shadow-lg"
+          style={secondaryBg}
+        >
+          <p className="text-lg font-medium">
+            Iltimos, ilovani Telegram bot orqali oching.
+          </p>
+          <p className="mt-2 text-sm opacity-80">
+            Usta ilovasi faqat Telegram ichida ishlaydi.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TelegramContext.Provider value={value}>
-      {!isReady ? (
+      {isTestMode && (
         <div
-          className="flex min-h-screen items-center justify-center p-6"
-          style={{
-            backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)",
-            color: "var(--tg-theme-text-color, #fff)",
-          }}
+          className="sticky top-0 z-50 border-b px-4 py-2 text-center text-sm font-medium"
+          style={{ ...secondaryBg, ...screenFg }}
         >
-          <p className="animate-pulse">Yuklanmoqda...</p>
+          ⚠️ Test rejimi — brauzerda ochilgan
         </div>
-      ) : !isTelegram ? (
-        <div
-          className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center"
-          style={{
-            backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)",
-            color: "var(--tg-theme-text-color, #fff)",
-          }}
-        >
-          <div
-            className="max-w-sm rounded-2xl p-6 shadow-lg"
-            style={{ backgroundColor: "var(--tg-theme-secondary-bg-color, #2b2b2b)" }}
-          >
-            <p className="text-lg font-medium">
-              Iltimos, ilovani Telegram bot orqali oching.
-            </p>
-            <p className="mt-2 text-sm opacity-80">
-              Usta ilovasi faqat Telegram ichida ishlaydi.
-            </p>
-          </div>
-        </div>
-      ) : (
-        children
       )}
+      {children}
     </TelegramContext.Provider>
   );
 }

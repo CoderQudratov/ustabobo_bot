@@ -1,12 +1,11 @@
 /**
- * Backend API — NEXT_PUBLIC_API_URL orqali ulash
+ * Backend API — NEXT_PUBLIC_API_URL orqali ulash (masalan https://avtoproapi.loca.lt).
+ * Trailing slash olib tashlanadi. O'rnatilmasa: http://localhost:3000.
  */
-
 const getBaseUrl = (): string => {
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
-  }
-  return "http://localhost:3001";
+  const url = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
+  if (url) return String(url).replace(/\/$/, "");
+  return "http://localhost:3000";
 };
 
 export function getApiUrl(path: string): string {
@@ -14,6 +13,14 @@ export function getApiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${base}${p}`;
 }
+
+const defaultFetchOptions: RequestInit = {
+  mode: "cors",
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/json",
+  },
+};
 
 export interface WebAppInitResponse {
   services: { id: string; name: string; price: number }[];
@@ -23,14 +30,19 @@ export interface WebAppInitResponse {
 }
 
 export async function fetchWebAppInit(initData: string): Promise<WebAppInitResponse> {
-  const res = await fetch(getApiUrl("webapp/init"), {
+  const url = getApiUrl("webapp/init");
+  const res = await fetch(url, {
+    ...defaultFetchOptions,
     method: "GET",
     headers: {
-      "Content-Type": "application/json",
+      ...defaultFetchOptions.headers,
       "X-Telegram-Init-Data": initData,
-    },
+    } as HeadersInit,
   });
-  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -45,6 +57,7 @@ export interface CreateOrderManualProductItem {
   quantity: number;
 }
 
+/** TZ 6.2.7 — Backend POST /orders uchun payload */
 export interface CreateOrderPayload {
   client_name: string;
   client_phone: string;
@@ -63,14 +76,19 @@ export async function createOrder(
   payload: CreateOrderPayload,
   initData: string
 ): Promise<{ id: string }> {
-  const res = await fetch(getApiUrl("orders"), {
+  const url = getApiUrl("orders");
+  const res = await fetch(url, {
+    ...defaultFetchOptions,
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      ...defaultFetchOptions.headers,
       "X-Telegram-Init-Data": initData,
-    },
+    } as HeadersInit,
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
   return res.json();
 }

@@ -6,10 +6,15 @@ import { useTelegram } from "@/hooks/useTelegram";
 import {
   fetchWebAppInit,
   createOrder,
+  getApiUrl,
   type WebAppInitResponse,
   type CreateOrderProductItem,
   type CreateOrderManualProductItem,
+  type CreateOrderPayload,
 } from "@/utils/api";
+
+const MAX_INIT_RETRIES = 3;
+const RETRY_DELAY_MS = 1500;
 
 const screenStyle = {
   backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)",
@@ -20,6 +25,18 @@ const btnStyle = {
   backgroundColor: "var(--tg-theme-button-color, #2481cc)",
   color: "var(--tg-theme-button-text-color, #fff)",
 };
+
+function isNetworkError(e: unknown): boolean {
+  if (e instanceof TypeError && e.message === "Failed to fetch") return true;
+  if (e instanceof Error && e.message.toLowerCase().includes("failed to fetch")) return true;
+  return false;
+}
+
+function getErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === "string") return e;
+  return fallback;
+}
 
 export default function NewOrderPage() {
   const { initData } = useTelegram();
@@ -43,22 +60,38 @@ export default function NewOrderPage() {
 
   const vehiclesOfOrg = init?.vehicles.filter((v) => v.org_id === orgId) ?? [];
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchWebAppInit(initData)
-      .then((data) => {
-        if (!cancelled) setInit(data);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Init xato");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
+  const loadInit = useCallback(() => {
+    setError(null);
+    setLoading(true);
+
+    const attempt = (retryCount: number): void => {
+      fetchWebAppInit(initData)
+        .then((data) => {
+          setInit(data);
+          setLoading(false);
+        })
+        .catch((e) => {
+          if (isNetworkError(e) && retryCount < MAX_INIT_RETRIES) {
+            setTimeout(() => attempt(retryCount + 1), RETRY_DELAY_MS);
+            return;
+          }
+          if (isNetworkError(e)) {
+            setError(
+              `Backend ga ulanish xato. Tekshiring: NEXT_PUBLIC_API_URL (${getApiUrl("")}), tarmoq va CORS.`
+            );
+          } else {
+            setError(getErrorMessage(e, "Init xato"));
+          }
+          setLoading(false);
+        });
     };
+
+    attempt(0);
   }, [initData]);
+
+  useEffect(() => {
+    loadInit();
+  }, [loadInit]);
 
   const toggleService = useCallback((id: string) => {
     setSelectedServiceIds((prev) =>
@@ -92,34 +125,54 @@ export default function NewOrderPage() {
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!clientName.trim() || !clientPhone.trim() || !carNumber.trim()) {
+      setError(null);
+
+      const name = clientName.trim();
+      const phone = clientPhone.trim();
+      const carNum = carNumber.trim();
+      if (!name || !phone || !carNum) {
         setError("Mijoz ismi, telefoni va mashina raqami majburiy.");
         return;
       }
-      setError(null);
+
+      const hasServices = selectedServiceIds.length > 0;
+      const hasProducts = products.length > 0;
+      const hasManual = manualProducts.length > 0;
+      if (!hasServices && !hasProducts && !hasManual) {
+        setError("Kamida bitta xizmat, zapchast yoki qo'lda zapchast tanlang.");
+        return;
+      }
+
+      const payload: CreateOrderPayload = {
+        client_name: name,
+        client_phone: phone,
+        car_number: carNum,
+        car_model: carModel.trim() || undefined,
+        car_photo_url: carPhotoUrl.trim() || undefined,
+        organization_id: isOrgVehicle && orgId ? orgId : undefined,
+        vehicle_id: isOrgVehicle && vehicleId ? vehicleId : undefined,
+        delivery_needed: deliveryNeeded,
+        service_ids: hasServices ? selectedServiceIds : undefined,
+        products: hasProducts ? products : undefined,
+        manual_products: hasManual ? manualProducts : undefined,
+      };
+
       setSubmitLoading(true);
       try {
-        await createOrder(
-          {
-            client_name: clientName.trim(),
-            client_phone: clientPhone.trim(),
-            car_number: carNumber.trim(),
-            car_model: carModel.trim() || undefined,
-            organization_id: isOrgVehicle && orgId ? orgId : undefined,
-            vehicle_id: isOrgVehicle && vehicleId ? vehicleId : undefined,
-            delivery_needed: deliveryNeeded,
-            service_ids:
-              selectedServiceIds.length > 0 ? selectedServiceIds : undefined,
-            products: products.length > 0 ? products : undefined,
-            manual_products:
-              manualProducts.length > 0 ? manualProducts : undefined,
-            car_photo_url: carPhotoUrl || undefined,
-          },
-          initData
-        );
-        window.location.href = "/";
+        await createOrder(payload, initData);
+        if (typeof window !== "undefined" && window.Telegram?.WebApp?.close) {
+          window.Telegram.WebApp.close();
+        } else {
+          window.location.href = "/";
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Saqlash xato");
+        if (isNetworkError(err)) {
+          setError(
+            "Backend ga ulanish xato. NEXT_PUBLIC_API_URL va tarmoqni tekshiring."
+          );
+        } else {
+          setError(getErrorMessage(err, "Saqlash xato"));
+        }
       } finally {
         setSubmitLoading(false);
       }
@@ -129,6 +182,7 @@ export default function NewOrderPage() {
       clientPhone,
       carNumber,
       carModel,
+      carPhotoUrl,
       isOrgVehicle,
       orgId,
       vehicleId,
@@ -136,15 +190,21 @@ export default function NewOrderPage() {
       selectedServiceIds,
       products,
       manualProducts,
-      carPhotoUrl,
       initData,
     ]
   );
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6" style={screenStyle}>
-        <p className="animate-pulse">Yuklanmoqda...</p>
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
+        style={screenStyle}
+      >
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#2481cc)] border-t-transparent"
+          aria-hidden
+        />
+        <p className="text-sm opacity-90">Ma'lumotlar yuklanmoqda...</p>
       </div>
     );
   }
@@ -167,6 +227,15 @@ export default function NewOrderPage() {
           className="mb-4 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400"
         >
           {error}
+          {!init && (
+            <button
+              type="button"
+              onClick={loadInit}
+              className="ml-2 underline focus:outline-none"
+            >
+              Qayta urinish
+            </button>
+          )}
         </div>
       )}
 
@@ -268,7 +337,7 @@ export default function NewOrderPage() {
             6.2.3 Xizmatlar
           </h2>
           <div className="space-y-2">
-            {init?.services.map((s) => (
+            {init?.services?.map((s) => (
               <label key={s.id} className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -281,7 +350,7 @@ export default function NewOrderPage() {
                 </span>
               </label>
             ))}
-            {!init?.services?.length && (
+            {init?.services?.length === 0 && (
               <p className="text-sm opacity-70">Xizmatlar ro&apos;yxati bo&apos;sh</p>
             )}
           </div>
@@ -292,7 +361,7 @@ export default function NewOrderPage() {
             6.2.4 Zapchastlar (ombor)
           </h2>
           <div className="space-y-2">
-            {init?.products.map((p) => (
+            {init?.products?.map((p) => (
               <ProductRow
                 key={p.id}
                 name={p.name}
@@ -302,7 +371,7 @@ export default function NewOrderPage() {
                 onQuantityChange={(q) => addProduct(p.id, q)}
               />
             ))}
-            {!init?.products?.length && (
+            {init?.products?.length === 0 && (
               <p className="text-sm opacity-70">Omborda mahsulot yo&apos;q</p>
             )}
           </div>
