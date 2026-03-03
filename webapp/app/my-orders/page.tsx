@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTelegram } from "@/hooks/useTelegram";
+import { isTelegramWebApp } from "@/utils/telegram-env";
+import { TelegramRequired } from "@/components/TelegramRequired";
 import {
   fetchMyOrders,
   cancelOrderApi,
@@ -115,11 +117,15 @@ export default function MyOrdersPage() {
   const [carPhotoModalUrl, setCarPhotoModalUrl] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
-    if (telegramId == null) return;
+    const tgId = telegramUser?.id;
+    if (tgId == null) {
+      setLoading(false);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      const data = await fetchMyOrders(telegramId);
+      const data = await fetchMyOrders(tgId);
       setOrders(Array.isArray(data) ? data : []);
     } catch (e) {
       setOrders([]);
@@ -127,16 +133,12 @@ export default function MyOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [telegramId]);
+  }, [telegramUser?.id]);
 
   useEffect(() => {
-    if (telegramId == null) return;
+    if (!isReady) return;
     loadOrders();
-  }, [telegramId, loadOrders]);
-
-  useEffect(() => {
-    if (isReady && telegramId == null) setLoading(false);
-  }, [isReady, telegramId]);
+  }, [isReady, loadOrders]);
 
   const handleCancel = async (orderId: string) => {
     setActioningId(orderId);
@@ -248,6 +250,10 @@ export default function MyOrdersPage() {
       : isDriver && filter === "history"
         ? orders.filter((o) => DRIVER_HISTORY_STATUSES.includes(o.status))
         : orders;
+
+  if (!isTelegramWebApp()) {
+    return <TelegramRequired />;
+  }
 
   if (telegramId == null && !loading) {
     return (
@@ -385,7 +391,7 @@ export default function MyOrdersPage() {
             {error}
             <button
               type="button"
-              onClick={() => telegramId != null && loadOrders()}
+              onClick={() => loadOrders()}
               className="ml-2 underline focus:outline-none"
             >
               Qayta urinish
@@ -493,6 +499,35 @@ export default function MyOrdersPage() {
                     <p className="text-sm font-semibold pt-2 border-t border-white/10">
                       Jami: {formatPrice(calcTotal(order))}
                     </p>
+
+                    {/* Driver: one-tap open in Google Maps (TZ Phase 7) */}
+                    {isDriver && order.lat != null && order.lng != null && (
+                      <a
+                        href={`https://maps.google.com/?q=${Number(order.lat)},${Number(order.lng)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-sm font-medium border border-white/20 bg-white/10 hover:bg-white/15"
+                        style={{ color: "var(--tg-theme-link-color, #2481cc)" }}
+                      >
+                        🗺️ Xaritada ochish
+                      </a>
+                    )}
+
+                    {order.master && (
+                      <p className="text-xs opacity-80 pt-1">
+                        Usta: {order.master.fullname}
+                        {order.master.login ? ` (@${order.master.login})` : ""}
+                      </p>
+                    )}
+                    {order.client_phone && (
+                      <a
+                        href={`tel:${order.client_phone.replace(/\s/g, "")}`}
+                        className="text-sm font-medium"
+                        style={{ color: "var(--tg-theme-link-color, #2481cc)" }}
+                      >
+                        📞 {order.client_phone}
+                      </a>
+                    )}
 
                     {canCancel(order.status) && (
                       <button

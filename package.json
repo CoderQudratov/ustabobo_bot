@@ -6,6 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "check-env": "npx tsx scripts/check-env-duplicates.ts",
+    "prestart:dev": "npm run check-env",
+    "prebuild": "npm run check-env",
     "build": "nest build && node scripts/fix-prisma-client.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "NODE_OPTIONS='-r ./scripts/patch-before-run.js' nest start",

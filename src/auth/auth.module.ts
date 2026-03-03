@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TelegramWebAppGuard } from './guards/telegram-webapp.guard';
+import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
 import { MasterAuthGuard } from './guards/master-auth.guard';
 import { WebappController } from './webapp.controller';
 import { WebappService } from './webapp.service';
@@ -14,7 +15,8 @@ import { WebappService } from './webapp.service';
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'avtopro-erp-secret-change-in-production',
+      secret:
+        process.env.JWT_SECRET ?? 'avtopro-erp-secret-change-in-production',
       signOptions: { expiresIn: '1h' },
     }),
   ],
@@ -24,9 +26,16 @@ import { WebappService } from './webapp.service';
     JwtStrategy,
     JwtAuthGuard,
     TelegramWebAppGuard,
+    TelegramInitDataGuard,
     MasterAuthGuard,
     WebappService,
   ],
-  exports: [AuthService, JwtAuthGuard, TelegramWebAppGuard, MasterAuthGuard],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    TelegramWebAppGuard,
+    TelegramInitDataGuard,
+    MasterAuthGuard,
+  ],
 })
 export class AuthModule {}

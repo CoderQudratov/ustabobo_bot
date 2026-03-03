@@ -2,10 +2,13 @@
 
 import { createContext, useEffect, useMemo, useState } from "react";
 import type { TelegramWebAppUser } from "@/types/telegram";
-import { setSessionExpiredHandler } from "@/utils/api";
+import { setSessionExpiredHandler, setPinRequiredHandler, setTelegramRequiredHandler } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { TelegramRequired } from "@/components/TelegramRequired";
 
 const SDK_WAIT_MS = 1800;
+const INIT_DATA_RETRY_MS = 400;
+const INIT_DATA_RETRY_COUNT = 6;
 
 type TelegramContextValue = {
   isReady: boolean;
@@ -41,33 +44,83 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<TelegramWebAppUser | null>(null);
   const [initData, setInitData] = useState("");
   const [hasTelegramEnv, setHasTelegramEnv] = useState(false);
+  const [hasInitData, setHasInitData] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [pinRequired, setPinRequired] = useState(false);
+  const [telegramRequired, setTelegramRequired] = useState(false);
 
-  const isTelegram = hasTelegramEnv;
-  const isTestMode = isTelegram && !user;
+  const isTelegram = hasTelegramEnv && hasInitData;
+  const isTestMode = hasTelegramEnv && !user;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let cancelled = false;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    const finish = (data: string, hasData: boolean) => {
+      if (cancelled) return;
+      setUser(getTelegramUser());
+      setInitData(data);
+      setHasInitData(hasData);
+      setHasTelegramEnv(!!getWebApp());
+      setIsReady(true);
+    };
+
     const timer = setTimeout(() => {
+      if (cancelled) return;
       const webApp = getWebApp();
       if (webApp) {
-        webApp.ready();
-        webApp.expand();
-        if (typeof webApp.enableClosingConfirmation === "function") {
-          webApp.enableClosingConfirmation();
+        try {
+          const ver = (webApp as { version?: string }).version ?? "";
+          if (typeof webApp.enableClosingConfirmation === "function" && ver >= "6.1") {
+            webApp.enableClosingConfirmation();
+          }
+        } catch {
+          // ignore
+        }
+        const data = getInitData();
+        if (data?.trim()) {
+          finish(data, true);
+          return;
         }
         setUser(getTelegramUser());
-        setInitData(getInitData());
         setHasTelegramEnv(true);
+        let retries = 0;
+        const poll = () => {
+          if (cancelled || retries >= INIT_DATA_RETRY_COUNT) {
+            finish("", false);
+            return;
+          }
+          retries += 1;
+          const next = getInitData();
+          if (next?.trim()) {
+            finish(next, true);
+            return;
+          }
+          timeouts.push(setTimeout(poll, INIT_DATA_RETRY_MS));
+        };
+        timeouts.push(setTimeout(poll, INIT_DATA_RETRY_MS));
+      } else {
+        setIsReady(true);
       }
-      setIsReady(true);
     }, SDK_WAIT_MS);
-    return () => clearTimeout(timer);
+    timeouts.push(timer);
+
+    return () => {
+      cancelled = true;
+      timeouts.forEach((t) => clearTimeout(t));
+    };
   }, []);
 
   useEffect(() => {
     setSessionExpiredHandler(() => setSessionExpired(true));
-    return () => setSessionExpiredHandler(null);
+    setPinRequiredHandler(() => setPinRequired(true));
+    setTelegramRequiredHandler(() => setTelegramRequired(true));
+    return () => {
+      setSessionExpiredHandler(null);
+      setPinRequiredHandler(null);
+      setTelegramRequiredHandler(null);
+    };
   }, []);
 
   const value = useMemo<TelegramContextValue>(
@@ -90,25 +143,9 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isTelegram) {
-    return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 text-center"
-        style={{ ...screenBg, ...screenFg }}
-      >
-        <div
-          className="max-w-sm rounded-2xl p-6 shadow-lg"
-          style={secondaryBg}
-        >
-          <p className="text-lg font-medium">
-            Iltimos, ilovani Telegram bot orqali oching.
-          </p>
-          <p className="mt-2 text-sm opacity-80">
-            Usta ilovasi faqat Telegram ichida ishlaydi.
-          </p>
-        </div>
-      </div>
-    );
+  if (!isTelegram || telegramRequired) {
+    const variant = hasTelegramEnv && !hasInitData ? "expired" : "outside";
+    return <TelegramRequired variant={variant} />;
   }
 
   return (
@@ -142,6 +179,33 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                 color: "var(--tg-theme-button-text-color)",
               }}
               onClick={() => setSessionExpired(false)}
+            >
+              Tushundim
+            </button>
+          </div>
+        </div>
+      )}
+      {pinRequired && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+        >
+          <div
+            className="max-w-sm rounded-2xl p-6 shadow-xl"
+            style={{ ...secondaryBg, ...screenFg }}
+          >
+            <p className="text-lg font-medium">🔐 PIN kiriting</p>
+            <p className="mt-2 text-sm opacity-90">
+              Botga qayting va PIN kiriting. Keyin ilovani qayta oching.
+            </p>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-xl py-2.5 font-medium"
+              style={{
+                backgroundColor: "var(--tg-theme-button-color)",
+                color: "var(--tg-theme-button-text-color)",
+              }}
+              onClick={() => setPinRequired(false)}
             >
               Tushundim
             </button>

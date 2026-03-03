@@ -69,6 +69,18 @@ npm run start:dev
 
 ---
 
+## CORS va Cloudflare (BotFather dan bemalol ishlatish)
+
+Backend **barcha origin** lardan so'rovlarni qabul qiladi (CORS `origin: true`). Shuning uchun:
+
+- BotFather da Mini App URL ni **istalgan** Cloudflare tunnel (yoki ngrok) manziliga qo'yishingiz mumkin.
+- Har safar tunnel yangi URL bersa ham, CORS xato bermaydi.
+- Backend `0.0.0.0` da tinglaydi — Cloudflare tunnel lokal portga bemalol ulanishi mumkin.
+
+**Tavsiya:** `./scripts/start-all.sh` ishlatilsa — u Backend (3000) va WebApp (3001) ni ishga tushiradi, cloudflared orqali ikkita tunnel ochadi va `.env` / `webapp/.env.local` ni avtomatik yangilaydi. BotFather da faqat **Mini App URL** = skript chiqargan `WEBAPP_URL` (masalan `https://xxx.trycloudflare.com`) qilib qo'ying.
+
+---
+
 ## 1. Oʻzgaruvchilarni sozlash
 
 `.env` faylini yarating (yoki mavjud `.env` ni tekshiring):
@@ -79,11 +91,14 @@ cp .env.example .env
 
 `.env` da quyidagilar boʻlishi kerak:
 
-- **DATABASE_URL** — PostgreSQL ulanish (docker-compose dagi postgres bilan mos)
-- **BOT_TOKEN** — Telegram bot token
-- **JWT_SECRET** — admin login JWT uchun (ixtiyoriy; boʻlmasa default ishlatiladi)
-- **PORT** — backend port (default 3001; Next.js webapp 3000 da)
-- **WEBAPP_URL** — Usta WebApp manzili (HTTPS). Botda "Yangi buyurtma" bosilganda shu URL ochiladi. Lokal test uchun: `ngrok http 3000` → `.env` da `WEBAPP_URL=https://xxx.ngrok.io`
+- **DATABASE_URL** — PostgreSQL ulanish (bitta qator).
+- **BOT_TOKEN** — BotFather dan olingan token (bitta qator; "your_bot_token_here" boʻlmasin).
+- **JWT_SECRET** — admin login uchun (ixtiyoriy).
+- **PORT** — 3000 (WebApp 3001 da).
+- **WEBAPP_URL** — Mini App HTTPS manzili (Cloudflare/ngrok).
+- **TELEGRAM_BOT_USERNAME** — bot username (masalan Usta_test_bot).
+
+**Muhim:** .env da bir xil kalit ikki marta boʻlmasin (oxirgi qiymat qoladi, BOT_TOKEN placeholder qolsa "Invalid Telegram init data signature" chiqadi). Tekshirish: `npm run check-env`.
 
 ---
 
@@ -115,7 +130,7 @@ npm run db:seed
 npm run start:dev
 ```
 
-Server odatda **http://localhost:3001** da ishlaydi (`.env` da `PORT=3001`). Faqat **bitta** backend instansiyasini ishga tushiring; ikkita ishga tushirilsa port band (EADDRINUSE) yoki Telegram 409 Conflict chiqadi.
+Server odatda **http://localhost:3000** da ishlaydi (`.env` da `PORT=3000`). Faqat **bitta** backend instansiyasini ishga tushiring; ikkita ishga tushirilsa port band (EADDRINUSE) yoki Telegram 409 Conflict chiqadi.
 
 ---
 
@@ -126,7 +141,7 @@ Server odatda **http://localhost:3001** da ishlaydi (`.env` da `PORT=3001`). Faq
 **Login (JWT olish):**
 
 ```bash
-curl -X POST http://localhost:3001/admin/auth/login \
+curl -X POST http://localhost:3000/admin/auth/login \
   -H "Content-Type: application/json" \
   -d '{"login":"admin","password":"admin123"}'
 ```
@@ -134,7 +149,7 @@ curl -X POST http://localhost:3001/admin/auth/login \
 Javobda `access_token` keladi. Keyin reports:
 
 ```bash
-curl -X GET "http://localhost:3001/admin/reports" \
+curl -X GET "http://localhost:3000/admin/reports" \
   -H "Authorization: Bearer SIZNING_ACCESS_TOKEN"
 ```
 
@@ -171,9 +186,79 @@ curl -X GET "http://localhost:3001/admin/reports" \
 
 ## Usta WebApp (Telegram ichida)
 
-1. WebApp (Next.js) ni ishga tushiring: `cd webapp && npm run dev` (port 3000).
-2. Telegram dan "Yangi buyurtma" ishlashi uchun WebApp **HTTPS** va internetdan ochiladigan boʻlishi kerak. Lokal test: `ngrok http 3000` ishga tushiring, berilgan `https://xxx.ngrok.io` ni `.env` da **WEBAPP_URL** ga yozing va backendni qayta ishga tushiring.
-3. `WEBAPP_URL` boʻlmasa yoki `avto-pro-webapp.example.com` boʻlsa, botda tugma bosilganda "Error resolving hostname" chiqadi.
+1. WebApp (Next.js) ni ishga tushiring: `cd webapp && npm run dev -- -p 3001` (port 3001).
+2. Telegram dan "Yangi buyurtma" ishlashi uchun WebApp **HTTPS** va internetdan ochiladigan boʻlishi kerak (Cloudflare tunnel yoki ngrok).
+3. **Oddiy brauzerda** WebApp ni ochsangiz initData boʻlmaydi — "Sessiya tugadi" yoki 401 chiqadi. Ilovani **faqat Telegram bot** orqali oching (Botda "Yangi buyurtma" tugmasi).
+
+---
+
+## Cloudflare tunnel orqali ishlatish (ishonchli qadamlar)
+
+Backend va WebApp lokal portlarda ishlashi kerak; tashqariga Cloudflare tunnel orqali ochiladi.
+
+### 1. Backend (port 3000) va WebApp (port 3001) ni ishga tushiring
+
+```bash
+# Terminal 1 — backend
+npm run start:dev
+
+# Terminal 2 — webapp
+cd webapp && npm run dev -- -p 3001
+```
+
+Ishga tushgach backend logida koʻrinadi:
+- `[Startup] BOT_TOKEN prefix: 1234567890…`
+- `[Startup] WEBAPP_URL: ...`
+- `[Startup] TELEGRAM_INIT_DATA_MAX_AGE_SEC: 300`
+
+### 2. Cloudflare tunnellar
+
+- **API tunnel:** `cloudflared tunnel --url http://localhost:3000`  
+  Chiqadigan `https://XXX.trycloudflare.com` ni **NEXT_PUBLIC_API_URL** qilib **webapp/.env.local** ga yozing (va kerak boʻlsa backend .env da API_BASE_URL).
+- **WebApp tunnel:** `cloudflared tunnel --url http://localhost:3001`  
+  Chiqadigan `https://YYY.trycloudflare.com` ni **.env** da **WEBAPP_URL** ga yozing.
+
+Yoki bitta skript: `./scripts/start-all.sh` — u backend, webapp va tunnellarni ishga tushiradi va .env larni yangilaydi.
+
+### 3. BotFather sozlamalari
+
+- Bot Settings → Configure Mini App → Mini App URL = **WEBAPP_URL** (masalan `https://YYY.trycloudflare.com`).
+
+### 4. Uch bosqichli tekshiruv
+
+1. **WebApp ni bot orqali oching** — Botda "➕ Yangi buyurtma" bosing (oddiy brauzerda emas).
+2. **GET /debug/whoami** — WebApp ochiq boʻlgan holda (yoki brauzerda bir xil initData yuborib) soʻrov yuboring; **200** va `tg_id`, `role`, `is_authenticated` keladi.
+3. **Yangi buyurtma sahifasi** — forma yuklanadi, xizmatlar/ombor keladi (webapp/init 200).
+
+Agar "Invalid Telegram init data signature" chiqsa — quyidagi **5 narsani tekshiring** boʻlimiga oʻting.
+
+---
+
+## "Invalid Telegram init data signature" chiqsa — tekshiruv roʻyxati
+
+Bu xato CORS emas; initData backend da HMAC orqali tekshiriladi va imzo mos kelmasa shu xabar chiqadi.
+
+1. **.env da BOT_TOKEN bitta va haqiqiy**  
+   - Faylda `BOT_TOKEN` **bir marta** boʻlishi kerak; ikkinchi qator keyingi qiymatni ustiga yozadi (placeholder "your_bot_token_here" qolsa imzo notoʻgʻri boʻladi).  
+   - `npm run check-env` ishlating — takrorlangan kalitlar boʻlsa xato beradi.  
+   - Backend ishga tushganda logda `[Startup] BOT_TOKEN prefix: 1234567890…` koʻrinadi; prefix BotFather bergan token boshiga mos kelishi kerak.
+
+2. **WebApp ilovani Telegram bot orqali oching**  
+   - Oddiy brauzerda ochilsa `Telegram.WebApp.initData` boʻlmaydi; backend 401 qaytaradi.  
+   - Faqat botdagi "Yangi buyurtma" / "Mening buyurtmalarim" tugmalaridan ochilgan ilovada initData bor.
+
+3. **NEXT_PUBLIC_API_URL toʻgʻri**  
+   - **webapp/.env.local** da `NEXT_PUBLIC_API_URL` = API tunnel manzili (masalan `https://XXX.trycloudflare.com`).  
+   - WebApp build qilingan boʻlsa, oʻzgarishdan keyin **qayta build** yoki dev server ni qayta ishga tushiring.
+
+4. **Sessiya eskirgan boʻlmasin**  
+   - Default initData **5 daqiqa** (300 soniya) dan keyin eski hisoblanadi.  
+   - Dev da uzoqroq qilish: `.env` da `TELEGRAM_INIT_DATA_MAX_AGE_SEC=3600`.  
+   - Production da 300 qoldiring.
+
+5. **Backend logida sabab**  
+   - `NODE_ENV=development` da backend initData tekshirish muvaffaqiyatsiz boʻlsa logda sabab yoziladi:  
+     `[TelegramInitData] validation failed: computed_hash mismatch` — odatda BOT_TOKEN notoʻgʻri yoki .env da takrorlangan BOT_TOKEN.
 
 ---
 
@@ -182,5 +267,7 @@ curl -X GET "http://localhost:3001/admin/reports" \
 - **Database connection error:** Docker ishlayaptimi? `docker ps` — postgres va redis koʻrinishi kerak.
 - **Bot javob bermayapti:** `BOT_TOKEN` toʻgʻri va backend ishlayotganini tekshiring.
 - **401 Unauthorized:** Admin uchun `login: admin`, `password: admin123` va JWT toʻgʻri yuborilganini tekshiring. Brauzerda `http://localhost:3001` ochilsa endi 401 emas, API xabari chiqadi.
-- **EADDRINUSE / 409 Conflict:** Faqat **bitta** `npm run start:dev` ishlatiling; ikkita terminalda backend ishga tushirmang.
+- **EADDRINUSE / 409 Conflict (getUpdates):** Faqat **bitta** backend process bo‘lishi kerak (bitta `npm run start:dev` yoki bitta `./scripts/start-all.sh`). Ikkinchi terminalda yoki boshqa mashinada bir xil BOT_TOKEN bilan ishga tushirmang — 409 Conflict keladi.
 - **WebApp "hostname not found":** `.env` da **WEBAPP_URL** ni haqiqiy HTTPS manzilga oʻrnating (masalan ngrok manzili).
+- **"Sessiya tugadi" / 401 WebApp ichida:** Telegram ichida ochilganda ham 401 bo‘lsa — BOT_TOKEN shu botniki ekanini tekshiring; `.env` da bitta BOT_TOKEN bo‘lishi kerak. Keyin WebApp ni yopib, botda "➕ Yangi buyurtma" ni qayta bosing (yangilangan initData uchun).
+- **Tunnel URL o‘zgardi:** `./scripts/start-all.sh` qayta ishga tushiring — u .env va webapp/.env.local ni yangilaydi. Bot qayta start qilmasangiz ham, keyingi restart da yangi WEBAPP_URL ishlatiladi; bot menyu URL ni har so‘rovda emas, faqat ishga tushganda o‘qiydi.

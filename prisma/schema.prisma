@@ -52,17 +52,21 @@ enum OrderItemType {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  fullname      String
-  phone         String    @unique
-  username      String?
-  login         String    @unique
-  password_hash String
-  role          Role
-  tg_id         String?   @unique
-  percent_rate  Decimal   @db.Decimal(10, 4)
-  balance       Decimal   @default(0) @db.Decimal(12, 2)
-  is_active     Boolean   @default(true)
+  id                String    @id @default(uuid()) @db.Uuid
+  fullname          String
+  phone             String    @unique
+  username          String?
+  login             String    @unique
+  password_hash     String
+  role              Role
+  tg_id             String?   @unique
+  percent_rate      Decimal   @db.Decimal(10, 4)
+  balance           Decimal   @default(0) @db.Decimal(12, 2)
+  is_active         Boolean   @default(true)
+  pin_code          String?
+  is_authenticated  Boolean   @default(false)
+  locked_until      DateTime? @db.Timestamptz(6)
+  pin_fail_count    Int       @default(0)
 
   ordersAsMaster   Order[]        @relation("OrderMaster")
   ordersAsDriver   Order[]        @relation("OrderDriver")

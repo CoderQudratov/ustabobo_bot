@@ -37,7 +37,10 @@ export class OrdersController {
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.master, Role.boss)
-  createDraft(@Req() req: Request & { user: JwtUser }, @Body() dto: CreateOrderDto) {
+  createDraft(
+    @Req() req: Request & { user: JwtUser },
+    @Body() dto: CreateOrderDto,
+  ) {
     const masterId = req.user.id;
     return this.ordersService.createDraft(masterId, dto);
   }
@@ -91,12 +94,16 @@ export class OrdersController {
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.master, Role.boss)
-  async finish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
+  async finish(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
     const result = await this.ordersService.finish(id, req.user.id);
     const deep_link = result?.deep_link;
     if (!deep_link) {
       const token = result?.confirm_token;
-      if (!token) throw new BadRequestException('Tasdiqlash tokeni yaratilmadi');
+      if (!token)
+        throw new BadRequestException('Tasdiqlash tokeni yaratilmadi');
       const username = String(process.env.TELEGRAM_BOT_USERNAME ?? '').trim();
       if (!username) {
         throw new InternalServerErrorException(
@@ -114,7 +121,10 @@ export class OrdersController {
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.driver)
-  driverFinish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
+  driverFinish(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
     return this.ordersService.driverFinish(id, req.user.id);
   }
 

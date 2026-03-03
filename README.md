@@ -21,6 +21,32 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+## AVTO-PRO — Telegram Mini App + Bot
+
+Ko'chma avtoservis buyurtmalari tizimi: NestJS backend, Telegram Bot (Telegraf), Next.js WebApp (Mini App). Batafsil: [TZ.md](TZ.md), [RUN.md](RUN.md).
+
+### Telegram Mini App — xavfsizlik (Security)
+
+- **Yagona ishonch manbai:** server faqat **Telegram WebApp initData** ni tekshiradi (HMAC-SHA256, [rasmiy hujjat](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)). URL da `tg_id` yoki `role` ishonchsiz — ular hech qachon ishlatilmaydi.
+- **Header:** WebApp har bir so'rovda `X-Telegram-Init-Data` header yuboradi; backend `TelegramInitDataService` orqali tekshiradi va `auth_date` eskirgan bo'lmasa (default 5 min) foydalanuvchini `tg_id` bo'yicha DB dan aniqlaydi.
+- **PIN darvaza:** Agar foydalanuvchida `pin_code` bo'lsa va `is_authenticated === false` bo'lsa, WebApp API 403 qaytaradi: *"🔐 Botga qayting va PIN kiriting."* Barcha WebApp endpointlari (webapp/init, orders, wallet, upload) shu qoidaga bo'ysunadi.
+- **Hard logout:** Har bir `/start` da master/driver uchun `is_authenticated` false qilinadi; menyu ko'rinishi uchun qayta PIN kiritish talab qilinadi.
+
+### BotFather — Main Mini App va startapp
+
+- **Main Mini App:** [@BotFather](https://t.me/botfather) → Bot Settings → Configure Mini App → Mini App URL = `WEBAPP_URL` (masalan `https://your-app.trycloudflare.com`). Foydalanuvchi bot profilida tugma orqali WebApp ni ochadi.
+- **To'g'ridan-to'g'ri link:** `https://t.me/<BOT_USERNAME>?startapp=orders` — WebApp `start_param` / `tgWebAppStartParam` orqali ochilishi mumkin; kerak bo'lsa WebApp da routing qilish (masalan `/my-orders`).
+- **Mijoz tasdiqlash:** `/start conf_<UUID>` o'zgartirilmaydi (TZ §§10–11).
+
+### Test (Phase 6)
+
+- `/start` → PIN so'raladi (agar user da `pin_code` bo'lsa).
+- `/check` → `is_authenticated`, `pin_fail_count`, `locked_until` ko'rsatiladi.
+- PIN to'g'ri → menyu; yana `/start` → yana PIN.
+- `/be_driver` / `/be_master` — rol almashtirish (is_authenticated o'zgartirilmaydi).
+
+---
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.

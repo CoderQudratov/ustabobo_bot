@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { hasTelegramInitData } from "@/utils/api";
+import { isTelegramWebApp } from "@/utils/telegram-env";
+import { TelegramRequired } from "@/components/TelegramRequired";
 
 const screenStyle: React.CSSProperties = {
   backgroundColor: "var(--tg-theme-bg-color, #0f172a)",
@@ -10,28 +11,14 @@ const screenStyle: React.CSSProperties = {
 };
 
 export default function HomeHub() {
-  const [hasInit, setHasInit] = useState<boolean | null>(null);
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setHasInit(hasTelegramInitData());
+    setChecked(true);
   }, []);
 
-  if (hasInit === false) {
-    return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"
-        style={screenStyle}
-      >
-        <p className="text-lg font-semibold">Iltimos, bot orqali kiring.</p>
-        <p className="text-sm opacity-80">
-          Usta ilovasi faqat Telegram ichida ishlaydi (X-Telegram-Init-Data talab qilinadi).
-        </p>
-      </div>
-    );
-  }
-
-  if (hasInit === null) {
+  if (!checked) {
     return (
       <div
         className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
@@ -44,6 +31,10 @@ export default function HomeHub() {
         <p className="text-sm opacity-90">Yuklanmoqda...</p>
       </div>
     );
+  }
+
+  if (!isTelegramWebApp()) {
+    return <TelegramRequired />;
   }
 
   return (

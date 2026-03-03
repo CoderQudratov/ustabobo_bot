@@ -30,7 +30,10 @@ export class AuthScene {
   @SceneEnter()
   async onEnter(@Ctx() ctx: AuthWizardContext): Promise<void> {
     if (!ctx.wizard) {
-      console.warn(AUTH_LOG, 'SceneEnter: ctx.wizard undefined (session may not be ready)');
+      console.warn(
+        AUTH_LOG,
+        'SceneEnter: ctx.wizard undefined (session may not be ready)',
+      );
       await ctx.reply('Login kiriting:').catch(() => {});
       return;
     }
@@ -49,9 +52,14 @@ export class AuthScene {
   /** If user sends /start while in wizard, leave and ask to restart */
   @Command('start')
   async onStartInWizard(@Ctx() ctx: AuthWizardContext): Promise<void> {
-    console.log(AUTH_LOG, 'Command /start received inside wizard – leaving scene');
+    console.log(
+      AUTH_LOG,
+      'Command /start received inside wizard – leaving scene',
+    );
     await ctx.scene.leave().catch(() => {});
-    await ctx.reply('Kirishni qaytadan boshlash uchun /start ni qayta bosing.').catch(() => {});
+    await ctx
+      .reply('Kirishni qaytadan boshlash uchun /start ni qayta bosing.')
+      .catch(() => {});
   }
 
   /** Step 0: receive login, save to state, ask for password, move to step 1 */
@@ -59,8 +67,15 @@ export class AuthScene {
   @On('text')
   async stepLogin(@Ctx() ctx: AuthWizardContext): Promise<string | void> {
     if (!ctx.wizard) return 'Login kiriting:';
-    const text = ctx.message && 'text' in ctx.message ? (ctx.message as { text: string }).text : '';
-    console.log(AUTH_LOG, 'Step 0 (login) received text:', text ? `${text.slice(0, 2)}***` : '(empty)');
+    const text =
+      ctx.message && 'text' in ctx.message
+        ? (ctx.message as { text: string }).text
+        : '';
+    console.log(
+      AUTH_LOG,
+      'Step 0 (login) received text:',
+      text ? `${text.slice(0, 2)}***` : '(empty)',
+    );
 
     if (!text || !text.trim()) {
       return 'Login kiriting:';
@@ -82,8 +97,15 @@ export class AuthScene {
   @WizardStep(1)
   @On('text')
   async stepPassword(@Ctx() ctx: AuthWizardContext): Promise<void> {
-    const text = ctx.message && 'text' in ctx.message ? (ctx.message as { text: string }).text : '';
-    console.log(AUTH_LOG, 'Step 1 (password) received text:', text ? '***' : '(empty)');
+    const text =
+      ctx.message && 'text' in ctx.message
+        ? (ctx.message as { text: string }).text
+        : '';
+    console.log(
+      AUTH_LOG,
+      'Step 1 (password) received text:',
+      text ? '***' : '(empty)',
+    );
 
     if (!text || !text.trim()) {
       await ctx.reply('Parol kiriting:').catch(() => {});
@@ -134,12 +156,14 @@ export class AuthScene {
 
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { tg_id: tgId },
+        data: { tg_id: tgId, is_authenticated: true },
       });
       console.log(AUTH_LOG, 'Login success, tg_id saved for user:', user.id);
       await ctx.scene.leave().catch(() => {});
       // Menu built from process.env.WEBAPP_URL at reply time — no stale links
-      await ctx.reply('Muvaffaqiyatli kirildi!', getMainMenuKeyboard(tgId, user.role)).catch(() => {});
+      await ctx
+        .reply('Muvaffaqiyatli kirildi!', getMainMenuKeyboard(user.role))
+        .catch(() => {});
     } catch (err) {
       console.error(AUTH_LOG, 'Step 1 validate error:', err);
       await ctx.reply('Xatolik yuz berdi. Qaytadan kirish.').catch(() => {});

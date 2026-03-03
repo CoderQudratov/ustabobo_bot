@@ -20,7 +20,11 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 export const multerCarPhotoOptions: MulterOptions = {
   limits: { fileSize: MAX_SIZE },
-  fileFilter: (_req: unknown, file: { mimetype?: string }, cb: (error: Error | null, acceptFile: boolean) => void) => {
+  fileFilter: (
+    _req: unknown,
+    file: { mimetype?: string },
+    cb: (error: Error | null, acceptFile: boolean) => void,
+  ) => {
     if (!file?.mimetype?.startsWith('image/')) {
       return cb(new Error('Faqat rasm fayllar ruxsat etilgan'), false);
     }
@@ -45,7 +49,9 @@ interface UploadedCarPhoto {
 export class UploadController {
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', multerCarPhotoOptions))
-  uploadCarPhoto(@UploadedFile() file: UploadedCarPhoto | undefined): { url: string } {
+  uploadCarPhoto(@UploadedFile() file: UploadedCarPhoto | undefined): {
+    url: string;
+  } {
     if (!file) {
       throw new BadRequestException('Rasm fayl yuborilmadi');
     }

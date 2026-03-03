@@ -65,6 +65,8 @@ async function main() {
       role: MASTER.role,
       percent_rate: MASTER.percent_rate,
       balance: MASTER.balance,
+      pin_code: '1234',
+      is_authenticated: false,
     },
     update: {
       password_hash: masterHash,
@@ -73,6 +75,8 @@ async function main() {
       role: MASTER.role,
       percent_rate: MASTER.percent_rate,
       balance: MASTER.balance,
+      pin_code: '1234',
+      is_authenticated: false,
     },
   });
 

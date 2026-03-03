@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTelegram } from "@/hooks/useTelegram";
+import { isTelegramWebApp } from "@/utils/telegram-env";
+import { TelegramRequired } from "@/components/TelegramRequired";
 import { fetchWallet, type WalletTransaction } from "@/utils/api";
 
 const screenStyle = {
@@ -64,12 +66,17 @@ export default function WalletPage() {
   }, []);
 
   useEffect(() => {
+    if (!isTelegramWebApp()) return;
     loadWallet();
   }, [loadWallet]);
 
   useEffect(() => {
     if (isReady && telegramId == null) setLoading(false);
   }, [isReady, telegramId]);
+
+  if (!isTelegramWebApp()) {
+    return <TelegramRequired />;
+  }
 
   if (telegramId == null && !loading) {
     return (

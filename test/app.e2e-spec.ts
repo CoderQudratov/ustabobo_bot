@@ -1,3 +1,9 @@
+import { join } from 'path';
+import { config } from 'dotenv';
+
+// Load .env so e2e can start app (BOT_TOKEN, WEBAPP_URL, DATABASE_URL)
+config({ path: join(__dirname, '../.env') });
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -16,10 +22,21 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
+  afterEach(async () => {
+    try {
+      if (app) await app.close();
+    } catch {
+      // Telegraf may throw "Bot is not running!" on shutdown in test env
+    }
+  });
+
   it('/ (GET)', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect((res: { text: string }) => {
+        expect(res.text).toContain('AVTO-PRO API');
+        expect(res.text).toContain('Status: OK');
+      });
   });
 });

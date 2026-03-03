@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'node:crypto';
@@ -60,32 +57,68 @@ export class AuthService {
 
   /**
    * Validates Telegram WebApp initData (HMAC-SHA256 with bot token).
-   * Returns tg_id from payload or throws UnauthorizedException.
+   * Tries raw then decoded data_check_string so both Telegram clients work.
    */
   validateTelegramInitData(initData: string): { tgId: number } {
-    const token = process.env.BOT_TOKEN;
-    if (!token?.trim()) {
+    const token = process.env.BOT_TOKEN?.trim();
+    if (!token) {
       throw new UnauthorizedException('Telegram WebApp not configured');
     }
-    const encoded = decodeURIComponent(initData.trim());
-    const secret = crypto
-      .createHmac('sha256', 'WebAppData')
-      .update(token)
-      .digest();
-    const arr = encoded.split('&');
-    const hashIdx = arr.findIndex((s) => s.startsWith('hash='));
-    if (hashIdx === -1) {
+    let raw = initData.trim();
+    if (!raw) {
+      throw new UnauthorizedException('Telegram orqali kiring');
+    }
+    if (!raw.includes('&') && raw.includes('%')) {
+      try {
+        raw = decodeURIComponent(raw);
+      } catch {
+        // keep raw
+      }
+    }
+    const params = new URLSearchParams(raw);
+    const hash = params.get('hash');
+    if (!hash) {
       throw new UnauthorizedException('Invalid Telegram init data');
     }
-    const hash = arr.splice(hashIdx, 1)[0].split('=')[1];
-    arr.sort((a, b) => a.localeCompare(b));
-    const dataCheckString = arr.join('\n');
-    const computedHash = crypto
-      .createHmac('sha256', secret)
-      .update(dataCheckString)
-      .digest('hex');
-    if (computedHash !== hash) {
-      throw new UnauthorizedException('Invalid Telegram init data signature');
+    const secretKey = crypto
+      .createHmac('sha256', token)
+      .update('WebAppData')
+      .digest();
+    const tryValidate = (dataCheckString: string): boolean => {
+      const computed = crypto
+        .createHmac('sha256', secretKey)
+        .update(dataCheckString)
+        .digest('hex');
+      return computed === hash;
+    };
+    const arr = raw.split('&').filter((s) => !s.startsWith('hash='));
+    arr.sort((a, b) => {
+      const keyA = a.indexOf('=') >= 0 ? a.slice(0, a.indexOf('=')) : a;
+      const keyB = b.indexOf('=') >= 0 ? b.slice(0, b.indexOf('=')) : b;
+      return keyA.localeCompare(keyB);
+    });
+    const dataCheckStringRaw = arr.join('\n');
+    if (!tryValidate(dataCheckStringRaw)) {
+      const keys = Array.from(params.keys()).filter((k) => k !== 'hash').sort();
+      const dataCheckStringDecoded = keys
+        .map((k) => `${k}=${params.get(k)}`)
+        .join('\n');
+      if (!tryValidate(dataCheckStringDecoded)) {
+        throw new UnauthorizedException('Invalid Telegram init data signature');
+      }
+    }
+    const maxAgeSec = process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC
+      ? parseInt(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC, 10)
+      : 300;
+    const authDateStr = params.get('auth_date');
+    const authDate = authDateStr ? parseInt(authDateStr, 10) : 0;
+    if (maxAgeSec > 0 && authDate > 0) {
+      const age = Math.floor(Date.now() / 1000) - authDate;
+      if (age > maxAgeSec) {
+        throw new UnauthorizedException(
+          'Telegram sessiyasi eskirgan. Bot orqali qayta oching.',
+        );
+      }
     }
     const userParam = arr.find((s) => s.startsWith('user='));
     if (!userParam) {
@@ -113,7 +146,9 @@ export class AuthService {
       },
     });
     if (!user) {
-      throw new UnauthorizedException('Master not found for this Telegram account');
+      throw new UnauthorizedException(
+        'Master not found for this Telegram account',
+      );
     }
     return user;
   }
@@ -128,7 +163,9 @@ export class AuthService {
       },
     });
     if (!user) {
-      throw new UnauthorizedException('Foydalanuvchi topilmadi. Bot orqali kiring.');
+      throw new UnauthorizedException(
+        'Foydalanuvchi topilmadi. Bot orqali kiring.',
+      );
     }
     return user;
   }

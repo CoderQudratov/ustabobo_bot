@@ -10,7 +10,11 @@ import { BroadcastProducer } from '../broadcast/broadcast-producer.service';
 import { BotNotifyService } from '../bot/bot-notify.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
-import { OrderStatus, OrderItemType, Prisma } from '../../generated/prisma/client';
+import {
+  OrderStatus,
+  OrderItemType,
+  Prisma,
+} from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import { calculateOrderTotal, DELIVERY_FEE } from './price-calculator';
 import { assertTransition } from './order-status-machine';
@@ -23,7 +27,6 @@ export class OrdersService {
     private readonly broadcastProducer: BroadcastProducer,
     private readonly botNotify: BotNotifyService,
   ) {}
-
 
   async createDraft(masterId: string, dto: CreateOrderDto) {
     const serviceIds = dto.service_ids ?? [];
@@ -92,92 +95,96 @@ export class OrdersService {
       services.map((s) => [s.id, Number(s.price)] as [string, number]),
     );
     const productPriceMap = new Map<string, number>(
-      productRecords.map((p) => [p.id, Number(p.sale_price)] as [string, number]),
+      productRecords.map(
+        (p) => [p.id, Number(p.sale_price)] as [string, number],
+      ),
     );
 
-    const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const order = await tx.order.create({
-        data: {
-          master_id: masterId,
-          organization_id: dto.organization_id ?? null,
-          vehicle_id: dto.vehicle_id ?? null,
-          client_name: dto.client_name,
-          client_phone: dto.client_phone,
-          car_number: dto.car_number,
-          car_model: dto.car_model ?? null,
-          car_photo_url: dto.car_photo_url ?? null,
-          delivery_needed: dto.delivery_needed,
-          status: OrderStatus.draft,
-          total_amount: 0,
-        },
-      });
-
-      const itemData: Array<{
-        order_id: string;
-        item_type: OrderItemType;
-        product_id?: string;
-        service_id?: string;
-        item_name?: string;
-        quantity: number;
-        price_at_time: number;
-      }> = [];
-
-      for (const serviceId of serviceIds) {
-        const price = Number(servicePriceMap.get(serviceId) ?? 0);
-        itemData.push({
-          order_id: order.id,
-          item_type: OrderItemType.service,
-          service_id: serviceId,
-          quantity: 1,
-          price_at_time: price,
+    const created = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const order = await tx.order.create({
+          data: {
+            master_id: masterId,
+            organization_id: dto.organization_id ?? null,
+            vehicle_id: dto.vehicle_id ?? null,
+            client_name: dto.client_name,
+            client_phone: dto.client_phone,
+            car_number: dto.car_number,
+            car_model: dto.car_model ?? null,
+            car_photo_url: dto.car_photo_url ?? null,
+            delivery_needed: dto.delivery_needed,
+            status: OrderStatus.draft,
+            total_amount: 0,
+          },
         });
-      }
-      for (const p of products) {
-        const price = Number(productPriceMap.get(p.product_id) ?? 0);
-        itemData.push({
-          order_id: order.id,
-          item_type: OrderItemType.product,
-          product_id: p.product_id,
-          quantity: p.quantity,
-          price_at_time: price,
+
+        const itemData: Array<{
+          order_id: string;
+          item_type: OrderItemType;
+          product_id?: string;
+          service_id?: string;
+          item_name?: string;
+          quantity: number;
+          price_at_time: number;
+        }> = [];
+
+        for (const serviceId of serviceIds) {
+          const price = Number(servicePriceMap.get(serviceId) ?? 0);
+          itemData.push({
+            order_id: order.id,
+            item_type: OrderItemType.service,
+            service_id: serviceId,
+            quantity: 1,
+            price_at_time: price,
+          });
+        }
+        for (const p of products) {
+          const price = Number(productPriceMap.get(p.product_id) ?? 0);
+          itemData.push({
+            order_id: order.id,
+            item_type: OrderItemType.product,
+            product_id: p.product_id,
+            quantity: p.quantity,
+            price_at_time: price,
+          });
+        }
+        for (const mp of manualProducts) {
+          itemData.push({
+            order_id: order.id,
+            item_type: OrderItemType.manual_product,
+            item_name: mp.name,
+            quantity: mp.quantity,
+            price_at_time: Number(mp.price),
+          });
+        }
+
+        await tx.orderItem.createMany({
+          data: itemData.map((d) => ({
+            order_id: d.order_id,
+            item_type: d.item_type,
+            product_id: d.product_id,
+            service_id: d.service_id,
+            item_name: d.item_name,
+            quantity: d.quantity,
+            price_at_time: Number(d.price_at_time),
+          })),
         });
-      }
-      for (const mp of manualProducts) {
-        itemData.push({
-          order_id: order.id,
-          item_type: OrderItemType.manual_product,
-          item_name: mp.name,
-          quantity: mp.quantity,
-          price_at_time: Number(mp.price),
+
+        await tx.orderEvent.create({
+          data: {
+            order_id: order.id,
+            actor_user_id: masterId,
+            event_type: 'draft_created',
+            payload: { status: OrderStatus.draft },
+          },
         });
-      }
 
-      await tx.orderItem.createMany({
-        data: itemData.map((d) => ({
-          order_id: d.order_id,
-          item_type: d.item_type,
-          product_id: d.product_id,
-          service_id: d.service_id,
-          item_name: d.item_name,
-          quantity: d.quantity,
-          price_at_time: Number(d.price_at_time),
-        })),
-      });
-
-      await tx.orderEvent.create({
-        data: {
-          order_id: order.id,
-          actor_user_id: masterId,
-          event_type: 'draft_created',
-          payload: { status: OrderStatus.draft },
-        },
-      });
-
-      return tx.order.findUnique({
-        where: { id: order.id },
-        include: { orderItems: true },
-      });
-    });
+        return tx.order.findUnique({
+          where: { id: order.id },
+          include: { orderItems: true },
+        });
+      },
+    );
     // Proactive bot message: branch on delivery_needed (ask location vs confirm keyboard)
     if (created) {
       this.botNotify
@@ -186,7 +193,9 @@ export class OrdersService {
           master_id: created.master_id,
           delivery_needed: created.delivery_needed,
         })
-        .catch((err) => console.error('[OrdersService] sendMessageAfterDraft:', err));
+        .catch((err) =>
+          console.error('[OrdersService] sendMessageAfterDraft:', err),
+        );
     }
     return created!;
   }
@@ -212,16 +221,26 @@ export class OrdersService {
     });
     if (!draft) return null;
 
-    const updated = await this.setLocation(draft.id, user.id, { lat, lng: lon });
+    const updated = await this.setLocation(draft.id, user.id, {
+      lat,
+      lng: lon,
+    });
     const totalAmount = Number(updated.total_amount);
-    return { id: updated.id, master_id: updated.master_id, total_amount: totalAmount };
+    return {
+      id: updated.id,
+      master_id: updated.master_id,
+      total_amount: totalAmount,
+    };
   }
 
   /** Resolve master id from Telegram ID (Prisma tg_id is string; handle number/BigInt from client). */
-  async findMasterByTelegramId(telegramId: string | number): Promise<{ id: string } | null> {
-    const tgIdStr = typeof telegramId === 'number' || typeof telegramId === 'bigint'
-      ? String(telegramId)
-      : String(telegramId ?? '').trim();
+  async findMasterByTelegramId(
+    telegramId: string | number,
+  ): Promise<{ id: string } | null> {
+    const tgIdStr =
+      typeof telegramId === 'number' || typeof telegramId === 'bigint'
+        ? String(telegramId)
+        : String(telegramId ?? '').trim();
     if (!tgIdStr) return null;
     const user = await this.prisma.user.findFirst({
       where: { tg_id: tgIdStr, is_active: true },
@@ -231,10 +250,13 @@ export class OrdersService {
   }
 
   /** Find user (any role) by Telegram ID. */
-  async findUserByTelegramId(telegramId: string | number): Promise<{ id: string; role: string } | null> {
-    const tgIdStr = typeof telegramId === 'number' || typeof telegramId === 'bigint'
-      ? String(telegramId)
-      : String(telegramId ?? '').trim();
+  async findUserByTelegramId(
+    telegramId: string | number,
+  ): Promise<{ id: string; role: string } | null> {
+    const tgIdStr =
+      typeof telegramId === 'number' || typeof telegramId === 'bigint'
+        ? String(telegramId)
+        : String(telegramId ?? '').trim();
     const user = await this.prisma.user.findFirst({
       where: { tg_id: tgIdStr, is_active: true },
       select: { id: true, role: true },
@@ -246,10 +268,13 @@ export class OrdersService {
   async getMyOrders(telegramId: string | number) {
     const user = await this.findUserByTelegramId(telegramId);
     if (!user) return [];
+    return this.getMyOrdersByUserId(user.id, user.role);
+  }
+
+  /** Fetch orders by DB user id (used when auth is via initData guard; no telegramId in URL). */
+  async getMyOrdersByUserId(userId: string, role: string) {
     const where =
-      user.role === 'driver'
-        ? { driver_id: user.id }
-        : { master_id: user.id };
+      role === 'driver' ? { driver_id: userId } : { master_id: userId };
     return this.prisma.order.findMany({
       where,
       orderBy: { created_at: 'desc' },
@@ -278,16 +303,25 @@ export class OrdersService {
       throw new ForbiddenException('You can only update your own orders');
     }
     try {
-      assertTransition(order.status as OrderStatus, OrderStatus.waiting_confirmation, 'setLocation');
+      assertTransition(
+        order.status,
+        OrderStatus.waiting_confirmation,
+        'setLocation',
+      );
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
     const itemsForTotal = order.orderItems.map((i) => ({
       item_type: i.item_type,
       price_at_time: Number(i.price_at_time),
       quantity: i.quantity,
     }));
-    const totalAmount = calculateOrderTotal(itemsForTotal, order.delivery_needed);
+    const totalAmount = calculateOrderTotal(
+      itemsForTotal,
+      order.delivery_needed,
+    );
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({
@@ -326,9 +360,11 @@ export class OrdersService {
       ? OrderStatus.broadcasted
       : OrderStatus.waiting_master_work_start;
     try {
-      assertTransition(order.status as OrderStatus, newStatus, 'confirm');
+      assertTransition(order.status, newStatus, 'confirm');
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
 
     // When confirming from draft (no location), total_amount may be 0 — use shared calculator
@@ -339,7 +375,9 @@ export class OrdersService {
         quantity: i.quantity,
       })) ?? [];
     const totalAmount =
-      order.status === OrderStatus.draft && Number(order.total_amount) === 0 && itemsForTotal.length
+      order.status === OrderStatus.draft &&
+      Number(order.total_amount) === 0 &&
+      itemsForTotal.length
         ? calculateOrderTotal(itemsForTotal, order.delivery_needed)
         : Number(order.total_amount);
 
@@ -365,7 +403,10 @@ export class OrdersService {
     if (order.delivery_needed && newStatus === OrderStatus.broadcasted) {
       this.broadcastProducer.broadcastOrder(orderId);
     }
-    if (!order.delivery_needed && newStatus === OrderStatus.waiting_master_work_start) {
+    if (
+      !order.delivery_needed &&
+      newStatus === OrderStatus.waiting_master_work_start
+    ) {
       const master = await this.prisma.user.findUnique({
         where: { id: order.master_id },
         select: { tg_id: true },
@@ -392,12 +433,16 @@ export class OrdersService {
       throw new NotFoundException(`Order with id "${orderId}" not found`);
     }
     if (order.master_id !== masterId) {
-      throw new ForbiddenException('You can only start work on your own orders');
+      throw new ForbiddenException(
+        'You can only start work on your own orders',
+      );
     }
     try {
-      assertTransition(order.status as OrderStatus, OrderStatus.working, 'masterStartWork');
+      assertTransition(order.status, OrderStatus.working, 'masterStartWork');
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
     await this.prisma.$transaction([
       this.prisma.order.update({
@@ -434,9 +479,11 @@ export class OrdersService {
       throw new ForbiddenException('You can only cancel your own orders');
     }
     try {
-      assertTransition(order.status as OrderStatus, OrderStatus.cancelled, 'cancelOrder');
+      assertTransition(order.status, OrderStatus.cancelled, 'cancelOrder');
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
 
     const [updated] = await this.prisma.$transaction([
@@ -467,9 +514,15 @@ export class OrdersService {
       throw new ForbiddenException('You can only finish your own orders');
     }
     try {
-      assertTransition(order.status as OrderStatus, OrderStatus.waiting_customer_confirmation, 'finish');
+      assertTransition(
+        order.status,
+        OrderStatus.waiting_customer_confirmation,
+        'finish',
+      );
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
 
     const confirmToken = randomUUID();
@@ -520,12 +573,14 @@ export class OrdersService {
     }
     try {
       assertTransition(
-        order.status as OrderStatus,
+        order.status,
         OrderStatus.waiting_master_delivery_confirmation,
         'driverFinish',
       );
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
     await this.prisma.$transaction([
       this.prisma.order.update({
@@ -555,7 +610,11 @@ export class OrdersService {
   }
 
   /** Master confirms or rejects delivery (from bot inline buttons). When confirmed, credit 30,000 UZS to driver (once, in same tx). */
-  async masterConfirmDelivery(orderId: string, masterId: string, confirmed: boolean) {
+  async masterConfirmDelivery(
+    orderId: string,
+    masterId: string,
+    confirmed: boolean,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -567,17 +626,23 @@ export class OrdersService {
       throw new NotFoundException(`Order with id "${orderId}" not found`);
     }
     if (order.master_id !== masterId) {
-      throw new ForbiddenException('You can only confirm delivery for your own orders');
+      throw new ForbiddenException(
+        'You can only confirm delivery for your own orders',
+      );
     }
-    const targetStatus = confirmed ? OrderStatus.working : OrderStatus.received_by_driver;
+    const targetStatus = confirmed
+      ? OrderStatus.working
+      : OrderStatus.received_by_driver;
     try {
       assertTransition(
-        order.status as OrderStatus,
+        order.status,
         targetStatus,
         confirmed ? 'masterConfirmDelivery' : 'masterRejectDelivery',
       );
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
 
     const driverId = order.driver_id;
@@ -592,14 +657,20 @@ export class OrdersService {
         data: {
           order_id: orderId,
           actor_user_id: masterId,
-          event_type: confirmed ? 'master_confirmed_delivery' : 'master_rejected_delivery',
+          event_type: confirmed
+            ? 'master_confirmed_delivery'
+            : 'master_rejected_delivery',
           payload: { confirmed },
         },
       });
       if (confirmed && driverId) {
         const existing = await tx.transaction.findUnique({
           where: {
-            order_id_user_id_type: { order_id: orderId, user_id: driverId, type: 'delivery_fee' },
+            order_id_user_id_type: {
+              order_id: orderId,
+              user_id: driverId,
+              type: 'delivery_fee',
+            },
           },
         });
         if (!existing) {
@@ -707,9 +778,11 @@ export class OrdersService {
       throw new ForbiddenException('You can only receive your own orders');
     }
     try {
-      assertTransition(order.status as OrderStatus, OrderStatus.working, 'receive');
+      assertTransition(order.status, OrderStatus.working, 'receive');
     } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+      throw new BadRequestException(
+        e instanceof Error ? e.message : 'Invalid status transition',
+      );
     }
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({
@@ -747,15 +820,10 @@ export class OrdersService {
 
     const servicesSum = order.orderItems
       .filter((i) => i.item_type === OrderItemType.service)
-      .reduce(
-        (sum, i) => sum + Number(i.price_at_time) * i.quantity,
-        0,
-      );
+      .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
     const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
     const masterPercent = Number(order.master.percent_rate);
-    const driverPercent = order.driver
-      ? Number(order.driver.percent_rate)
-      : 0;
+    const driverPercent = order.driver ? Number(order.driver.percent_rate) : 0;
     const masterFee = (servicesSum * masterPercent) / 100;
     const driverFee = (deliveryFee * driverPercent) / 100;
     const totalAmount = Number(order.total_amount);

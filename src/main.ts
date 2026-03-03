@@ -4,8 +4,20 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
+import { validateEnv, getSafeStartupConfig } from './config/env';
 import { AppModule } from './app.module';
 import { config } from './config/configuration';
+
+// Fail fast if BOT_TOKEN missing or placeholder (avoids "Invalid Telegram init data signature")
+validateEnv();
+const safeConfig = getSafeStartupConfig();
+console.log('[Startup] BOT_TOKEN prefix:', safeConfig.botTokenPrefix);
+console.log('[Startup] WEBAPP_URL:', safeConfig.webappUrl);
+console.log('[Startup] NODE_ENV:', safeConfig.nodeEnv);
+console.log(
+  '[Startup] TELEGRAM_INIT_DATA_MAX_AGE_SEC:',
+  safeConfig.initDataMaxAgeSec,
+);
 
 const UPLOADS_DIR = join(process.cwd(), 'uploads');
 const CAR_PHOTOS_DIR = join(UPLOADS_DIR, 'car-photos');
@@ -17,6 +29,10 @@ process.on('unhandledRejection', (reason: unknown) => {
   console.error('[unhandledRejection]', reason);
 });
 
+/**
+ * CORS: barcha Cloudflare tunnel, Telegram WebApp va localhost dan so'rovlarni qabul qilish.
+ * BotFather dan qo'shilgan Mini App har qanday HTTPS origin dan ochilishi mumkin — origin cheklanmaydi.
+ */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use('/uploads', express.static(UPLOADS_DIR));
@@ -27,11 +43,15 @@ async function bootstrap() {
     allowedHeaders: [
       'Content-Type',
       'Authorization',
+      'x-telegram-init-data',
       'X-Telegram-Init-Data',
       'Accept',
       'Origin',
       'Accept-Language',
+      'Cache-Control',
+      'X-Requested-With',
     ],
+    exposedHeaders: ['Content-Length', 'Content-Type'],
     optionsSuccessStatus: 200,
     preflightContinue: false,
   });
@@ -42,7 +62,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(config.port);
-  console.log(`API: ${config.apiBaseUrl}`);
+  await app.listen(config.port, '0.0.0.0');
+  console.log(
+    `API: ${config.apiBaseUrl} (port ${config.port}, CORS: barcha origin)`,
+  );
 }
-bootstrap();
+void bootstrap();

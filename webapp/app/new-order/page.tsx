@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTelegram } from "@/hooks/useTelegram";
+import { isTelegramWebApp } from "@/utils/telegram-env";
+import { TelegramRequired } from "@/components/TelegramRequired";
 import {
   fetchWebAppInit,
   createOrder,
@@ -93,7 +95,7 @@ export default function NewOrderPage() {
           }
           if (isNetworkError(e)) {
             setError(
-              `Backend ga ulanish xato. Tekshiring: ${getApiUrl("")}, tarmoq va CORS.`
+              `Backend ga ulanish xato. API: ${getApiUrl("")}. Tekshiring: tunnel ishlayaptimi, .env da NEXT_PUBLIC_API_URL to'g'rimi.`
             );
           } else {
             setError(getErrorMessage(e, "Init xato"));
@@ -106,10 +108,7 @@ export default function NewOrderPage() {
   }, []);
 
   useEffect(() => {
-    if (!isReady) return;
-    if (typeof window !== "undefined" && window.Telegram?.WebApp?.ready) {
-      window.Telegram.WebApp.ready();
-    }
+    if (!isReady || !isTelegramWebApp()) return;
     loadInit();
   }, [isReady, loadInit]);
 
@@ -228,6 +227,10 @@ export default function NewOrderPage() {
       manualProducts,
     ]
   );
+
+  if (!isTelegramWebApp()) {
+    return <TelegramRequired />;
+  }
 
   if (loading) {
     return (

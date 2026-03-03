@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { TelegramProvider } from "@/components/providers/TelegramProvider";
+import { TelegramThemeClient } from "@/components/TelegramThemeClient";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
-        {/* TelegramProvider calls window.Telegram.WebApp.ready() on mount */}
+        <TelegramThemeClient />
         <TelegramProvider>{children}</TelegramProvider>
       </body>
     </html>

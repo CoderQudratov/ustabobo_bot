@@ -1,13 +1,57 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Action, Ctx, On, Start, Update } from 'nestjs-telegraf';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Action, Ctx, Command, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { Markup, Scenes } from 'telegraf';
-import { getDriverOrderWebAppKeyboard, getDriverKeyboard, getMainMenuKeyboard, getMasterKeyboard } from './keyboards';
+import {
+  getDriverOrderWebAppKeyboard,
+  getDriverKeyboard,
+  getMainMenuKeyboard,
+  getMasterKeyboard,
+  getPinEntryKeyboard,
+  PIN_CALLBACK_PREFIX,
+} from './keyboards';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus, Role } from '../../generated/prisma/client';
+import { User } from '../../generated/prisma/client';
 
 const DELIVERY_FEE = 30_000;
+const PIN_MAX_FAIL = 3;
+const PIN_LOCK_MINUTES = 5;
+
+/** Session: PIN entry buffer and optional set-PIN mode (when user has no pin_code yet). */
+interface SessionWithPin {
+  pinBuffer?: string;
+  setPinMode?: boolean;
+}
+
+function getSession(ctx: Context): SessionWithPin {
+  return ((ctx as any).session ?? {}) as SessionWithPin;
+}
+
+function getPinBuffer(ctx: Context): string {
+  return getSession(ctx).pinBuffer ?? '';
+}
+
+function setPinBuffer(ctx: Context, value: string): void {
+  const s = getSession(ctx);
+  (ctx as any).session = { ...s, pinBuffer: value };
+}
+
+function setPinMode(ctx: Context, value: boolean): void {
+  const s = getSession(ctx);
+  (ctx as any).session = { ...s, setPinMode: value };
+}
+
+function isSetPinMode(ctx: Context): boolean {
+  return !!getSession(ctx).setPinMode;
+}
 
 @Update()
 @Injectable()
@@ -16,6 +60,193 @@ export class BotUpdate {
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
   ) {}
+
+  /** Returns user if allowed to act (authenticated or no PIN); otherwise replies and returns null. */
+  private async requireAuth(ctx: Context): Promise<
+    | (User & {
+        pin_code: string | null;
+        is_authenticated: boolean;
+        locked_until: Date | null;
+        pin_fail_count: number;
+      })
+    | null
+  > {
+    const tgId = ctx.from?.id?.toString();
+    if (!tgId) return null;
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgId, is_active: true },
+    });
+    if (!user) return null;
+    const hasPin = user.pin_code != null && user.pin_code.trim() !== '';
+    if (hasPin && !user.is_authenticated) {
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        const mins = Math.ceil(
+          (new Date(user.locked_until).getTime() - Date.now()) / 60_000,
+        );
+        await ctx
+          .reply(
+            `🔒 PIN bloklangan. ${mins} daqiqa keyin qayta urinib ko‘ring.`,
+          )
+          .catch(() => {});
+        return null;
+      }
+      await ctx.reply('🔐 Avval PIN kiriting (/start).').catch(() => {});
+      return null;
+    }
+    return user as User & {
+      pin_code: string | null;
+      is_authenticated: boolean;
+      locked_until: Date | null;
+      pin_fail_count: number;
+    };
+  }
+
+  @Command('check')
+  async onCheck(@Ctx() ctx: Context): Promise<void> {
+    const tgId = ctx.from?.id?.toString();
+    if (!tgId) {
+      await ctx.reply('Foydalanuvchi aniqlanmadi.').catch(() => {});
+      return;
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgId, is_active: true },
+    });
+    if (!user) {
+      await ctx.reply('DB: user topilmadi.').catch(() => {});
+      return;
+    }
+    const msg = [
+      `is_authenticated: ${user.is_authenticated}`,
+      `pin_fail_count: ${user.pin_fail_count}`,
+      `locked_until: ${user.locked_until ? user.locked_until.toISOString() : 'null'}`,
+    ].join('\n');
+    await ctx.reply(msg).catch(() => {});
+  }
+
+  @Action(new RegExp(`^${PIN_CALLBACK_PREFIX}`))
+  async onPinAction(@Ctx() ctx: Context): Promise<void> {
+    const tgId = ctx.from?.id?.toString();
+    if (!tgId) {
+      await ctx.answerCbQuery('Xatolik.').catch(() => {});
+      return;
+    }
+    const cb = ctx.callbackQuery as { data?: string } | undefined;
+    const data = cb?.data ?? '';
+    if (data === 'pin_clear') {
+      setPinBuffer(ctx, '');
+      await ctx.answerCbQuery('Tozalandi.').catch(() => {});
+      const msg = isSetPinMode(ctx)
+        ? "🔐 PIN o'rnating (kamida 4 raqam):"
+        : '🔐 PIN kiriting:';
+      await ctx.editMessageText(msg, getPinEntryKeyboard()).catch(() => {});
+      return;
+    }
+    if (data === 'pin_ok') {
+      const buf = getPinBuffer(ctx);
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Foydalanuvchi topilmadi.').catch(() => {});
+        return;
+      }
+      // Set-PIN mode: user had no pin_code, now saving first PIN (min 4 digits)
+      if (isSetPinMode(ctx)) {
+        setPinMode(ctx, false);
+        setPinBuffer(ctx, '');
+        if (buf.length < 4) {
+          await ctx
+            .answerCbQuery('Kamida 4 raqam kiriting.', { show_alert: true })
+            .catch(() => {});
+          await ctx
+            .editMessageText(
+              "🔐 PIN o'rnating (kamida 4 raqam):",
+              getPinEntryKeyboard(),
+            )
+            .catch(() => {});
+          return;
+        }
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { pin_code: buf, is_authenticated: true, pin_fail_count: 0 },
+        });
+        await ctx.answerCbQuery('PIN saqlandi!').catch(() => {});
+        await ctx.editMessageText('Asosiy menyu').catch(() => {});
+        await ctx
+          .reply('Menyu', getMainMenuKeyboard(user.role))
+          .catch(() => {});
+        return;
+      }
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        await ctx.answerCbQuery('PIN bloklangan. Kuting.').catch(() => {});
+        return;
+      }
+      const expected = (user.pin_code ?? '').trim();
+      if (expected && buf === expected) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { is_authenticated: true, pin_fail_count: 0 },
+        });
+        setPinBuffer(ctx, '');
+        await ctx.answerCbQuery('Tasdiqlandi!').catch(() => {});
+        await ctx.editMessageText('Asosiy menyu').catch(() => {});
+        await ctx
+          .reply('Menyu', getMainMenuKeyboard(user.role))
+          .catch(() => {});
+        return;
+      }
+      const failCount = (user.pin_fail_count ?? 0) + 1;
+      const lockUntil =
+        failCount >= PIN_MAX_FAIL
+          ? new Date(Date.now() + PIN_LOCK_MINUTES * 60 * 1000)
+          : null;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { pin_fail_count: failCount, locked_until: lockUntil },
+      });
+      setPinBuffer(ctx, '');
+      if (lockUntil) {
+        await ctx
+          .answerCbQuery(
+            `PIN noto'g'ri. ${PIN_MAX_FAIL} marta urinish — ${PIN_LOCK_MINUTES} daqiqa blok.`,
+            { show_alert: true },
+          )
+          .catch(() => {});
+        await ctx
+          .editMessageText(
+            `🔒 Bloklandi. ${PIN_LOCK_MINUTES} daqiqa keyin /start bosing.`,
+          )
+          .catch(() => {});
+      } else {
+        const left = PIN_MAX_FAIL - failCount;
+        await ctx
+          .answerCbQuery(`Noto'g'ri. Qolgan urinish: ${left}`, {
+            show_alert: true,
+          })
+          .catch(() => {});
+        await ctx
+          .editMessageText(
+            `🔐 PIN kiriting (qolgan: ${left}):`,
+            getPinEntryKeyboard(),
+          )
+          .catch(() => {});
+      }
+      return;
+    }
+    if (data.startsWith('pin_d_')) {
+      const digit = data.slice(6);
+      const buf = getPinBuffer(ctx) + digit;
+      setPinBuffer(ctx, buf);
+      await ctx.answerCbQuery('.').catch(() => {});
+      const prefix = isSetPinMode(ctx) ? "🔐 PIN o'rnating: " : '🔐 PIN: ';
+      await ctx
+        .editMessageText(
+          `${prefix}${'•'.repeat(buf.length)}`,
+          getPinEntryKeyboard(),
+        )
+        .catch(() => {});
+    }
+  }
 
   @Start()
   async onStart(@Ctx() ctx: Context): Promise<void> {
@@ -37,7 +268,9 @@ export class BotUpdate {
         try {
           // TZ §§11–13: customer confirmation must complete order, reduce stock, and apply finance in $transaction.
           const order = await this.ordersService.customerConfirm(token);
-          await ctx.reply('✅ Xizmat muvaffaqiyatli tasdiqlandi! Rahmat.').catch(() => {});
+          await ctx
+            .reply('✅ Xizmat muvaffaqiyatli tasdiqlandi! Rahmat.')
+            .catch(() => {});
 
           if (order?.master?.id) {
             const master = await this.prisma.user.findUnique({
@@ -54,10 +287,14 @@ export class BotUpdate {
           }
         } catch (err) {
           if (err instanceof NotFoundException) {
-            await ctx.reply('Tasdiqlash tokeni eskirgan yoki noto‘g‘ri.').catch(() => {});
+            await ctx
+              .reply('Tasdiqlash tokeni eskirgan yoki noto‘g‘ri.')
+              .catch(() => {});
           } else {
             console.error('[Bot] conf_ start error:', err);
-            await ctx.reply('Tasdiqlash jarayonida xatolik yuz berdi.').catch(() => {});
+            await ctx
+              .reply('Tasdiqlash jarayonida xatolik yuz berdi.')
+              .catch(() => {});
           }
         }
         return;
@@ -73,20 +310,52 @@ export class BotUpdate {
         where: { tg_id: tgId, is_active: true },
       });
       if (user) {
-        console.log('[Bot] /start – already logged in, showing menu');
-        await ctx.reply('Asosiy menyu', getMainMenuKeyboard(tgId, user.role)).catch(() => {});
+        // Hard logout on every /start: require re-PIN (TZ Phase 3)
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { is_authenticated: false },
+        });
+        setPinBuffer(ctx, '');
+        if (user.pin_code != null && user.pin_code.trim() !== '') {
+          const locked =
+            user.locked_until && new Date(user.locked_until) > new Date();
+          if (locked) {
+            const mins = Math.ceil(
+              (new Date(user.locked_until!).getTime() - Date.now()) / 60_000,
+            );
+            await ctx
+              .reply(
+                `🔒 PIN bloklangan. ${mins} daqiqa keyin qayta urinib ko‘ring.`,
+              )
+              .catch(() => {});
+            return;
+          }
+          await ctx
+            .reply('🔐 PIN kiriting:', getPinEntryKeyboard())
+            .catch(() => {});
+          return;
+        }
+        // No PIN set: force PIN setup flow (security — user must set PIN before menu)
+        setPinMode(ctx, true);
+        await ctx
+          .reply("🔐 PIN o'rnating (kamida 4 raqam):", getPinEntryKeyboard())
+          .catch(() => {});
         return;
       }
 
       if (sceneCtx.scene) {
-        console.log('[Bot] /start – entering auth scene (first message from scene)');
+        console.log('[Bot] /start – entering auth scene');
         await sceneCtx.scene.enter('auth');
       } else {
-        await ctx.reply('Xatolik: sessiya ishlamayapti. Qaytadan urinib ko‘ring.').catch(() => {});
+        await ctx
+          .reply('Xatolik: sessiya ishlamayapti. Qaytadan urinib ko‘ring.')
+          .catch(() => {});
       }
     } catch (err) {
       console.error('[Bot] Start error:', err);
-      await ctx.reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+      await ctx
+        .reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .catch(() => {});
     }
   }
 
@@ -97,13 +366,10 @@ export class BotUpdate {
       const tgId = ctx.from?.id?.toString();
       if (!tgId) return;
 
-      // Hidden developer commands: switch role and refresh menu (Phase 1 – Testing Utilities)
+      // Hidden developer commands: switch role (do not set is_authenticated)
       if (text === '/be_driver' || text === '/be_master') {
-        const user = await this.prisma.user.findFirst({
-          where: { tg_id: tgId, is_active: true },
-        });
+        const user = await this.requireAuth(ctx);
         if (!user) {
-          await ctx.reply('Avval /start orqali kirish qiling.').catch(() => {});
           return;
         }
         const newRole = text === '/be_driver' ? Role.driver : Role.master;
@@ -112,17 +378,27 @@ export class BotUpdate {
           data: { role: newRole },
         });
         const roleLabel = newRole === Role.driver ? 'DRIVER' : 'MASTER';
-        const keyboard = newRole === Role.driver ? getDriverKeyboard(tgId) : getMasterKeyboard(tgId);
-        await ctx.reply(`Sizning rolingiz ${roleLabel} ga o'zgartirildi.`, keyboard).catch(() => {});
+        const keyboard =
+          newRole === Role.driver ? getDriverKeyboard() : getMasterKeyboard();
+        await ctx
+          .reply(`Sizning rolingiz ${roleLabel} ga o'zgartirildi.`, keyboard)
+          .catch(() => {});
         return;
       }
 
+      const user = await this.requireAuth(ctx);
+      if (!user) return;
+
       if (text === '📋 Buyurtmalarim') {
-        await ctx.reply('Buyurtmalar ro‘yxati (keyingi versiyada).').catch(() => {});
+        await ctx
+          .reply('Buyurtmalar ro‘yxati (keyingi versiyada).')
+          .catch(() => {});
         return;
       }
       if (text === '📍 Lokatsiya yuborish') {
-        await ctx.reply('Lokatsiyangizni yuboring (Share location).').catch(() => {});
+        await ctx
+          .reply('Lokatsiyangizni yuboring (Share location).')
+          .catch(() => {});
         return;
       }
       if (text === '📦 Qabul qildim') {
@@ -130,7 +406,9 @@ export class BotUpdate {
         return;
       }
       if (text === '🔵 Ishni yakunlash') {
-        await ctx.reply('“Ishni yakunlash” (keyingi versiyada).').catch(() => {});
+        await ctx
+          .reply('“Ishni yakunlash” (keyingi versiyada).')
+          .catch(() => {});
         return;
       }
     } catch (err) {
@@ -142,44 +420,45 @@ export class BotUpdate {
   @On('location')
   async onLocation(@Ctx() ctx: Context): Promise<void> {
     try {
+      const user = await this.requireAuth(ctx);
+      if (!user) return;
       const telegramId = ctx.from?.id;
-      if (telegramId == null) {
-        await ctx.reply('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
-        return;
-      }
-      const location = ctx.message && 'location' in ctx.message ? ctx.message.location : null;
+      if (telegramId == null) return;
+      const location =
+        ctx.message && 'location' in ctx.message ? ctx.message.location : null;
       if (!location) {
         await ctx.reply('Lokatsiya olinmadi.').catch(() => {});
         return;
       }
-      const tgIdStr = String(telegramId);
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgIdStr, is_active: true },
-      });
-      if (!user) {
-        await ctx.reply('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
-
       const draft = await this.prisma.order.findFirst({
         where: { master_id: user.id, status: OrderStatus.draft },
         orderBy: { created_at: 'desc' },
       });
 
       if (!draft) {
-        await ctx.reply('Aktiv draft buyurtma topilmadi. Avval yangi buyurtma yarating (WebApp).').catch(() => {});
+        await ctx
+          .reply(
+            'Aktiv draft buyurtma topilmadi. Avval yangi buyurtma yarating (WebApp).',
+          )
+          .catch(() => {});
         return;
       }
 
       if (!draft.delivery_needed) {
-        await ctx.reply(
-          "Bu buyurtma uchun yetkazib berish belgilanmagan. Iltimos, buyurtmani tasdiqlang.",
-        ).catch(() => {});
+        await ctx
+          .reply(
+            'Bu buyurtma uchun yetkazib berish belgilanmagan. Iltimos, buyurtmani tasdiqlang.',
+          )
+          .catch(() => {});
         return;
       }
 
       const { latitude: lat, longitude: lng } = location;
-      const result = await this.ordersService.addLocationToDraft(telegramId, lat, lng);
+      const result = await this.ordersService.addLocationToDraft(
+        telegramId,
+        lat,
+        lng,
+      );
       if (!result) {
         await ctx.reply('Xatolik: lokatsiya saqlanmadi.').catch(() => {});
         return;
@@ -215,22 +494,26 @@ export class BotUpdate {
         ],
       ]);
 
-      await ctx.reply(
-        `📝 Buyurtma ma'lumotlari qabul qilindi.\n\n💰 Jami summa: ${totalFormatted} so'm\n\nTasdiqlaysizmi?`,
-        keyboard,
-      ).catch(() => {});
+      await ctx
+        .reply(
+          `📝 Buyurtma ma'lumotlari qabul qilindi.\n\n💰 Jami summa: ${totalFormatted} so'm\n\nTasdiqlaysizmi?`,
+          keyboard,
+        )
+        .catch(() => {});
     } catch (err) {
       console.error('onLocation error:', err);
-      await ctx.reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+      await ctx
+        .reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .catch(() => {});
     }
   }
 
   @Action(/^confirm_order_(.+)$/)
   async onConfirmOrder(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -240,38 +523,48 @@ export class BotUpdate {
         await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
         return;
       }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
       await this.ordersService.confirm(orderId, user.id);
       await ctx.answerCbQuery('Tasdiqlandi!').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText('✅ Buyurtmangiz tasdiqlandi!').catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx
+          .editMessageText('✅ Buyurtmangiz tasdiqlandi!')
+          .catch(() => {});
       }
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
-        const msg = err instanceof Error ? err.message : 'Buyurtmani tasdiqlash mumkin emas.';
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Buyurtmani tasdiqlash mumkin emas.';
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
-        if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        if (
+          ctx.callbackQuery?.message &&
+          'message_id' in ctx.callbackQuery.message
+        ) {
           await ctx.editMessageText(`❌ ${msg}`).catch(() => {});
         }
         return;
       }
       console.error('onConfirmOrder error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+      await ctx
+        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .catch(() => {});
     }
   }
 
   @Action(/^cancel_order_(.+)$/)
   async onCancelOrder(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -281,38 +574,42 @@ export class BotUpdate {
         await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
         return;
       }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
       await this.ordersService.cancelOrder(orderId, user.id);
       await ctx.answerCbQuery('Bekor qilindi.').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
         await ctx.editMessageText('❌ Buyurtma bekor qilindi.').catch(() => {});
       }
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
-        const msg = err instanceof Error ? err.message : 'Buyurtmani bekor qilish mumkin emas.';
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Buyurtmani bekor qilish mumkin emas.';
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
       console.error('onCancelOrder error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+      await ctx
+        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .catch(() => {});
     }
   }
 
   @Action(/^accept_(.+)$/)
   async onAcceptOrder(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
-
       const cb = ctx.callbackQuery as { data?: string } | undefined;
       const data = cb?.data ?? '';
       const orderId = data.startsWith('accept_') ? data.slice(7) : null;
@@ -321,47 +618,63 @@ export class BotUpdate {
         return;
       }
 
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
-
       await this.ordersService.driverAccept(orderId, user.id);
 
       await ctx.answerCbQuery('Buyurtma qabul qilindi!').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText('Siz bu buyurtmani qabul qildingiz ✅').catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx
+          .editMessageText('Siz bu buyurtmani qabul qildingiz ✅')
+          .catch(() => {});
       }
       // Send driver a single message with only WebApp button (TZ: no intermediate "Qabul qildim" step)
       const driverTgId = ctx.from?.id;
       if (driverTgId != null) {
-        const keyboard = getDriverOrderWebAppKeyboard(driverTgId);
-        await ctx.telegram.sendMessage(driverTgId, '📦 Buyurtmani ochish uchun quyidagi tugmani bosing:', {
-          reply_markup: keyboard.reply_markup,
-        }).catch(() => {});
+        const keyboard = getDriverOrderWebAppKeyboard();
+        await ctx.telegram
+          .sendMessage(
+            driverTgId,
+            '📦 Buyurtmani ochish uchun quyidagi tugmani bosing:',
+            {
+              reply_markup: keyboard.reply_markup,
+            },
+          )
+          .catch(() => {});
       }
     } catch (err) {
       if (err instanceof ConflictException) {
-        await ctx.answerCbQuery('Kech qoldingiz, boshqa kuryer oldi 😔', { show_alert: true }).catch(() => {});
-        if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-          await ctx.editMessageText('Bu buyurtma boshqa kuryer tomonidan qabul qilindi.').catch(() => {});
+        await ctx
+          .answerCbQuery('Kech qoldingiz, boshqa kuryer oldi 😔', {
+            show_alert: true,
+          })
+          .catch(() => {});
+        if (
+          ctx.callbackQuery?.message &&
+          'message_id' in ctx.callbackQuery.message
+        ) {
+          await ctx
+            .editMessageText(
+              'Bu buyurtma boshqa kuryer tomonidan qabul qilindi.',
+            )
+            .catch(() => {});
         }
         return;
       }
       console.error('onAcceptOrder error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+      await ctx
+        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .catch(() => {});
     }
   }
 
   @Action(/^confirm_delivery_(.+)$/)
   async onConfirmDelivery(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -371,23 +684,31 @@ export class BotUpdate {
         await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
         return;
       }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
       await this.ordersService.masterConfirmDelivery(orderId, user.id, true);
-      await ctx.answerCbQuery('Qabul qilindi. Ishni boshlashingiz mumkin.').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText('✅ Qabul qilindi. Ishni boshlashingiz mumkin.').catch(() => {});
+      await ctx
+        .answerCbQuery('Qabul qilindi. Ishni boshlashingiz mumkin.')
+        .catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx
+          .editMessageText('✅ Qabul qilindi. Ishni boshlashingiz mumkin.')
+          .catch(() => {});
       }
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
-        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg =
+          err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
-        if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        if (
+          ctx.callbackQuery?.message &&
+          'message_id' in ctx.callbackQuery.message
+        ) {
           await ctx.editMessageText(`❌ ${msg}`).catch(() => {});
         }
         return;
@@ -400,9 +721,9 @@ export class BotUpdate {
   @Action(/^reject_delivery_(.+)$/)
   async onRejectDelivery(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -412,21 +733,26 @@ export class BotUpdate {
         await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
         return;
       }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
       await this.ordersService.masterConfirmDelivery(orderId, user.id, false);
-      await ctx.answerCbQuery('Rad etildi. Kuryerga xabar yuborildi.').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText("❌ Rad etildi. Kuryer bilan bog'laning.").catch(() => {});
+      await ctx
+        .answerCbQuery('Rad etildi. Kuryerga xabar yuborildi.')
+        .catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx
+          .editMessageText("❌ Rad etildi. Kuryer bilan bog'laning.")
+          .catch(() => {});
       }
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
-        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg =
+          err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
@@ -438,9 +764,9 @@ export class BotUpdate {
   @Action(/^start_work_(.+)$/)
   async onStartWork(@Ctx() ctx: Context): Promise<void> {
     try {
-      const tgId = ctx.from?.id?.toString();
-      if (!tgId) {
-        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -450,21 +776,26 @@ export class BotUpdate {
         await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
         return;
       }
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
-        return;
-      }
       await this.ordersService.masterStartWork(orderId, user.id);
       await ctx.answerCbQuery('Ish boshlandi!').catch(() => {});
-      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-        await ctx.editMessageText('✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.').catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx
+          .editMessageText(
+            '✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.',
+          )
+          .catch(() => {});
       }
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
-        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg =
+          err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
@@ -475,9 +806,14 @@ export class BotUpdate {
 
   @Action(/^decline_work_(.+)$/)
   async onDeclineWork(@Ctx() ctx: Context): Promise<void> {
-    await ctx.answerCbQuery("Ishni boshlash bekor qilindi.").catch(() => {});
-    if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
-      await ctx.editMessageText('Ishni boshlash bekor qilindi.').catch(() => {});
+    await ctx.answerCbQuery('Ishni boshlash bekor qilindi.').catch(() => {});
+    if (
+      ctx.callbackQuery?.message &&
+      'message_id' in ctx.callbackQuery.message
+    ) {
+      await ctx
+        .editMessageText('Ishni boshlash bekor qilindi.')
+        .catch(() => {});
     }
   }
 }

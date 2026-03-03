@@ -114,12 +114,13 @@ else
   CF_WEBAPP_PID=$!
   echo "      API tunnel PID: $CF_API_PID   |  log: api_cf.log"
   echo "      WebApp tunnel PID: $CF_WEBAPP_PID  |  log: webapp_cf.log"
-  echo "      Waiting 10s for tunnels to register..."
-  sleep 10
-  echo ""
-
-  API_URL=$(get_cf_url_from_log "$API_CF_LOG")
-  WEBAPP_URL=$(get_cf_url_from_log "$WEBAPP_CF_LOG")
+  echo "      Waiting for tunnel URLs (polling logs up to 20s)..."
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 2
+    API_URL=$(get_cf_url_from_log "$API_CF_LOG")
+    WEBAPP_URL=$(get_cf_url_from_log "$WEBAPP_CF_LOG")
+    [ -n "$API_URL" ] && [ -n "$WEBAPP_URL" ] && break
+  done
   if [ -z "$API_URL" ]; then
     echo "      WARNING: API URL aniqlanmadi. api_cf.log ni tekshiring."
   fi
@@ -129,8 +130,9 @@ else
 fi
 echo ""
 
-echo "[7/7] Updating env..."
+echo "[7/7] Updating env (tunnel URLs -> .env)..."
 if [ -n "$WEBAPP_URL" ]; then
+  [ -f "$ROOT/.env" ] || touch "$ROOT/.env"
   if grep -q '^WEBAPP_URL=' "$ROOT/.env" 2>/dev/null; then
     sed -i "s|^WEBAPP_URL=.*|WEBAPP_URL=$WEBAPP_URL|" "$ROOT/.env"
   else
@@ -139,6 +141,7 @@ if [ -n "$WEBAPP_URL" ]; then
   echo "      .env: WEBAPP_URL=$WEBAPP_URL"
 fi
 if [ -n "$API_URL" ]; then
+  mkdir -p "$ROOT/webapp"
   echo "NEXT_PUBLIC_API_URL=$API_URL" > "$ROOT/webapp/.env.local"
   echo "      webapp/.env.local: NEXT_PUBLIC_API_URL=$API_URL"
   echo "      Restarting WebApp to pick up new API URL..."

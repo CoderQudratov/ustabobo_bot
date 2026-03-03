@@ -17,7 +17,8 @@ async function toPromise(
   result: boolean | Promise<boolean> | import('rxjs').Observable<boolean>,
 ): Promise<boolean> {
   if (typeof result === 'boolean') return result;
-  if (typeof (result as Promise<boolean>).then === 'function') return result as Promise<boolean>;
+  if (typeof (result as Promise<boolean>).then === 'function')
+    return result as Promise<boolean>;
   return firstValueFrom(result as import('rxjs').Observable<boolean>);
 }
 

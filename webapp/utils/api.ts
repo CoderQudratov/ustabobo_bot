@@ -1,8 +1,15 @@
 /**
  * Backend API client for AVTO-PRO WebApp (TZ §6).
- * Single source for API base: NEXT_PUBLIC_API_URL (no hardcoded localhost in production).
- * Every request sends X-Telegram-Init-Data; 401 triggers session-expired flow.
+ * Every request MUST send header "x-telegram-init-data" = Telegram.WebApp.initData.
+ * Backend validates via HMAC; no initData -> do not call API, trigger onTelegramRequired.
  */
+import { getInitDataOrNull, getStartParam } from "@/utils/telegram-env";
+
+const INIT_DATA_HEADER = 'x-telegram-init-data';
+
+/** Custom error when initData is missing — do not call backend. */
+export const TELEGRAM_REQUIRED = "TELEGRAM_REQUIRED";
+
 function getBaseUrl(): string {
   if (typeof window === 'undefined') return '';
   const url = process.env.NEXT_PUBLIC_API_URL;
@@ -13,19 +20,15 @@ function getBaseUrl(): string {
   return '';
 }
 
-function getTelegramInitData(): string {
-  if (typeof window === 'undefined') return '';
-  return window.Telegram?.WebApp?.initData ?? '';
-}
-
 /** Use to show "Iltimos, bot orqali kiring" when opened outside Telegram (initData missing). */
 export function hasTelegramInitData(): boolean {
-  return !!getTelegramInitData()?.trim();
+  const data = getInitDataOrNull();
+  return typeof data === "string" && data.trim().length > 0;
 }
 
 /** Parse Telegram user id from initData for error reporting. Returns empty string if unavailable. */
 export function getTelegramUserId(): string {
-  const raw = getTelegramInitData();
+  const raw = getInitDataOrNull();
   if (!raw?.trim()) return '';
   try {
     const params = new URLSearchParams(raw);
@@ -45,21 +48,42 @@ export function getApiUrl(path: string): string {
 }
 
 let onSessionExpired: (() => void) | null = null;
+let onPinRequired: (() => void) | null = null;
+let onTelegramRequired: (() => void) | null = null;
 
-/** Set callback when 401 is received (e.g. show "Session Expired" modal and re-trigger initData handshake). */
+/** Set callback when 401 is received (e.g. show "Session Expired" modal). */
 export function setSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler;
 }
 
+/** Set callback when 403 PIN required is received — show "Botga qayting va PIN kiriting." */
+export function setPinRequiredHandler(handler: (() => void) | null) {
+  onPinRequired = handler;
+}
+
+/** Set callback when initData is missing — do not call backend, show Telegram required screen. */
+export function setTelegramRequiredHandler(handler: (() => void) | null) {
+  onTelegramRequired = handler;
+}
+
 /**
- * Centralized fetch wrapper. Always sends X-Telegram-Init-Data.
- * On 401, calls session-expired handler so UI can show modal and suggest reopening from Telegram.
+ * Centralized fetch wrapper. Always sends x-telegram-init-data (backend expects lowercase).
+ * If initData is empty we do NOT call backend: trigger onTelegramRequired and throw TELEGRAM_REQUIRED.
  */
 async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Response> {
+  const initData = getInitDataOrNull();
+  if (!initData?.trim()) {
+    if (onTelegramRequired) onTelegramRequired();
+    throw new Error(TELEGRAM_REQUIRED);
+  }
+  if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+    const startParam = getStartParam();
+    console.log("[WebApp] initData length:", initData.length, "start_param:", startParam ?? "(none)");
+  }
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getApiUrl(pathOrUrl);
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  headers.set('X-Telegram-Init-Data', getTelegramInitData());
+  headers.set(INIT_DATA_HEADER, initData);
   const res = await fetch(url, {
     mode: 'cors',
     credentials: 'include',
@@ -69,16 +93,24 @@ async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Resp
   if (res.status === 401 && onSessionExpired) {
     onSessionExpired();
   }
+  if (res.status === 403 && onPinRequired) {
+    onPinRequired();
+  }
   return res;
 }
 
 /** Upload car photo (multipart). Returns { url } for the saved image. */
 export async function uploadCarPhoto(file: File): Promise<{ url: string }> {
+  const initData = getInitDataOrNull();
+  if (!initData?.trim()) {
+    if (onTelegramRequired) onTelegramRequired();
+    throw new Error(TELEGRAM_REQUIRED);
+  }
   const url = getApiUrl('api/upload');
   const formData = new FormData();
   formData.append('file', file);
   const headers = new Headers();
-  headers.set('X-Telegram-Init-Data', getTelegramInitData());
+  headers.set(INIT_DATA_HEADER, initData);
   const res = await fetch(url, {
     method: 'POST',
     body: formData,
@@ -88,6 +120,9 @@ export async function uploadCarPhoto(file: File): Promise<{ url: string }> {
   });
   if (res.status === 401 && onSessionExpired) {
     onSessionExpired();
+  }
+  if (res.status === 403 && onPinRequired) {
+    onPinRequired();
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -186,11 +221,16 @@ export interface MyOrder {
   orderItems: MyOrderItem[];
   master?: MyOrderMaster;
   driver?: MyOrderDriver | null;
+  /** For driver: open in Google Maps https://maps.google.com/?q=lat,lng */
+  lat?: number | null;
+  lng?: number | null;
 }
 
+/** Fetches current user's orders. telegramId from Telegram.WebApp (sent in URL per backend). */
 export async function fetchMyOrders(telegramId: string | number): Promise<MyOrder[]> {
-  const id = typeof telegramId === 'number' ? String(telegramId) : telegramId;
-  const res = await apiFetch(`orders/my/${encodeURIComponent(id)}`, { method: 'GET' });
+  const res = await apiFetch(`orders/my/${encodeURIComponent(String(telegramId))}`, {
+    method: 'GET',
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(text || `HTTP ${res.status}`);

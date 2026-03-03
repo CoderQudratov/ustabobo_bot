@@ -3,17 +3,15 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { JwtPayload } from '../auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Role } from '../../../generated/prisma/client';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET ?? 'avtopro-erp-secret-change-in-production',
+      secretOrKey:
+        process.env.JWT_SECRET ?? 'avtopro-erp-secret-change-in-production',
     });
   }
 
@@ -27,7 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       id: user.id,
       login: user.login,
-      role: user.role as Role,
+      role: user.role,
       fullname: user.fullname,
     };
   }
