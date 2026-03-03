@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTelegram } from "@/hooks/useTelegram";
 import {
   fetchMyOrders,
   cancelOrderApi,
   finishOrderApi,
+  driverFinishOrderApi,
   type MyOrder,
 } from "@/utils/api";
 
@@ -21,7 +23,8 @@ const btnStyle = {
 };
 
 const CANCELABLE_STATUSES = ["draft", "waiting_confirmation"];
-const FINISHABLE_STATUSES = ["working"];
+const MASTER_FINISH_STATUS = "working";
+const DRIVER_FINISH_STATUS = "received_by_driver";
 const DELIVERY_FEE = 30_000;
 
 function statusBadgeClass(status: string): string {
@@ -31,6 +34,9 @@ function statusBadgeClass(status: string): string {
       return "bg-amber-500/20 text-amber-400 border border-amber-500/40";
     case "broadcasted":
     case "accepted":
+    case "received_by_driver":
+    case "waiting_master_delivery_confirmation":
+    case "waiting_master_work_start":
     case "delivered_by_driver":
     case "received_by_master":
     case "working":
@@ -51,6 +57,9 @@ function statusLabel(status: string): string {
     waiting_confirmation: "Tasdiqlash kutilmoqda",
     broadcasted: "Kuryerlar uchun",
     accepted: "Qabul qilindi",
+    received_by_driver: "Qabul qilindi (kuryer)",
+    waiting_master_delivery_confirmation: "Usta tasdiqlashi kutilmoqda",
+    waiting_master_work_start: "Ishni boshlash kutilmoqda",
     delivered_by_driver: "Yetkazildi",
     received_by_master: "Qabul qilindi (usta)",
     working: "Ish jarayonida",
@@ -91,6 +100,10 @@ function calcTotal(order: MyOrder): number {
 }
 
 export default function MyOrdersPage() {
+  const searchParams = useSearchParams();
+  const role = (searchParams.get("role") ?? "master").toLowerCase();
+  const filter = (searchParams.get("filter") ?? "").toLowerCase(); // 'active' | 'history' for driver
+  const isDriver = role === "driver";
   const { isReady, user: telegramUser } = useTelegram();
   const telegramId = telegramUser?.id ?? null;
   const [orders, setOrders] = useState<MyOrder[]>([]);
@@ -98,6 +111,8 @@ export default function MyOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [confirmFinishOrderId, setConfirmFinishOrderId] = useState<string | null>(null);
+  const [carPhotoModalUrl, setCarPhotoModalUrl] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (telegramId == null) return;
@@ -143,32 +158,73 @@ export default function MyOrdersPage() {
     }
   };
 
-  const handleFinishOrReceive = async (order: MyOrder) => {
+  const handleMasterFinishClick = (order: MyOrder) => {
+    if (order.status !== MASTER_FINISH_STATUS) {
+      if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+        window.Telegram.WebApp.showAlert(
+          `Ishni yakunlash mumkin emas. Status: ${order.status}`
+        );
+      }
+      return;
+    }
+    setConfirmFinishOrderId(order.id);
+  };
+
+  const handleMasterFinishConfirm = async () => {
+    const orderId = confirmFinishOrderId;
+    setConfirmFinishOrderId(null);
+    if (!orderId) return;
+    const order = orders.find((o) => o.id === orderId);
+    if (!order || order.status !== MASTER_FINISH_STATUS) return;
+    setActioningId(orderId);
+    try {
+      await finishOrderApi(orderId);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, status: "waiting_customer_confirmation" }
+            : o
+        )
+      );
+      if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+        window.Telegram.WebApp.showAlert(
+          "Ish yakunlandi. Tasdiqlash linki chatga yuborildi."
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Xato";
+      if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+        window.Telegram.WebApp.showAlert(msg);
+      }
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleDriverFinish = async (order: MyOrder) => {
     setActioningId(order.id);
     try {
-      // TZ §10: Finish is allowed ONLY when status is working.
-      if (order.status !== "working") {
+      if (order.status !== DRIVER_FINISH_STATUS) {
         if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
           window.Telegram.WebApp.showAlert(
-            `Ishni yakunlash mumkin emas. Status: ${order.status}`
+            `Yetkazib berishni belgilash mumkin emas. Status: ${order.status}`
           );
         }
         return;
       }
-
-        const { deep_link } = await finishOrderApi(order.id);
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === order.id
-              ? { ...o, status: "waiting_customer_confirmation" }
-              : o
-          )
+      await driverFinishOrderApi(order.id);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id
+            ? { ...o, status: "waiting_master_delivery_confirmation" }
+            : o
+        )
+      );
+      if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+        window.Telegram.WebApp.showAlert(
+          "Ustaga yuborildi. Usta tasdiqlagach ish davom etadi."
         );
-        if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
-          window.Telegram.WebApp.showAlert(
-            `Ish yakunlandi.\nTasdiqlash linki:\n${deep_link}`
-          );
-        }
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Xato";
       if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
@@ -180,8 +236,18 @@ export default function MyOrdersPage() {
   };
 
   const canCancel = (status: string) => CANCELABLE_STATUSES.includes(status);
-  const canFinishOrReceive = (status: string) => FINISHABLE_STATUSES.includes(status);
+  const canMasterFinish = (status: string) => status === MASTER_FINISH_STATUS;
+  const canDriverFinish = (status: string) => status === DRIVER_FINISH_STATUS;
   const isCompleted = (status: string) => status === "completed";
+
+  const DRIVER_ACTIVE_STATUSES = ["received_by_driver", "waiting_master_delivery_confirmation"];
+  const DRIVER_HISTORY_STATUSES = ["working", "completed"];
+  const filteredOrders =
+    isDriver && filter === "active"
+      ? orders.filter((o) => DRIVER_ACTIVE_STATUSES.includes(o.status))
+      : isDriver && filter === "history"
+        ? orders.filter((o) => DRIVER_HISTORY_STATUSES.includes(o.status))
+        : orders;
 
   if (telegramId == null && !loading) {
     return (
@@ -221,15 +287,96 @@ export default function MyOrdersPage() {
 
   return (
     <div className="min-h-screen pb-24" style={screenStyle}>
-      <div className="sticky top-0 z-20 flex items-center gap-4 bg-[color:var(--tg-theme-bg-color,#1a1a1a)]/95 px-6 py-4 backdrop-blur">
-        <Link
-          href="/"
-          className="rounded-xl px-3 py-2 text-sm font-medium"
-          style={btnStyle}
+      {carPhotoModalUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setCarPhotoModalUrl(null)}
+          role="dialog"
+          aria-label="Mashina rasm"
         >
-          ⬅️ Orqaga
-        </Link>
-        <h1 className="text-lg font-semibold">Mening buyurtmalarim</h1>
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-lg bg-white/20 px-3 py-1 text-sm text-white"
+            onClick={() => setCarPhotoModalUrl(null)}
+          >
+            Yopish
+          </button>
+          <img
+            src={carPhotoModalUrl}
+            alt="Mashina rasm"
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      {confirmFinishOrderId && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+        >
+          <div
+            className="max-w-sm rounded-2xl p-6 shadow-xl w-full"
+            style={{
+              backgroundColor: "var(--tg-theme-secondary-bg-color, #2b2b2b)",
+              color: "var(--tg-theme-text-color, #fff)",
+            }}
+          >
+            <p className="text-lg font-medium">Buyurtmani yakunlashni tasdiqlaysizmi?</p>
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-xl py-2.5 text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/40"
+                onClick={() => setConfirmFinishOrderId(null)}
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                style={btnStyle}
+                onClick={handleMasterFinishConfirm}
+              >
+                Tasdiqlash
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="sticky top-0 z-20 flex flex-col gap-2 bg-[color:var(--tg-theme-bg-color,#1a1a1a)]/95 px-6 py-4 backdrop-blur">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="rounded-xl px-3 py-2 text-sm font-medium"
+            style={btnStyle}
+          >
+            ⬅️ Orqaga
+          </Link>
+          <h1 className="text-lg font-semibold">Mening buyurtmalarim</h1>
+        </div>
+        {isDriver && (
+          <div className="flex gap-2">
+            <Link
+              href={`/my-orders?role=driver&filter=active`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                filter === "active"
+                  ? "bg-[var(--tg-theme-button-color,#2481cc)] text-[var(--tg-theme-button-text-color,#fff)]"
+                  : "bg-white/10 text-white/80"
+              }`}
+            >
+              📦 Faol
+            </Link>
+            <Link
+              href={`/my-orders?role=driver&filter=history`}
+              className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                filter === "history"
+                  ? "bg-[var(--tg-theme-button-color,#2481cc)] text-[var(--tg-theme-button-text-color,#fff)]"
+                  : "bg-white/10 text-white/80"
+              }`}
+            >
+              🕒 Tarix
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className="p-6">
@@ -247,14 +394,24 @@ export default function MyOrdersPage() {
         )}
 
         {!error && orders.length === 0 && (
-          <div className="rounded-xl border border:white/10 bg-white/5 px-6 py-10 text-center text-sm opacity-80">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm opacity-80">
             Buyurtmalar yo&apos;q
           </div>
         )}
 
-        {!error && orders.length > 0 && (
+        {!error && orders.length > 0 && filteredOrders.length === 0 && (
+          <div className="rounded-xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm opacity-80">
+            {isDriver && filter === "active"
+              ? "Faol buyurtmalar yo\u2018q"
+              : isDriver && filter === "history"
+                ? "Tarix bo\u2018yicha buyurtmalar yo\u2018q"
+                : "Buyurtmalar yo\u2018q"}
+          </div>
+        )}
+
+        {!error && orders.length > 0 && filteredOrders.length > 0 && (
           <ul className="space-y-4">
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <li
                 key={order.id}
                 className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden shadow-sm"
@@ -293,6 +450,25 @@ export default function MyOrdersPage() {
                       {order.client_name} · {order.car_number}
                       {order.car_model ? ` · ${order.car_model}` : ""}
                     </p>
+                    {!isDriver && order.car_photo_url && (
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCarPhotoModalUrl(order.car_photo_url ?? null);
+                          }}
+                          className="shrink-0 overflow-hidden rounded-lg border border-white/20 focus:outline-none focus:ring-2 focus:ring-[var(--tg-theme-button-color)]"
+                        >
+                          <img
+                            src={order.car_photo_url}
+                            alt="Mashina rasm"
+                            className="h-16 w-24 object-cover"
+                          />
+                        </button>
+                        <span className="text-xs opacity-70">Mashina rasm (bosib kattalashtirish)</span>
+                      </div>
+                    )}
                     <ul className="text-sm space-y-1.5">
                       {order.orderItems?.map((item) => (
                         <li
@@ -332,14 +508,35 @@ export default function MyOrdersPage() {
                       </button>
                     )}
 
-                    {canFinishOrReceive(order.status) && (
+                    {isDriver && canDriverFinish(order.status) && (
+                      <button
+                        type="button"
+                        disabled={actioningId === order.id}
+                        className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                        style={btnStyle}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDriverFinish(order);
+                        }}
+                      >
+                        {actioningId === order.id
+                          ? "..."
+                          : "🏁 Yetkazib berdim / Yakunlash"}
+                      </button>
+                    )}
+                    {!isDriver && order.status === "waiting_master_delivery_confirmation" && (
+                      <p className="mt-2 text-sm text-amber-400 font-medium">
+                        ⏳ Kuryerdan qabul qilish kutilmoqda
+                      </p>
+                    )}
+                    {!isDriver && canMasterFinish(order.status) && (
                       <button
                         type="button"
                         disabled={actioningId === order.id}
                         className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium bg-blue-500/20 text-blue-400 border border-blue-500/40 disabled:opacity-50"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleFinishOrReceive(order);
+                          handleMasterFinishClick(order);
                         }}
                       >
                         {actioningId === order.id

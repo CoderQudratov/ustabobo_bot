@@ -105,6 +105,9 @@ export class BroadcastProcessor extends WorkerHost {
     const deliveryFeeLine = order.delivery_needed
       ? `Yetkazish to'lovi: ${DELIVERY_FEE.toLocaleString()} so'm`
       : '';
+    const driverFeeLine = order.delivery_needed
+      ? `💰 Haq: ${DELIVERY_FEE.toLocaleString()} so'm`
+      : '';
 
     return [
       '📋 <b>Yangi buyurtma</b>',
@@ -118,6 +121,7 @@ export class BroadcastProcessor extends WorkerHost {
       '',
       locationInfo,
       deliveryFeeLine ? `\n${deliveryFeeLine}` : '',
+      driverFeeLine ? `\n${driverFeeLine}` : '',
     ]
       .filter(Boolean)
       .join('\n');

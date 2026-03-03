@@ -12,7 +12,9 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
 import { OrderStatus, OrderItemType, Prisma } from '../../generated/prisma/client';
 import { randomUUID } from 'node:crypto';
-const DELIVERY_FEE = 30_000;
+import { calculateOrderTotal, DELIVERY_FEE } from './price-calculator';
+import { assertTransition } from './order-status-machine';
+import { config } from '../config/configuration';
 
 @Injectable()
 export class OrdersService {
@@ -228,19 +230,28 @@ export class OrdersService {
     return user ? { id: user.id } : null;
   }
 
-  /** Fetch all orders for master by Telegram ID (for "My Orders" WebApp). Order by created_at DESC. Includes services, parts, master and driver. */
-  async getMyOrders(telegramId: string | number) {
-    const master = await this.findMasterByTelegramId(telegramId);
-    if (!master) return [];
+  /** Find user (any role) by Telegram ID. */
+  async findUserByTelegramId(telegramId: string | number): Promise<{ id: string; role: string } | null> {
     const tgIdStr = typeof telegramId === 'number' || typeof telegramId === 'bigint'
       ? String(telegramId)
       : String(telegramId ?? '').trim();
     const user = await this.prisma.user.findFirst({
       where: { tg_id: tgIdStr, is_active: true },
+      select: { id: true, role: true },
     });
+    return user ? { id: user.id, role: user.role } : null;
+  }
+
+  /** Fetch orders for "My Orders" WebApp: master/boss by master_id, driver by driver_id. */
+  async getMyOrders(telegramId: string | number) {
+    const user = await this.findUserByTelegramId(telegramId);
     if (!user) return [];
+    const where =
+      user.role === 'driver'
+        ? { driver_id: user.id }
+        : { master_id: user.id };
     return this.prisma.order.findMany({
-      where: { master_id: user.id },
+      where,
       orderBy: { created_at: 'desc' },
       include: {
         master: { select: { id: true, fullname: true, login: true } },
@@ -266,19 +277,17 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only update your own orders');
     }
-    if (order.status !== OrderStatus.draft) {
-      throw new BadRequestException(
-        `Order must be in draft status. Current status: ${order.status}`,
-      );
+    try {
+      assertTransition(order.status as OrderStatus, OrderStatus.waiting_confirmation, 'setLocation');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
     }
-
-    let totalAmount = order.orderItems.reduce(
-      (sum, item) => sum + Number(item.price_at_time) * item.quantity,
-      0,
-    );
-    if (order.delivery_needed) {
-      totalAmount += DELIVERY_FEE;
-    }
+    const itemsForTotal = order.orderItems.map((i) => ({
+      item_type: i.item_type,
+      price_at_time: Number(i.price_at_time),
+      quantity: i.quantity,
+    }));
+    const totalAmount = calculateOrderTotal(itemsForTotal, order.delivery_needed);
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({
@@ -313,28 +322,26 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only confirm your own orders');
     }
-    // TZ flow: allow draft -> waiting_confirmation (via location) and draft/waiting_confirmation -> broadcasted|working (confirm)
-    if (order.status !== OrderStatus.waiting_confirmation && order.status !== OrderStatus.draft) {
-      throw new BadRequestException(
-        `Order must be in waiting_confirmation or draft status. Current status: ${order.status}`,
-      );
-    }
-
     const newStatus = order.delivery_needed
       ? OrderStatus.broadcasted
-      : OrderStatus.working;
-
-    // When confirming from draft (no location), total_amount may be 0 — compute from items
-    let totalAmount = Number(order.total_amount);
-    if (order.status === OrderStatus.draft && totalAmount === 0 && order.orderItems?.length) {
-      totalAmount = order.orderItems.reduce(
-        (sum, item) => sum + Number(item.price_at_time) * item.quantity,
-        0,
-      );
-      if (order.delivery_needed) {
-        totalAmount += DELIVERY_FEE;
-      }
+      : OrderStatus.waiting_master_work_start;
+    try {
+      assertTransition(order.status as OrderStatus, newStatus, 'confirm');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
     }
+
+    // When confirming from draft (no location), total_amount may be 0 — use shared calculator
+    const itemsForTotal =
+      order.orderItems?.map((i) => ({
+        item_type: i.item_type,
+        price_at_time: Number(i.price_at_time),
+        quantity: i.quantity,
+      })) ?? [];
+    const totalAmount =
+      order.status === OrderStatus.draft && Number(order.total_amount) === 0 && itemsForTotal.length
+        ? calculateOrderTotal(itemsForTotal, order.delivery_needed)
+        : Number(order.total_amount);
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({
@@ -358,8 +365,61 @@ export class OrdersService {
     if (order.delivery_needed && newStatus === OrderStatus.broadcasted) {
       this.broadcastProducer.broadcastOrder(orderId);
     }
+    if (!order.delivery_needed && newStatus === OrderStatus.waiting_master_work_start) {
+      const master = await this.prisma.user.findUnique({
+        where: { id: order.master_id },
+        select: { tg_id: true },
+      });
+      if (master?.tg_id) {
+        await this.botNotify.sendWorkStartConfirmationRequest(
+          master.tg_id,
+          orderId,
+          order.car_photo_url,
+        );
+      }
+    }
 
     return updated;
+  }
+
+  /** Master confirms "Ishni boshlaysizmi?" -> Ha. No-delivery path: waiting_master_work_start -> working. */
+  async masterStartWork(orderId: string, masterId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { master: { select: { tg_id: true } } },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.master_id !== masterId) {
+      throw new ForbiddenException('You can only start work on your own orders');
+    }
+    try {
+      assertTransition(order.status as OrderStatus, OrderStatus.working, 'masterStartWork');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+    }
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.working },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: masterId,
+          event_type: 'master_started_work',
+          payload: {},
+        },
+      }),
+    ]);
+    if (order.master?.tg_id) {
+      await this.botNotify.sendWorkStartedToMaster(order.master.tg_id);
+    }
+    return this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true, master: true },
+    });
   }
 
   /** Cancel order (draft or waiting_confirmation). Used by bot "Bekor qilish" button. */
@@ -373,10 +433,10 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only cancel your own orders');
     }
-    if (order.status !== OrderStatus.draft && order.status !== OrderStatus.waiting_confirmation) {
-      throw new BadRequestException(
-        "Usta yo'lga chiqqan yoki buyurtma yopilgan, bekor qilib bo'lmaydi",
-      );
+    try {
+      assertTransition(order.status as OrderStatus, OrderStatus.cancelled, 'cancelOrder');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
     }
 
     const [updated] = await this.prisma.$transaction([
@@ -406,11 +466,10 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only finish your own orders');
     }
-    // TZ §4.1: Finish only when status is working (usta ishni yakunladi → waiting_customer_confirmation)
-    if (order.status !== OrderStatus.working) {
-      throw new BadRequestException(
-        `Order must be in working status. Current status: ${order.status}`,
-      );
+    try {
+      assertTransition(order.status as OrderStatus, OrderStatus.waiting_customer_confirmation, 'finish');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
     }
 
     const confirmToken = randomUUID();
@@ -433,7 +492,143 @@ export class OrdersService {
       }),
     ]);
 
-    return { confirm_token: confirmToken };
+    const botUsername = config.telegramBotUsername;
+    const deepLink = botUsername
+      ? `https://t.me/${botUsername}?start=conf_${confirmToken}`
+      : '';
+    const master = await this.prisma.user.findUnique({
+      where: { id: order.master_id },
+      select: { tg_id: true },
+    });
+    if (master?.tg_id && deepLink) {
+      await this.botNotify.sendFinishLinkToMaster(master.tg_id, deepLink);
+    }
+    return { confirm_token: confirmToken, deep_link: deepLink };
+  }
+
+  /** Driver marks delivery done in WebApp: received_by_driver -> waiting_master_delivery_confirmation; bot asks Master Ha/Yo'q. */
+  async driverFinish(orderId: string, driverId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { master: { select: { tg_id: true } } },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.driver_id !== driverId) {
+      throw new ForbiddenException('You can only update orders you accepted');
+    }
+    try {
+      assertTransition(
+        order.status as OrderStatus,
+        OrderStatus.waiting_master_delivery_confirmation,
+        'driverFinish',
+      );
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+    }
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.waiting_master_delivery_confirmation },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: driverId,
+          event_type: 'driver_finished',
+          payload: {},
+        },
+      }),
+    ]);
+    if (order.master?.tg_id) {
+      await this.botNotify.sendDeliveryConfirmationRequestToMaster(
+        order.master.tg_id,
+        orderId,
+        order.car_photo_url,
+      );
+    }
+    return this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true, master: true },
+    });
+  }
+
+  /** Master confirms or rejects delivery (from bot inline buttons). When confirmed, credit 30,000 UZS to driver (once, in same tx). */
+  async masterConfirmDelivery(orderId: string, masterId: string, confirmed: boolean) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        master: { select: { tg_id: true } },
+        driver: { select: { id: true, tg_id: true } },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.master_id !== masterId) {
+      throw new ForbiddenException('You can only confirm delivery for your own orders');
+    }
+    const targetStatus = confirmed ? OrderStatus.working : OrderStatus.received_by_driver;
+    try {
+      assertTransition(
+        order.status as OrderStatus,
+        targetStatus,
+        confirmed ? 'masterConfirmDelivery' : 'masterRejectDelivery',
+      );
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
+    }
+
+    const driverId = order.driver_id;
+    const deliveryCreditAmount = DELIVERY_FEE;
+
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: targetStatus },
+      });
+      await tx.orderEvent.create({
+        data: {
+          order_id: orderId,
+          actor_user_id: masterId,
+          event_type: confirmed ? 'master_confirmed_delivery' : 'master_rejected_delivery',
+          payload: { confirmed },
+        },
+      });
+      if (confirmed && driverId) {
+        const existing = await tx.transaction.findUnique({
+          where: {
+            order_id_user_id_type: { order_id: orderId, user_id: driverId, type: 'delivery_fee' },
+          },
+        });
+        if (!existing) {
+          await tx.transaction.create({
+            data: {
+              order_id: orderId,
+              user_id: driverId,
+              amount: deliveryCreditAmount,
+              type: 'delivery_fee',
+            },
+          });
+          await tx.user.update({
+            where: { id: driverId },
+            data: { balance: { increment: deliveryCreditAmount } },
+          });
+        }
+      }
+    });
+
+    if (confirmed && order.master?.tg_id) {
+      await this.botNotify.sendMasterCanStartWork(order.master.tg_id);
+    }
+    if (!confirmed && order.driver?.tg_id) {
+      await this.botNotify.sendDeliveryRejectedToDriver(order.driver.tg_id);
+    }
+    return this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true, master: true, driver: true },
+    });
   }
 
   /**
@@ -444,10 +639,14 @@ export class OrdersService {
     return this.customerConfirm(token);
   }
 
+  /**
+   * Atomic accept: only the first driver who clicks gets the order (TZ §7.2).
+   * UPDATE ... WHERE status = 'broadcasted' RETURNING ensures a single winner; others get empty and see "Kech qoldingiz".
+   */
   async driverAccept(orderId: string, driverId: string) {
     const result = await this.prisma.$queryRaw<
       Array<{ id: string }>
-    >`UPDATE "Order" SET driver_id = ${driverId}, status = 'accepted' WHERE id = ${orderId} AND status = 'broadcasted' RETURNING id`;
+    >`UPDATE "Order" SET driver_id = ${driverId}, status = 'received_by_driver' WHERE id = ${orderId} AND status = 'broadcasted' RETURNING id`;
     if (!result || result.length === 0) {
       throw new ConflictException('Order already taken');
     }
@@ -507,10 +706,10 @@ export class OrdersService {
     if (order.master_id !== masterId) {
       throw new ForbiddenException('You can only receive your own orders');
     }
-    if (order.status !== OrderStatus.delivered_by_driver) {
-      throw new BadRequestException(
-        `Order must be in delivered_by_driver status. Current status: ${order.status}`,
-      );
+    try {
+      assertTransition(order.status as OrderStatus, OrderStatus.working, 'receive');
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid status transition');
     }
     const [updated] = await this.prisma.$transaction([
       this.prisma.order.update({

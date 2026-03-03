@@ -1,16 +1,16 @@
 /**
  * Backend API client for AVTO-PRO WebApp (TZ §6).
- * Uses NEXT_PUBLIC_API_URL (Cloudflare Tunnel / local). No hardcoded links.
- * Every request MUST send X-Telegram-Init-Data so the backend can authenticate (avoids 401).
+ * Single source for API base: NEXT_PUBLIC_API_URL (no hardcoded localhost in production).
+ * Every request sends X-Telegram-Init-Data; 401 triggers session-expired flow.
  */
-const FALLBACK_BASE_URL = 'http://localhost:3000';
-
 function getBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    const url = process.env.NEXT_PUBLIC_API_URL;
-    if (url && String(url).trim()) return String(url).trim().replace(/\/+$/, '');
+  if (typeof window === 'undefined') return '';
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (url && String(url).trim()) return String(url).trim().replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.location?.hostname === 'localhost') {
+    return `http://localhost:${window.location.port === '3001' ? '3000' : window.location.port || '3000'}`;
   }
-  return FALLBACK_BASE_URL;
+  return '';
 }
 
 function getTelegramInitData(): string {
@@ -23,27 +23,77 @@ export function hasTelegramInitData(): boolean {
   return !!getTelegramInitData()?.trim();
 }
 
+/** Parse Telegram user id from initData for error reporting. Returns empty string if unavailable. */
+export function getTelegramUserId(): string {
+  const raw = getTelegramInitData();
+  if (!raw?.trim()) return '';
+  try {
+    const params = new URLSearchParams(raw);
+    const userStr = params.get('user');
+    if (!userStr) return '';
+    const user = JSON.parse(decodeURIComponent(userStr)) as { id?: number };
+    return user?.id != null ? String(user.id) : '';
+  } catch {
+    return '';
+  }
+}
+
 export function getApiUrl(path: string): string {
   const base = getBaseUrl();
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
 }
 
+let onSessionExpired: (() => void) | null = null;
+
+/** Set callback when 401 is received (e.g. show "Session Expired" modal and re-trigger initData handshake). */
+export function setSessionExpiredHandler(handler: (() => void) | null) {
+  onSessionExpired = handler;
+}
+
 /**
- * Centralized fetch wrapper. CRITICAL: Always sends X-Telegram-Init-Data from window.Telegram.WebApp.initData
- * so the backend can authenticate the WebApp (fixes 401 Unauthorized when opened from bot buttons).
+ * Centralized fetch wrapper. Always sends X-Telegram-Init-Data.
+ * On 401, calls session-expired handler so UI can show modal and suggest reopening from Telegram.
  */
 async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Response> {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getApiUrl(pathOrUrl);
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
   headers.set('X-Telegram-Init-Data', getTelegramInitData());
-  return fetch(url, {
+  const res = await fetch(url, {
     mode: 'cors',
     credentials: 'include',
     ...init,
     headers,
   });
+  if (res.status === 401 && onSessionExpired) {
+    onSessionExpired();
+  }
+  return res;
+}
+
+/** Upload car photo (multipart). Returns { url } for the saved image. */
+export async function uploadCarPhoto(file: File): Promise<{ url: string }> {
+  const url = getApiUrl('api/upload');
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = new Headers();
+  headers.set('X-Telegram-Init-Data', getTelegramInitData());
+  const res = await fetch(url, {
+    method: 'POST',
+    body: formData,
+    headers,
+    mode: 'cors',
+    credentials: 'include',
+  });
+  if (res.status === 401 && onSessionExpired) {
+    onSessionExpired();
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `Upload failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 export interface WebAppInitResponse {
@@ -128,6 +178,7 @@ export interface MyOrder {
   client_phone: string;
   car_number: string;
   car_model: string | null;
+  car_photo_url?: string | null;
   delivery_needed?: boolean;
   status: string;
   total_amount: number;
@@ -158,7 +209,7 @@ export async function cancelOrderApi(orderId: string): Promise<void> {
   }
 }
 
-/** POST /orders/:id/finish — TZ §10: usta "Ishni yakunlash" (working → waiting_customer_confirmation). */
+/** POST /orders/:id/finish — Master "Ishni yakunlash" (working → waiting_customer_confirmation). */
 export async function finishOrderApi(orderId: string): Promise<{ deep_link: string }> {
   const res = await apiFetch(`orders/${encodeURIComponent(orderId)}/finish`, {
     method: 'POST',
@@ -171,6 +222,18 @@ export async function finishOrderApi(orderId: string): Promise<{ deep_link: stri
   return res.json();
 }
 
+/** POST /orders/:id/driver-finish — Driver "Yetkazib berdim" (received_by_driver → working). */
+export async function driverFinishOrderApi(orderId: string): Promise<void> {
+  const res = await apiFetch(`orders/${encodeURIComponent(orderId)}/driver-finish`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+}
+
 /** POST /orders/:id/receive — usta "Qabul qildim" (delivered_by_driver → working). */
 export async function receiveOrderApi(orderId: string): Promise<void> {
   const res = await apiFetch(`orders/${encodeURIComponent(orderId)}/receive`, {
@@ -181,4 +244,26 @@ export async function receiveOrderApi(orderId: string): Promise<void> {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(text || `HTTP ${res.status}`);
   }
+}
+
+export interface WalletTransaction {
+  id: string;
+  order_id: string;
+  amount: number;
+  type: string;
+  created_at: string;
+}
+
+export interface WalletResponse {
+  balance: number;
+  transactions: WalletTransaction[];
+}
+
+export async function fetchWallet(): Promise<WalletResponse> {
+  const res = await apiFetch('wallet', { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
 }

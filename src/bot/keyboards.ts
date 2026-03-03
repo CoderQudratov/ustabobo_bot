@@ -1,40 +1,54 @@
 import { Markup } from 'telegraf';
-
-const WEBAPP_ENV_KEY = 'WEBAPP_URL';
+import { getWebAppBaseUrl } from '../config/configuration';
 
 /**
- * Returns normalized WebApp base URL (trimmed, no trailing slash).
- * Ensures concatenation (e.g. base + '/new-order') never produces double slashes.
- * Throws if WEBAPP_URL is not set; logs a warning so the developer sees it immediately.
+ * Build WebApp URL with optional tg_id and role for faster initial load; auth still via initData.
  */
-function getWebAppBaseUrl(): string {
-  const raw = process.env[WEBAPP_ENV_KEY];
-  if (raw === undefined || raw === '') {
-    console.warn(
-      `[Bot] ${WEBAPP_ENV_KEY} is not set in .env. WebApp buttons will fail. Set WEBAPP_URL to your WebApp origin (e.g. Cloudflare tunnel URL).`,
-    );
-    throw new Error(
-      'WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni .env da WEBAPP_URL=... qilib qo\'ying.',
-    );
-  }
-  const trimmed = raw.trim();
-  const base = trimmed.replace(/\/+$/, '');
-  return base || trimmed;
+function webAppUrl(baseUrl: string, tgId?: string | number, role?: string, path = ''): string {
+  const url = new URL(path ? `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\//, '')}` : baseUrl);
+  if (tgId != null) url.searchParams.set('tg_id', String(tgId));
+  if (role) url.searchParams.set('role', role);
+  return url.toString();
 }
 
 /**
- * Master menu keyboard per TZ §6.1. NEVER caches URLs — reads process.env.WEBAPP_URL on every call.
- * Uses ONLY Markup.button.webApp (never Markup.button.url) so Telegram injects initData.
- * Both buttons point to base WEBAPP_URL (unified dashboard at /); no hardcoded paths.
+ * Master menu: Yangi buyurtma + Mening buyurtmalarim (WebApp).
  */
-export function getMainMenuKeyboard() {
+export function getMasterKeyboard(tgId?: string | number) {
   const baseUrl = getWebAppBaseUrl();
-
+  const urlWithParams = webAppUrl(baseUrl, tgId, 'master');
   return Markup.keyboard([
-    [Markup.button.webApp('➕ Yangi buyurtma', baseUrl)],
-    [Markup.button.webApp('📦 Mening buyurtmalarim', baseUrl)],
-    [Markup.button.locationRequest('📍 Lokatsiya yuborish')],
-    ['📦 Qabul qildim'],
-    ['🔵 Ishni yakunlash'],
+    [Markup.button.webApp('➕ Yangi buyurtma', urlWithParams)],
+    [Markup.button.webApp('📦 Mening buyurtmalarim', urlWithParams)],
   ]).resize();
+}
+
+/**
+ * Driver menu: Faol buyurtmalar, Tarix, Hamyon (WebApp).
+ */
+export function getDriverKeyboard(tgId?: string | number) {
+  const baseUrl = getWebAppBaseUrl();
+  return Markup.keyboard([
+    [Markup.button.webApp('📦 Faol buyurtmalar', webAppUrl(baseUrl, tgId, 'driver', '/my-orders?filter=active'))],
+    [Markup.button.webApp('🕒 Tarix', webAppUrl(baseUrl, tgId, 'driver', '/my-orders?filter=history'))],
+    [Markup.button.webApp('💰 Hamyon', webAppUrl(baseUrl, tgId, 'driver', '/wallet'))],
+  ]).resize();
+}
+
+/**
+ * Bot menu by role: Master gets getMasterKeyboard, Driver gets getDriverKeyboard.
+ * Fallback for unknown role: getMasterKeyboard (legacy getMainMenuKeyboard behaviour).
+ */
+export function getMainMenuKeyboard(tgId?: string | number, role?: string) {
+  if (role === 'driver') {
+    return getDriverKeyboard(tgId);
+  }
+  return getMasterKeyboard(tgId);
+}
+
+/** Single WebApp button for driver after Accept: "📦 Buyurtmani ochish". */
+export function getDriverOrderWebAppKeyboard(tgId: string | number) {
+  const baseUrl = getWebAppBaseUrl();
+  const url = webAppUrl(baseUrl, tgId, 'driver');
+  return Markup.keyboard([[Markup.button.webApp('📦 Buyurtmani ochish', url)]]).resize();
 }

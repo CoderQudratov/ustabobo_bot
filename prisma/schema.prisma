@@ -23,8 +23,11 @@ enum Role {
 enum OrderStatus {
   draft
   waiting_confirmation
+  waiting_master_work_start
   broadcasted
   accepted
+  received_by_driver
+  waiting_master_delivery_confirmation
   delivered_by_driver
   received_by_master
   working
@@ -58,12 +61,28 @@ model User {
   role          Role
   tg_id         String?   @unique
   percent_rate  Decimal   @db.Decimal(10, 4)
-  balance       Decimal   @db.Decimal(12, 2)
+  balance       Decimal   @default(0) @db.Decimal(12, 2)
   is_active     Boolean   @default(true)
 
-  ordersAsMaster Order[]     @relation("OrderMaster")
-  ordersAsDriver Order[]     @relation("OrderDriver")
-  orderEvents    OrderEvent[]
+  ordersAsMaster   Order[]        @relation("OrderMaster")
+  ordersAsDriver   Order[]        @relation("OrderDriver")
+  orderEvents      OrderEvent[]
+  transactions     Transaction[]
+}
+
+model Transaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  order_id  String   @db.Uuid
+  user_id   String   @db.Uuid
+  amount    Int      // amount in UZS (e.g. 30_000 for delivery fee)
+  type      String   // e.g. 'delivery_fee'
+  created_at DateTime @default(now())
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@unique([order_id, user_id, type])
+  @@index([user_id])
 }
 
 model Organization {
@@ -134,8 +153,9 @@ model Order {
   driver       User?         @relation("OrderDriver", fields: [driver_id], references: [id], onDelete: SetNull)
   organization Organization? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
   vehicle      Vehicle?      @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
-  orderItems   OrderItem[]
-  orderEvents  OrderEvent[]
+  orderItems     OrderItem[]
+  orderEvents    OrderEvent[]
+  transactions   Transaction[]
 }
 
 model OrderItem {

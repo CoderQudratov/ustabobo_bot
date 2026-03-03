@@ -2,10 +2,10 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Action, Ctx, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { Markup, Scenes } from 'telegraf';
-import { getMainMenuKeyboard } from './keyboards';
+import { getDriverOrderWebAppKeyboard, getDriverKeyboard, getMainMenuKeyboard, getMasterKeyboard } from './keyboards';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { OrderStatus } from '../../generated/prisma/client';
+import { OrderStatus, Role } from '../../generated/prisma/client';
 
 const DELIVERY_FEE = 30_000;
 
@@ -74,8 +74,7 @@ export class BotUpdate {
       });
       if (user) {
         console.log('[Bot] /start – already logged in, showing menu');
-        // Menu is built fresh from process.env each time — no cached WebApp URLs
-        await ctx.reply('Asosiy menyu', getMainMenuKeyboard()).catch(() => {});
+        await ctx.reply('Asosiy menyu', getMainMenuKeyboard(tgId, user.role)).catch(() => {});
         return;
       }
 
@@ -97,6 +96,26 @@ export class BotUpdate {
       const text = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
       const tgId = ctx.from?.id?.toString();
       if (!tgId) return;
+
+      // Hidden developer commands: switch role and refresh menu (Phase 1 – Testing Utilities)
+      if (text === '/be_driver' || text === '/be_master') {
+        const user = await this.prisma.user.findFirst({
+          where: { tg_id: tgId, is_active: true },
+        });
+        if (!user) {
+          await ctx.reply('Avval /start orqali kirish qiling.').catch(() => {});
+          return;
+        }
+        const newRole = text === '/be_driver' ? Role.driver : Role.master;
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { role: newRole },
+        });
+        const roleLabel = newRole === Role.driver ? 'DRIVER' : 'MASTER';
+        const keyboard = newRole === Role.driver ? getDriverKeyboard(tgId) : getMasterKeyboard(tgId);
+        await ctx.reply(`Sizning rolingiz ${roleLabel} ga o'zgartirildi.`, keyboard).catch(() => {});
+        return;
+      }
 
       if (text === '📋 Buyurtmalarim') {
         await ctx.reply('Buyurtmalar ro‘yxati (keyingi versiyada).').catch(() => {});
@@ -316,6 +335,14 @@ export class BotUpdate {
       if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
         await ctx.editMessageText('Siz bu buyurtmani qabul qildingiz ✅').catch(() => {});
       }
+      // Send driver a single message with only WebApp button (TZ: no intermediate "Qabul qildim" step)
+      const driverTgId = ctx.from?.id;
+      if (driverTgId != null) {
+        const keyboard = getDriverOrderWebAppKeyboard(driverTgId);
+        await ctx.telegram.sendMessage(driverTgId, '📦 Buyurtmani ochish uchun quyidagi tugmani bosing:', {
+          reply_markup: keyboard.reply_markup,
+        }).catch(() => {});
+      }
     } catch (err) {
       if (err instanceof ConflictException) {
         await ctx.answerCbQuery('Kech qoldingiz, boshqa kuryer oldi 😔', { show_alert: true }).catch(() => {});
@@ -326,6 +353,131 @@ export class BotUpdate {
       }
       console.error('onAcceptOrder error:', err);
       await ctx.answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.').catch(() => {});
+    }
+  }
+
+  @Action(/^confirm_delivery_(.+)$/)
+  async onConfirmDelivery(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const tgId = ctx.from?.id?.toString();
+      if (!tgId) {
+        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(/^confirm_delivery_(.+)$/);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
+      await this.ordersService.masterConfirmDelivery(orderId, user.id, true);
+      await ctx.answerCbQuery('Qabul qilindi. Ishni boshlashingiz mumkin.').catch(() => {});
+      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        await ctx.editMessageText('✅ Qabul qilindi. Ishni boshlashingiz mumkin.').catch(() => {});
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
+        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+          await ctx.editMessageText(`❌ ${msg}`).catch(() => {});
+        }
+        return;
+      }
+      console.error('onConfirmDelivery error:', err);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Action(/^reject_delivery_(.+)$/)
+  async onRejectDelivery(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const tgId = ctx.from?.id?.toString();
+      if (!tgId) {
+        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(/^reject_delivery_(.+)$/);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
+      await this.ordersService.masterConfirmDelivery(orderId, user.id, false);
+      await ctx.answerCbQuery('Rad etildi. Kuryerga xabar yuborildi.').catch(() => {});
+      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        await ctx.editMessageText("❌ Rad etildi. Kuryer bilan bog'laning.").catch(() => {});
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
+        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        return;
+      }
+      console.error('onRejectDelivery error:', err);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Action(/^start_work_(.+)$/)
+  async onStartWork(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const tgId = ctx.from?.id?.toString();
+      if (!tgId) {
+        await ctx.answerCbQuery('Xatolik: foydalanuvchi aniqlanmadi.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(/^start_work_(.+)$/);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const user = await this.prisma.user.findFirst({
+        where: { tg_id: tgId, is_active: true },
+      });
+      if (!user) {
+        await ctx.answerCbQuery('Avval /start orqali kirish qiling.').catch(() => {});
+        return;
+      }
+      await this.ordersService.masterStartWork(orderId, user.id);
+      await ctx.answerCbQuery('Ish boshlandi!').catch(() => {});
+      if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+        await ctx.editMessageText('✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.').catch(() => {});
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException) {
+        const msg = err instanceof Error ? err.message : 'Amalni bajarish mumkin emas.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        return;
+      }
+      console.error('onStartWork error:', err);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Action(/^decline_work_(.+)$/)
+  async onDeclineWork(@Ctx() ctx: Context): Promise<void> {
+    await ctx.answerCbQuery("Ishni boshlash bekor qilindi.").catch(() => {});
+    if (ctx.callbackQuery?.message && 'message_id' in ctx.callbackQuery.message) {
+      await ctx.editMessageText('Ishni boshlash bekor qilindi.').catch(() => {});
     }
   }
 }
