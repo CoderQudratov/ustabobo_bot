@@ -25,7 +25,8 @@ export const config = {
   /** API base URL for server-side or fallback (e.g. for logs). */
   get apiBaseUrl(): string {
     const raw = process.env.API_BASE_URL ?? process.env.PORT;
-    if (raw && String(raw).match(/^https?:\/\//)) return String(raw).replace(/\/+$/, '');
+    if (raw && String(raw).match(/^https?:\/\//))
+      return String(raw).replace(/\/+$/, '');
     const port = parseInt(String(process.env.PORT ?? '3000'), 10);
     return `http://localhost:${port}`;
   },

@@ -98,8 +98,7 @@ export class BroadcastProcessor extends WorkerHost {
         partsLines.push(`• ${item.item_name} — ${item.quantity} шт`);
       }
     }
-    const partsBlock =
-      partsLines.length > 0 ? partsLines.join('\n') : '—';
+    const partsBlock = partsLines.length > 0 ? partsLines.join('\n') : '—';
 
     const locationInfo = 'Lokatsiya pastda yuboriladi.';
     const deliveryFeeLine = order.delivery_needed
@@ -129,8 +128,5 @@ export class BroadcastProcessor extends WorkerHost {
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

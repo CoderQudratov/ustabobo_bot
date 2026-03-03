@@ -23,7 +23,7 @@ import { OrdersModule } from '../orders/orders.module';
             '[Bot] WEBAPP_URL is not set in .env. WebApp buttons will fail. Set WEBAPP_URL to your WebApp origin (HTTPS).',
           );
           throw new Error(
-            'WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni WEBAPP_URL=... qilib qo\'ying.',
+            "WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni WEBAPP_URL=... qilib qo'ying.",
           );
         }
         return {

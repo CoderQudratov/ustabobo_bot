@@ -49,20 +49,27 @@ export class BotNotifyService {
         '📍 Yetkazib berish uchun manzilingizni (lokatsiya yoki text) yuboring:',
       );
     } else {
-      await this.bot.telegram.sendMessage(chatId, "📝 Buyurtma ma'lumotlari qabul qilindi.\n\nTasdiqlaysizmi?", {
-        reply_markup: confirmKeyboard.reply_markup,
-      });
+      await this.bot.telegram.sendMessage(
+        chatId,
+        "📝 Buyurtma ma'lumotlari qabul qilindi.\n\nTasdiqlaysizmi?",
+        {
+          reply_markup: confirmKeyboard.reply_markup,
+        },
+      );
     }
   }
 
   /** Send deep link to Master after "Ishni yakunlash" — they can Forward this message to customer. */
-  async sendFinishLinkToMaster(masterTgId: string, deepLink: string): Promise<void> {
+  async sendFinishLinkToMaster(
+    masterTgId: string,
+    deepLink: string,
+  ): Promise<void> {
     const chatId = Number(masterTgId);
     if (!Number.isFinite(chatId)) return;
     const text = [
       '✅ Ish muvaffaqiyatli yakunlandi!',
       '',
-      "Mijozga ulashish uchun tayyor link:",
+      'Mijozga ulashish uchun tayyor link:',
       deepLink,
     ].join('\n');
     await this.bot.telegram.sendMessage(chatId, text).catch(() => {});
@@ -93,7 +100,9 @@ export class BotNotifyService {
         /* fallback to text */
       }
     }
-    await this.bot.telegram.sendMessage(chatId, text, replyMarkup).catch(() => {});
+    await this.bot.telegram
+      .sendMessage(chatId, text, replyMarkup)
+      .catch(() => {});
   }
 
   /** After Master clicks Ha: "Ish boshlandi. Yakunlash uchun WebApp-ga kiring." */
@@ -101,7 +110,10 @@ export class BotNotifyService {
     const chatId = Number(masterTgId);
     if (!Number.isFinite(chatId)) return;
     await this.bot.telegram
-      .sendMessage(chatId, '✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.')
+      .sendMessage(
+        chatId,
+        '✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.',
+      )
       .catch(() => {});
   }
 
@@ -116,7 +128,7 @@ export class BotNotifyService {
     const shortId = orderId.slice(0, 8);
     const text = `📦 Kuryer buyurtmani (#${shortId}) yetkazib berganini ma'lum qildi. Qabul qildingizmi?`;
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback("✅ Ha", `confirm_delivery_${orderId}`)],
+      [Markup.button.callback('✅ Ha', `confirm_delivery_${orderId}`)],
       [Markup.button.callback("❌ Yo'q", `reject_delivery_${orderId}`)],
     ]);
     const replyMarkup = { reply_markup: keyboard.reply_markup };
@@ -131,7 +143,9 @@ export class BotNotifyService {
         /* fallback to text */
       }
     }
-    await this.bot.telegram.sendMessage(chatId, text, replyMarkup).catch(() => {});
+    await this.bot.telegram
+      .sendMessage(chatId, text, replyMarkup)
+      .catch(() => {});
   }
 
   /** Notify Master they can start work (after confirming delivery). */
@@ -148,7 +162,10 @@ export class BotNotifyService {
     const chatId = Number(driverTgId);
     if (!Number.isFinite(chatId)) return;
     await this.bot.telegram
-      .sendMessage(chatId, "❌ Usta qabul qilmadi, iltimos usta bilan bog'laning.")
+      .sendMessage(
+        chatId,
+        "❌ Usta qabul qilmadi, iltimos usta bilan bog'laning.",
+      )
       .catch(() => {});
   }
 }

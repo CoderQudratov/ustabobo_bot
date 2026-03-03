@@ -12,7 +12,9 @@ export class VehiclesService {
       where: { id: dto.org_id },
     });
     if (!org) {
-      throw new NotFoundException(`Organization with id "${dto.org_id}" not found`);
+      throw new NotFoundException(
+        `Organization with id "${dto.org_id}" not found`,
+      );
     }
     return this.prisma.vehicle.create({
       data: {
@@ -63,14 +65,18 @@ export class VehiclesService {
         where: { id: dto.org_id },
       });
       if (!org) {
-        throw new NotFoundException(`Organization with id "${dto.org_id}" not found`);
+        throw new NotFoundException(
+          `Organization with id "${dto.org_id}" not found`,
+        );
       }
     }
     return this.prisma.vehicle.update({
       where: { id },
       data: {
         ...(dto.org_id !== undefined && { org_id: dto.org_id }),
-        ...(dto.plate_number !== undefined && { plate_number: dto.plate_number }),
+        ...(dto.plate_number !== undefined && {
+          plate_number: dto.plate_number,
+        }),
         ...(dto.model !== undefined && { model: dto.model }),
         ...(dto.is_active !== undefined && { is_active: dto.is_active }),
       },

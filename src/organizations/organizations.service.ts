@@ -14,7 +14,7 @@ export class OrganizationsService {
         name: dto.name,
         contact_person: dto.contact_person,
         phone: dto.phone,
-        payment_type: dto.payment_type as PaymentType,
+        payment_type: dto.payment_type,
         balance_due: dto.balance_due ?? 0,
         is_active: dto.is_active ?? true,
       },
@@ -44,9 +44,13 @@ export class OrganizationsService {
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.contact_person !== undefined && { contact_person: dto.contact_person }),
+        ...(dto.contact_person !== undefined && {
+          contact_person: dto.contact_person,
+        }),
         ...(dto.phone !== undefined && { phone: dto.phone }),
-        ...(dto.payment_type !== undefined && { payment_type: dto.payment_type as PaymentType }),
+        ...(dto.payment_type !== undefined && {
+          payment_type: dto.payment_type,
+        }),
         ...(dto.balance_due !== undefined && { balance_due: dto.balance_due }),
         ...(dto.is_active !== undefined && { is_active: dto.is_active }),
       },

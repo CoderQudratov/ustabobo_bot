@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -26,19 +20,13 @@ export class DriverOrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post(':id/accept')
-  accept(
-    @Param('id') id: string,
-    @Req() req: Request & { user: JwtUser },
-  ) {
+  accept(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     const driverId = req.user.id;
     return this.ordersService.driverAccept(id, driverId);
   }
 
   @Post(':id/delivered')
-  delivered(
-    @Param('id') id: string,
-    @Req() req: Request & { user: JwtUser },
-  ) {
+  delivered(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     const driverId = req.user.id;
     return this.ordersService.driverDelivered(id, driverId);
   }

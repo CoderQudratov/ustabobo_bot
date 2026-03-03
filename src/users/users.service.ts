@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '../../generated/prisma/client';
@@ -18,16 +15,22 @@ export class UsersService {
       where: { login: dto.login },
     });
     if (existingLogin) {
-      throw new ConflictException(`User with login "${dto.login}" already exists`);
+      throw new ConflictException(
+        `User with login "${dto.login}" already exists`,
+      );
     }
     const existingPhone = await this.prisma.user.findUnique({
       where: { phone: dto.phone },
     });
     if (existingPhone) {
-      throw new ConflictException(`User with phone "${dto.phone}" already exists`);
+      throw new ConflictException(
+        `User with phone "${dto.phone}" already exists`,
+      );
     }
     if (dto.role !== 'master' && dto.role !== 'driver') {
-      throw new ConflictException('Staff can only be created with role master or driver');
+      throw new ConflictException(
+        'Staff can only be created with role master or driver',
+      );
     }
 
     const password_hash = await bcrypt.hash(dto.password, SALT_ROUNDS);

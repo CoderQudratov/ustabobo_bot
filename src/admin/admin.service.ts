@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus, OrderItemType } from '../../generated/prisma/client';
 
@@ -26,7 +30,10 @@ export class AdminService {
     from_date?: string;
     to_date?: string;
   }) {
-    const where: { status?: OrderStatus; created_at?: { gte?: Date; lte?: Date } } = {};
+    const where: {
+      status?: OrderStatus;
+      created_at?: { gte?: Date; lte?: Date };
+    } = {};
 
     if (filters.status) {
       where.status = filters.status as OrderStatus;
@@ -45,7 +52,7 @@ export class AdminService {
         const to = new Date(filters.to_date);
         if (Number.isNaN(to.getTime())) {
           throw new BadRequestException('Invalid to_date');
-               }
+        }
         to.setHours(23, 59, 59, 999);
         where.created_at.lte = to;
       }
@@ -90,7 +97,9 @@ export class AdminService {
   async getClientsHistory(query: { phone?: string; car_number?: string }) {
     const { phone, car_number } = query;
     if (!phone && !car_number) {
-      throw new BadRequestException('Provide at least one of phone or car_number');
+      throw new BadRequestException(
+        'Provide at least one of phone or car_number',
+      );
     }
 
     const where: {
@@ -168,7 +177,9 @@ export class AdminService {
         .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
       const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
       const masterPercent = Number(order.master.percent_rate);
-      const driverPercent = order.driver ? Number(order.driver.percent_rate) : 0;
+      const driverPercent = order.driver
+        ? Number(order.driver.percent_rate)
+        : 0;
 
       totalMasterFee += (servicesSum * masterPercent) / 100;
       totalDriverFee += (deliveryFee * driverPercent) / 100;
