@@ -7,6 +7,7 @@ import { useTelegram } from "@/hooks/useTelegram";
 import {
   fetchWebAppInit,
   createOrder,
+  uploadCarPhoto,
   getApiUrl,
   type WebAppInitResponse,
   type CreateOrderProductItem,
@@ -59,6 +60,8 @@ export default function NewOrderPage() {
   const [manualProducts, setManualProducts] = useState<CreateOrderManualProductItem[]>([]);
   const [deliveryNeeded, setDeliveryNeeded] = useState(false);
   const [carPhotoUrl, setCarPhotoUrl] = useState("");
+  const [carPhotoPreview, setCarPhotoPreview] = useState<string | null>(null);
+  const [carPhotoUploading, setCarPhotoUploading] = useState(false);
 
   const vehiclesOfOrg = init?.vehicles.filter((v) => v.org_id === orgId) ?? [];
 
@@ -210,6 +213,7 @@ export default function NewOrderPage() {
       }
     },
     [
+      router,
       clientName,
       clientPhone,
       carNumber,
@@ -500,12 +504,71 @@ export default function NewOrderPage() {
               6.2.5 Mashina rasmi
             </h2>
             <input
-              type="url"
-              placeholder="Rasm URL (keyincha kamera qo'shiladi)"
-              value={carPhotoUrl}
-              onChange={(e) => setCarPhotoUrl(e.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+              id="car-photo-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={carPhotoUploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const prevUrl = carPhotoPreview;
+                setCarPhotoPreview(URL.createObjectURL(file));
+                if (prevUrl) URL.revokeObjectURL(prevUrl);
+                setCarPhotoUploading(true);
+                try {
+                  const { url } = await uploadCarPhoto(file);
+                  setCarPhotoUrl(url);
+                } catch (err) {
+                  const msg = getErrorMessage(err, "Rasm yuklanmadi");
+                  if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
+                    window.Telegram.WebApp.showAlert(msg);
+                  }
+                  setCarPhotoUrl("");
+                  setCarPhotoPreview(null);
+                } finally {
+                  setCarPhotoUploading(false);
+                  e.target.value = "";
+                }
+              }}
             />
+            <label
+              htmlFor="car-photo-input"
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus-within:border-[var(--tg-theme-button-color)] disabled:pointer-events-none disabled:opacity-50"
+              style={carPhotoUploading ? { pointerEvents: "none" } : undefined}
+            >
+              {carPhotoUploading ? (
+                <>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color)] border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                "📸 Mashina rasmini olish"
+              )}
+            </label>
+            {(carPhotoPreview || carPhotoUrl) && !carPhotoUploading && (
+              <div className="mt-3">
+                <img
+                  src={carPhotoPreview || carPhotoUrl}
+                  alt="Mashina rasm"
+                  className="max-h-48 w-full rounded-xl object-contain bg-white/5"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCarPhotoUrl("");
+                    if (carPhotoPreview) {
+                      URL.revokeObjectURL(carPhotoPreview);
+                      setCarPhotoPreview(null);
+                    }
+                  }}
+                  className="mt-2 text-sm text-red-400 underline"
+                >
+                  O‘chirish
+                </button>
+              </div>
+            )}
           </section>
 
           {/* 6.2.6 Dostavka */}

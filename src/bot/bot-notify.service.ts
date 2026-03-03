@@ -54,4 +54,101 @@ export class BotNotifyService {
       });
     }
   }
+
+  /** Send deep link to Master after "Ishni yakunlash" — they can Forward this message to customer. */
+  async sendFinishLinkToMaster(masterTgId: string, deepLink: string): Promise<void> {
+    const chatId = Number(masterTgId);
+    if (!Number.isFinite(chatId)) return;
+    const text = [
+      '✅ Ish muvaffaqiyatli yakunlandi!',
+      '',
+      "Mijozga ulashish uchun tayyor link:",
+      deepLink,
+    ].join('\n');
+    await this.bot.telegram.sendMessage(chatId, text).catch(() => {});
+  }
+
+  /** No-delivery: ask Master "Ishni boshlaysizmi?" with [Ha] [Yo'q]. If carPhotoUrl, send as photo with caption. */
+  async sendWorkStartConfirmationRequest(
+    masterTgId: string,
+    orderId: string,
+    carPhotoUrl?: string | null,
+  ): Promise<void> {
+    const chatId = Number(masterTgId);
+    if (!Number.isFinite(chatId)) return;
+    const text = '🛠 Ishni boshlaysizmi?';
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Ha', `start_work_${orderId}`)],
+      [Markup.button.callback("❌ Yo'q", `decline_work_${orderId}`)],
+    ]);
+    const replyMarkup = { reply_markup: keyboard.reply_markup };
+    if (carPhotoUrl?.trim()) {
+      try {
+        await this.bot.telegram.sendPhoto(chatId, carPhotoUrl.trim(), {
+          caption: text,
+          ...replyMarkup,
+        });
+        return;
+      } catch {
+        /* fallback to text */
+      }
+    }
+    await this.bot.telegram.sendMessage(chatId, text, replyMarkup).catch(() => {});
+  }
+
+  /** After Master clicks Ha: "Ish boshlandi. Yakunlash uchun WebApp-ga kiring." */
+  async sendWorkStartedToMaster(masterTgId: string): Promise<void> {
+    const chatId = Number(masterTgId);
+    if (!Number.isFinite(chatId)) return;
+    await this.bot.telegram
+      .sendMessage(chatId, '✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.')
+      .catch(() => {});
+  }
+
+  /** Ask Master to confirm delivery. If carPhotoUrl, send as photo with caption; else text only. */
+  async sendDeliveryConfirmationRequestToMaster(
+    masterTgId: string,
+    orderId: string,
+    carPhotoUrl?: string | null,
+  ): Promise<void> {
+    const chatId = Number(masterTgId);
+    if (!Number.isFinite(chatId)) return;
+    const shortId = orderId.slice(0, 8);
+    const text = `📦 Kuryer buyurtmani (#${shortId}) yetkazib berganini ma'lum qildi. Qabul qildingizmi?`;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback("✅ Ha", `confirm_delivery_${orderId}`)],
+      [Markup.button.callback("❌ Yo'q", `reject_delivery_${orderId}`)],
+    ]);
+    const replyMarkup = { reply_markup: keyboard.reply_markup };
+    if (carPhotoUrl?.trim()) {
+      try {
+        await this.bot.telegram.sendPhoto(chatId, carPhotoUrl.trim(), {
+          caption: text,
+          ...replyMarkup,
+        });
+        return;
+      } catch {
+        /* fallback to text */
+      }
+    }
+    await this.bot.telegram.sendMessage(chatId, text, replyMarkup).catch(() => {});
+  }
+
+  /** Notify Master they can start work (after confirming delivery). */
+  async sendMasterCanStartWork(masterTgId: string): Promise<void> {
+    const chatId = Number(masterTgId);
+    if (!Number.isFinite(chatId)) return;
+    await this.bot.telegram
+      .sendMessage(chatId, '✅ Ishni boshlashingiz mumkin.')
+      .catch(() => {});
+  }
+
+  /** Notify Driver that master rejected delivery. */
+  async sendDeliveryRejectedToDriver(driverTgId: string): Promise<void> {
+    const chatId = Number(driverTgId);
+    if (!Number.isFinite(chatId)) return;
+    await this.bot.telegram
+      .sendMessage(chatId, "❌ Usta qabul qilmadi, iltimos usta bilan bog'laning.")
+      .catch(() => {});
+  }
 }

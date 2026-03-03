@@ -45,13 +45,13 @@ export class OrdersController {
   @Get('my/:telegramId')
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
-  @Roles(Role.master, Role.boss)
+  @Roles(Role.master, Role.boss, Role.driver)
   async getMyOrders(
     @Param('telegramId') telegramId: string,
     @Req() req: Request & { user: JwtUser },
   ) {
-    const master = await this.ordersService.findMasterByTelegramId(telegramId);
-    if (!master || master.id !== req.user.id) {
+    const user = await this.ordersService.findUserByTelegramId(telegramId);
+    if (!user || user.id !== req.user.id) {
       throw new ForbiddenException('Access denied');
     }
     return this.ordersService.getMyOrders(telegramId);
@@ -93,19 +93,29 @@ export class OrdersController {
   @Roles(Role.master, Role.boss)
   async finish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     const result = await this.ordersService.finish(id, req.user.id);
-    const token = result?.confirm_token;
-    if (!token) {
-      throw new BadRequestException('Tasdiqlash tokeni yaratilmadi');
+    const deep_link = result?.deep_link;
+    if (!deep_link) {
+      const token = result?.confirm_token;
+      if (!token) throw new BadRequestException('Tasdiqlash tokeni yaratilmadi');
+      const username = String(process.env.TELEGRAM_BOT_USERNAME ?? '').trim();
+      if (!username) {
+        throw new InternalServerErrorException(
+          'Tizim sozlanmagan: .env faylida TELEGRAM_BOT_USERNAME kiritilmagan.',
+        );
+      }
+      console.log(`✅ [DeepLink] Created for Order #${id}`);
+      return { deep_link: `https://t.me/${username}?start=conf_${token}` };
     }
-    const username = String(process.env.TELEGRAM_BOT_USERNAME ?? '').trim();
-    if (!username) {
-      throw new InternalServerErrorException(
-        'Tizim sozlanmagan: .env faylida TELEGRAM_BOT_USERNAME kiritilmagan. ' +
-          'Developer: TELEGRAM_BOT_USERNAME ni .env ga qo‘shing (masalan: TELEGRAM_BOT_USERNAME=YourBotUserName).',
-      );
-    }
-    const deep_link = `https://t.me/${username}?start=conf_${token}`;
+    console.log(`✅ [DeepLink] Created for Order #${id}`);
     return { deep_link };
+  }
+
+  @Post(':id/driver-finish')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.driver)
+  driverFinish(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
+    return this.ordersService.driverFinish(id, req.user.id);
   }
 
   @Post(':id/receive')

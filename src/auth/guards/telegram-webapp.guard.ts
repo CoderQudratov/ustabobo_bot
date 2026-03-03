@@ -38,7 +38,7 @@ export class TelegramWebAppGuard implements CanActivate {
       throw new UnauthorizedException('Telegram orqali kiring');
     }
     const { tgId } = this.authService.validateTelegramInitData(raw);
-    const user = await this.authService.getMasterByTgId(tgId);
+    const user = await this.authService.getUserByTgId(tgId);
     (request as Request & { user: TelegramWebAppUser }).user = {
       id: user.id,
       login: user.login,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { config } from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
 import { BroadcastProducer } from './broadcast-producer.service';
 import { BroadcastProcessor } from './broadcast.processor';
@@ -9,8 +10,8 @@ import { BotModule } from '../bot/bot.module';
   imports: [
     BullModule.forRoot({
       connection: {
-        host: 'localhost',
-        port: 6379,
+        host: config.redis.host,
+        port: config.redis.port,
       },
     }),
     BullModule.registerQueue({ name: 'broadcast_queue' }),

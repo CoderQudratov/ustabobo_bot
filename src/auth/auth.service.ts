@@ -117,4 +117,19 @@ export class AuthService {
     }
     return user;
   }
+
+  /** WebApp: resolve user by Telegram ID (master, driver, or boss). Used by TelegramWebAppGuard for "My Orders" and driver-finish. */
+  async getUserByTgId(tgId: number) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        tg_id: String(tgId),
+        role: { in: [Role.master, Role.driver, Role.boss] },
+        is_active: true,
+      },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Foydalanuvchi topilmadi. Bot orqali kiring.');
+    }
+    return user;
+  }
 }
