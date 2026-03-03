@@ -484,3 +484,4 @@ ombor
 tashkilot qarzi
 tushum va hisobotlarni ko‘radi
 END OF TZ.md shuni tzgfa yuklab quyoraymi
+ahaha
