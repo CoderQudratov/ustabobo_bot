@@ -308,8 +308,39 @@ export class AdminService {
   }
 
   async getDashboard() {
-    const lowStock = await this.productsService.getLowStockProducts();
-    return { low_stock_count: lowStock.length };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [todayOrders, todayRevenue, activeOrders, lowStockResult] =
+      await Promise.all([
+        this.prisma.order.count({
+          where: { created_at: { gte: today, lt: tomorrow } },
+        }),
+        this.prisma.order.aggregate({
+          where: {
+            status: OrderStatus.completed,
+            completed_at: { gte: today, lt: tomorrow },
+          },
+          _sum: { total_amount: true },
+        }),
+        this.prisma.order.count({
+          where: {
+            status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+          },
+        }),
+        this.prisma.$queryRaw<[{ count: number }]>`
+          SELECT COUNT(*)::int as count FROM "Product" WHERE stock_count <= min_limit
+        `,
+      ]);
+
+    return {
+      today_orders: todayOrders,
+      today_revenue: Number(todayRevenue._sum.total_amount ?? 0),
+      active_orders: activeOrders,
+      low_stock_count: lowStockResult[0]?.count ?? 0,
+    };
   }
 
   async updateProduct(id: string, dto: AdminUpdateProductDto) {
@@ -381,165 +412,294 @@ export class AdminService {
     return order;
   }
 
-  async getVehicleHistory(vehicleId: string) {
+  async getVehicleHistory(vehicleId: string, page = 1, limit = 20) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
-      select: { id: true, plate_number: true, model: true },
+      include: { organization: { select: { name: true } } },
     });
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with id "${vehicleId}" not found`);
+      throw new NotFoundException('Mashina topilmadi');
     }
-    const orders = await this.prisma.order.findMany({
-      where: { vehicle_id: vehicleId },
-      include: orderInclude,
-      orderBy: { created_at: 'desc' },
-    });
-    return { vehicle, orders };
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where: { vehicle_id: vehicleId },
+        include: {
+          master: { select: { id: true, fullname: true, phone: true } },
+          driver: { select: { id: true, fullname: true } },
+          orderItems: {
+            include: {
+              product: { select: { name: true } },
+              service: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.order.count({ where: { vehicle_id: vehicleId } }),
+    ]);
+    return {
+      vehicle: {
+        id: vehicle.id,
+        plate_number: vehicle.plate_number,
+        model: vehicle.model,
+        organization: vehicle.organization?.name ?? null,
+      },
+      orders,
+      total,
+      page,
+      limit,
+      total_pages: Math.ceil(total / limit),
+    };
   }
 
-  async getClientsHistory(query: { phone?: string; car_number?: string }) {
-    const { phone, car_number } = query;
-    if (!phone && !car_number) {
+  async getAllVehicles(orgId?: string, search?: string) {
+    const where: { org_id?: string; is_active: boolean; OR?: Array<{ plate_number?: object; model?: object }> } = {
+      is_active: true,
+    };
+    if (orgId) where.org_id = orgId;
+    if (search?.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { plate_number: { contains: term, mode: 'insensitive' } },
+        { model: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    return this.prisma.vehicle.findMany({
+      where,
+      include: { organization: { select: { name: true } } },
+      orderBy: { plate_number: 'asc' },
+    });
+  }
+
+  async getClientsHistory(
+    query: { phone?: string; car_number?: string; page?: number; limit?: number },
+  ) {
+    const { phone, car_number, page = 1, limit = 20 } = query;
+    if (!phone?.trim() && !car_number?.trim()) {
       throw new BadRequestException(
-        'Provide at least one of phone or car_number',
+        'Telefon raqami yoki mashina raqami kiriting',
       );
     }
     const where: {
-      status: OrderStatus;
-      client_phone?: string;
-      car_number?: string;
-    } = { status: OrderStatus.completed };
-    if (phone) where.client_phone = phone;
-    if (car_number) where.car_number = car_number;
-    const orders = await this.prisma.order.findMany({
-      where,
-      include: orderInclude,
-      orderBy: { completed_at: 'desc' },
-    });
-    return { orders };
+      client_phone?: { contains: string };
+      car_number?: { contains: string; mode: 'insensitive' };
+    } = {};
+    if (phone?.trim()) {
+      const normalizedPhone = phone.replace(/[\s\-+()]/g, '');
+      if (normalizedPhone) {
+        where.client_phone = { contains: normalizedPhone };
+      }
+    }
+    if (car_number?.trim()) {
+      where.car_number = {
+        contains: car_number.trim(),
+        mode: 'insensitive',
+      };
+    }
+    const [orders, total, aggregate] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        include: {
+          master: { select: { id: true, fullname: true } },
+          driver: { select: { id: true, fullname: true } },
+          organization: { select: { name: true } },
+          vehicle: { select: { plate_number: true, model: true } },
+          orderItems: {
+            include: {
+              product: { select: { name: true } },
+              service: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.order.count({ where }),
+      this.prisma.order.aggregate({
+        where,
+        _sum: { total_amount: true },
+      }),
+    ]);
+    const totalSpent = aggregate._sum.total_amount
+      ? Number(aggregate._sum.total_amount)
+      : 0;
+    const clientInfo =
+      orders.length > 0
+        ? {
+            client_name: orders[0].client_name,
+            client_phone: orders[0].client_phone,
+            total_orders: total,
+            total_spent: totalSpent,
+          }
+        : null;
+    return {
+      client: clientInfo,
+      orders,
+      total,
+      page,
+      limit,
+      total_pages: Math.ceil(total / limit),
+    };
   }
 
   // ─── Reports ───────────────────────────────────────────────────────────────
   async getReports(filters: {
-    from?: string;
-    to?: string;
+    from: string;
+    to: string;
     master_id?: string;
     org_id?: string;
   }) {
+    if (!filters.from?.trim() || !filters.to?.trim()) {
+      throw new BadRequestException('from and to (ISO date) are required');
+    }
+    const dateFrom = new Date(filters.from);
+    const dateTo = new Date(filters.to);
+    if (Number.isNaN(dateFrom.getTime())) {
+      throw new BadRequestException('Invalid from');
+    }
+    if (Number.isNaN(dateTo.getTime())) {
+      throw new BadRequestException('Invalid to');
+    }
+    dateTo.setHours(23, 59, 59, 999);
+
     const where: {
       status: OrderStatus;
-      completed_at?: { gte?: Date; lte?: Date };
+      completed_at: { gte: Date; lte: Date };
       master_id?: string;
       organization_id?: string;
-    } = { status: OrderStatus.completed };
-
-    if (filters.from || filters.to) {
-      where.completed_at = {};
-      if (filters.from) {
-        const from = new Date(filters.from);
-        if (Number.isNaN(from.getTime())) throw new BadRequestException('Invalid from');
-        where.completed_at.gte = from;
-      }
-      if (filters.to) {
-        const to = new Date(filters.to);
-        if (Number.isNaN(to.getTime())) throw new BadRequestException('Invalid to');
-        to.setHours(23, 59, 59, 999);
-        where.completed_at.lte = to;
-      }
-    }
+    } = {
+      status: OrderStatus.completed,
+      completed_at: { gte: dateFrom, lte: dateTo },
+    };
     if (filters.master_id) where.master_id = filters.master_id;
     if (filters.org_id) where.organization_id = filters.org_id;
 
     const completedOrders = await this.prisma.order.findMany({
       where,
       include: {
-        master: { select: { id: true, fullname: true, percent_rate: true } },
-        driver: { select: { id: true, fullname: true, percent_rate: true } },
-        organization: { select: { id: true, name: true, balance_due: true } },
+        master: { select: { id: true, fullname: true } },
+        driver: { select: { id: true, fullname: true } },
+        organization: { select: { id: true, name: true } },
         orderItems: {
           include: {
             service: { select: { name: true } },
           },
         },
+        transactions: true,
       },
     });
 
-    let totalRevenue = 0;
-    const masterBreakdown: Record<string, { fullname: string; revenue: number; fee: number }> = {};
-    const driverBreakdown: Record<string, { fullname: string; fee: number }> = {};
-    const serviceCounts: Record<string, number> = {};
+    const totalRevenue = completedOrders.reduce(
+      (sum, o) => sum + Number(o.total_amount),
+      0,
+    );
+    const totalOrders = completedOrders.length;
 
+    const masterMap = new Map<
+      string,
+      { master_id: string; fullname: string; orders_count: number; total_revenue: number; master_fee: number }
+    >();
     for (const order of completedOrders) {
-      const totalAmount = Number(order.total_amount);
-      totalRevenue += totalAmount;
-
-      const servicesSum = order.orderItems
-        .filter((i) => i.item_type === OrderItemType.service)
-        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
-      const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
-      const masterPercent = Number(order.master.percent_rate);
-      const driverPercent = order.driver ? Number(order.driver.percent_rate) : 0;
-      const masterFee = (servicesSum * masterPercent) / 100;
-      const driverFee = (deliveryFee * driverPercent) / 100;
-
-      const mid = order.master.id;
-      if (!masterBreakdown[mid]) {
-        masterBreakdown[mid] = { fullname: order.master.fullname, revenue: 0, fee: 0 };
+      const key = order.master_id;
+      if (!masterMap.has(key)) {
+        masterMap.set(key, {
+          master_id: key,
+          fullname: order.master.fullname,
+          orders_count: 0,
+          total_revenue: 0,
+          master_fee: 0,
+        });
       }
-      masterBreakdown[mid].revenue += totalAmount;
-      masterBreakdown[mid].fee += masterFee;
-
-      if (order.driver) {
-        const did = order.driver.id;
-        if (!driverBreakdown[did]) {
-          driverBreakdown[did] = { fullname: order.driver.fullname, fee: 0 };
-        }
-        driverBreakdown[did].fee += driverFee;
-      }
-
-      for (const item of order.orderItems) {
-        if (item.item_type === OrderItemType.service && item.service_id) {
-          const name =
-            (item as { service?: { name: string } }).service?.name ??
-            item.service_id;
-          serviceCounts[name] = (serviceCounts[name] ?? 0) + item.quantity;
-        }
-      }
+      const m = masterMap.get(key)!;
+      m.orders_count++;
+      m.total_revenue += Number(order.total_amount);
+      m.master_fee += order.transactions
+        .filter((t) => t.type === 'master_fee')
+        .reduce((s, t) => s + t.amount, 0);
     }
 
-    const totalMasterFee = Object.values(masterBreakdown).reduce((s, m) => s + m.fee, 0);
-    const totalDriverFee = Object.values(driverBreakdown).reduce((s, d) => s + d.fee, 0);
-    const totalBossProfit = totalRevenue - totalMasterFee - totalDriverFee;
+    const driverMap = new Map<
+      string,
+      { driver_id: string; fullname: string; deliveries_count: number; driver_fee: number }
+    >();
+    for (const order of completedOrders) {
+      if (!order.driver_id) continue;
+      const key = order.driver_id;
+      if (!driverMap.has(key)) {
+        driverMap.set(key, {
+          driver_id: key,
+          fullname: order.driver?.fullname ?? '',
+          deliveries_count: 0,
+          driver_fee: 0,
+        });
+      }
+      const d = driverMap.get(key)!;
+      d.deliveries_count++;
+      d.driver_fee += order.transactions
+        .filter((t) => t.type === 'driver_fee')
+        .reduce((s, t) => s + t.amount, 0);
+    }
 
     const orgDebts = await this.prisma.organization.findMany({
-      where: { is_active: true },
-      select: { id: true, name: true, balance_due: true },
+      where: { balance_due: { gt: 0 } },
+      select: { id: true, name: true, balance_due: true, phone: true },
+      orderBy: { balance_due: 'desc' },
     });
     const organization_debts = orgDebts.map((o) => ({
       id: o.id,
       name: o.name,
       balance_due: Number(o.balance_due),
+      phone: o.phone,
     }));
 
-    const top_services = Object.entries(serviceCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, count]) => ({ name, count }));
+    const serviceStats: Record<
+      string,
+      { name: string; count: number; revenue: number }
+    > = {};
+    for (const order of completedOrders) {
+      for (const item of order.orderItems) {
+        if (item.item_type !== OrderItemType.service) continue;
+        const name =
+          (item as { service?: { name: string } }).service?.name ??
+          item.item_name ??
+          item.service_id ??
+          'Unknown';
+        if (!serviceStats[name]) {
+          serviceStats[name] = { name, count: 0, revenue: 0 };
+        }
+        serviceStats[name].count += item.quantity;
+        serviceStats[name].revenue +=
+          Number(item.price_at_time) * item.quantity;
+      }
+    }
+
+    const totalMasterFees = [...masterMap.values()].reduce(
+      (s, m) => s + m.master_fee,
+      0,
+    );
+    const totalDriverFees = [...driverMap.values()].reduce(
+      (s, d) => s + d.driver_fee,
+      0,
+    );
+
+    const top_services = Object.values(serviceStats)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
 
     return {
-      total_revenue: totalRevenue,
-      total_boss_profit: totalBossProfit,
-      per_master: Object.entries(masterBreakdown).map(([id, v]) => ({
-        master_id: id,
-        fullname: v.fullname,
-        revenue: v.revenue,
-        fee: v.fee,
-      })),
-      per_driver: Object.entries(driverBreakdown).map(([id, v]) => ({
-        driver_id: id,
-        fullname: v.fullname,
-        fee: v.fee,
-      })),
+      period: { from: dateFrom, to: dateTo },
+      summary: {
+        total_orders: totalOrders,
+        total_revenue: totalRevenue,
+        total_master_fees: totalMasterFees,
+        total_driver_fees: totalDriverFees,
+        boss_profit: totalRevenue - totalMasterFees - totalDriverFees,
+      },
+      master_breakdown: [...masterMap.values()],
+      driver_breakdown: [...driverMap.values()],
       organization_debts,
       top_services,
     };

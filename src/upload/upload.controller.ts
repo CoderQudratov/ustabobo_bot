@@ -8,17 +8,15 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
-import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { Public } from '../common/decorators/public.decorator';
 import { TelegramWebAppGuard } from '../auth/guards/telegram-webapp.guard';
-import { config } from '../config/configuration';
+import { UploadService } from './upload.service';
 
-const CAR_PHOTOS_DIR = join(process.cwd(), 'uploads', 'car-photos');
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const multerCarPhotoOptions: MulterOptions = {
+  storage: memoryStorage(),
   limits: { fileSize: MAX_SIZE },
   fileFilter: (
     _req: unknown,
@@ -30,33 +28,26 @@ export const multerCarPhotoOptions: MulterOptions = {
     }
     cb(null, true);
   },
-  storage: diskStorage({
-    destination: (_req, _file, cb) => cb(null, CAR_PHOTOS_DIR),
-    filename: (_req, _file, cb) => {
-      const name = `car_${Date.now()}_${randomBytes(8).toString('hex')}.jpg`;
-      cb(null, name);
-    },
-  }),
 };
-
-interface UploadedCarPhoto {
-  filename: string;
-}
 
 @Controller('api')
 @Public()
 @UseGuards(TelegramWebAppGuard)
 export class UploadController {
+  constructor(private readonly uploadService: UploadService) {}
+
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', multerCarPhotoOptions))
-  uploadCarPhoto(@UploadedFile() file: UploadedCarPhoto | undefined): {
-    url: string;
-  } {
+  async uploadCarPhoto(
+    @UploadedFile()
+    file:
+      | { buffer: Buffer; mimetype?: string; originalname?: string }
+      | undefined,
+  ): Promise<{ url: string }> {
     if (!file) {
       throw new BadRequestException('Rasm fayl yuborilmadi');
     }
-    const baseUrl = config.apiBaseUrl.replace(/\/+$/, '');
-    const url = `${baseUrl}/uploads/car-photos/${file.filename}`;
+    const url = await this.uploadService.uploadFile(file);
     return { url };
   }
 }

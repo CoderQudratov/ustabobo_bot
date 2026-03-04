@@ -1,4 +1,12 @@
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -11,6 +19,14 @@ import { AdminUpdateVehicleDto } from './dto/update-vehicle.dto';
 @Roles(Role.boss)
 export class AdminVehiclesController {
   constructor(private readonly adminService: AdminService) {}
+
+  @Get()
+  list(
+    @Query('org_id') orgId?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getAllVehicles(orgId, search);
+  }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: AdminUpdateVehicleDto) {
