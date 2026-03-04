@@ -41,11 +41,16 @@ async function bootstrap() {
   const webappOrigin = process.env.WEBAPP_URL?.trim().replace(/\/+$/, '');
   const corsOrigins: string[] = [
     'https://ustabobo.netlify.app',
+    'https://erpusta.netlify.app',
     'http://localhost:3000',
     'http://localhost:3001',
   ];
   if (webappOrigin && !corsOrigins.includes(webappOrigin)) {
     corsOrigins.push(webappOrigin);
+  }
+  const erpOrigin = process.env.ERP_URL?.trim().replace(/\/+$/, '');
+  if (erpOrigin && !corsOrigins.includes(erpOrigin)) {
+    corsOrigins.push(erpOrigin);
   }
   app.enableCors({
     origin: corsOrigins,
