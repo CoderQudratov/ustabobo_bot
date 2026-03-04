@@ -110,11 +110,12 @@ export class AuthService {
     const maxAgeSec = process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC
       ? parseInt(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC, 10)
       : 300;
+    const clockSkewSec = 120;
     const authDateStr = params.get('auth_date');
     const authDate = authDateStr ? parseInt(authDateStr, 10) : 0;
     if (maxAgeSec > 0 && authDate > 0) {
       const age = Math.floor(Date.now() / 1000) - authDate;
-      if (age > maxAgeSec) {
+      if (age > maxAgeSec + clockSkewSec) {
         throw new UnauthorizedException(
           'Telegram sessiyasi eskirgan. Bot orqali qayta oching.',
         );

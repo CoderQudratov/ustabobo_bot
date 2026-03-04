@@ -1,6 +1,17 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
-import { TelegramWebAppGuard } from './guards/telegram-webapp.guard';
+import {
+  TelegramWebAppGuard,
+  TelegramWebAppUser,
+} from './guards/telegram-webapp.guard';
 import { WebappService } from './webapp.service';
 
 @Controller('webapp')
@@ -8,10 +19,24 @@ import { WebappService } from './webapp.service';
 export class WebappController {
   constructor(private readonly webappService: WebappService) {}
 
+  /** Returns JSON only (no redirect). Validates initData (BOT_TOKEN hash + auth_date). */
   @Get('init')
   @UseGuards(TelegramWebAppGuard)
-  getInit() {
-    return this.webappService.getInitData();
+  async getInit(@Req() req: Request & { user: TelegramWebAppUser }) {
+    const user = req.user;
+    const telegramId = user.telegramId;
+    const firstName =
+      user.fullname?.trim().split(/\s+/)[0] || user.login || '';
+    console.log('WEBAPP INIT USER', telegramId);
+
+    const catalog = await this.webappService.getInitData();
+    return {
+      ok: true,
+      telegramId,
+      username: user.login,
+      firstName,
+      ...catalog,
+    };
   }
 
   /** Error Boundary reporting: log client errors with telegram_id for debugging. No auth required. */

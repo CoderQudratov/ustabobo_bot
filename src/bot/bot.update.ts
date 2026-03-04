@@ -16,6 +16,11 @@ import {
   getPinEntryKeyboard,
   PIN_CALLBACK_PREFIX,
 } from './keyboards';
+import {
+  logBotError,
+  userMessageWithCode,
+  BOT_ERROR_CODES,
+} from './bot-error.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus, Role } from '../../generated/prisma/client';
@@ -60,6 +65,30 @@ export class BotUpdate {
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
   ) {}
+
+  private normalizeButtonText(raw: string): string {
+    return raw.replace(/\s+/g, ' ').trim();
+  }
+
+  private isYangiBuyurtma(text: string): boolean {
+    const n = this.normalizeButtonText(text);
+    return (
+      n === '➕ Yangi buyurtma' ||
+      n.includes('Yangi buyurtma') ||
+      n === 'Yangi buyurtma'
+    );
+  }
+
+  private isMeningBuyurtmalarim(text: string): boolean {
+    const n = this.normalizeButtonText(text);
+    return (
+      n === '📦 Mening buyurtmalarim' ||
+      n.includes('Mening buyurtmalarim') ||
+      n === 'Mening buyurtmalarim' ||
+      n === '📋 Buyurtmalarim' ||
+      n.includes('Buyurtmalarim')
+    );
+  }
 
   /** Returns user if allowed to act (authenticated or no PIN); otherwise replies and returns null. */
   private async requireAuth(ctx: Context): Promise<
@@ -291,9 +320,16 @@ export class BotUpdate {
               .reply('Tasdiqlash tokeni eskirgan yoki noto‘g‘ri.')
               .catch(() => {});
           } else {
-            console.error('[Bot] conf_ start error:', err);
+            logBotError(BOT_ERROR_CODES.START, err, ctx, {
+              action: 'customerConfirm',
+            });
             await ctx
-              .reply('Tasdiqlash jarayonida xatolik yuz berdi.')
+              .reply(
+                userMessageWithCode(
+                  BOT_ERROR_CODES.START,
+                  'Tasdiqlash jarayonida xatolik yuz berdi.',
+                ),
+              )
               .catch(() => {});
           }
         }
@@ -343,18 +379,32 @@ export class BotUpdate {
         return;
       }
 
+      // New user: enter auth scene (login/password). Stage is registered by nestjs-telegraf.
       if (sceneCtx.scene) {
-        console.log('[Bot] /start – entering auth scene');
+        console.log('[Bot] /start – entering auth scene', {
+          chatId: ctx.chat?.id,
+          userId: tgId,
+        });
         await sceneCtx.scene.enter('auth');
       } else {
+        console.error('[Bot]', BOT_ERROR_CODES.START, {
+          reason: 'scene_undefined',
+          chatId: ctx.chat?.id,
+          userId: tgId,
+        });
         await ctx
-          .reply('Xatolik: sessiya ishlamayapti. Qaytadan urinib ko‘ring.')
+          .reply(
+            userMessageWithCode(
+              BOT_ERROR_CODES.START,
+              'Xatolik: sessiya ishlamayapti. Qaytadan urinib ko‘ring.',
+            ),
+          )
           .catch(() => {});
       }
     } catch (err) {
-      console.error('[Bot] Start error:', err);
+      logBotError(BOT_ERROR_CODES.START, err, ctx);
       await ctx
-        .reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .reply(userMessageWithCode(BOT_ERROR_CODES.START))
         .catch(() => {});
     }
   }
@@ -389,12 +439,39 @@ export class BotUpdate {
       const user = await this.requireAuth(ctx);
       if (!user) return;
 
-      if (text === '📋 Buyurtmalarim') {
+      // Main menu buttons (when user types instead of pressing WebApp button): show same keyboard.
+      if (this.isYangiBuyurtma(text)) {
+        const draft = await this.prisma.order.findFirst({
+          where: { master_id: user.id, status: OrderStatus.draft },
+          orderBy: { created_at: 'desc' },
+        });
+        if (draft) {
+          await ctx
+            .reply(
+              'Sizda allaqachon qoralama buyurtma bor. Davom etasizmi yoki yangi yaratasizmi? Quyidagi tugmani bosing:',
+              getMainMenuKeyboard(user.role),
+            )
+            .catch(() => {});
+        } else {
+          await ctx
+            .reply(
+              'Yangi buyurtma yaratish uchun quyidagi tugmani bosing:',
+              getMainMenuKeyboard(user.role),
+            )
+            .catch(() => {});
+        }
+        return;
+      }
+      if (this.isMeningBuyurtmalarim(text)) {
         await ctx
-          .reply('Buyurtmalar ro‘yxati (keyingi versiyada).')
+          .reply(
+            'Buyurtmalar ro‘yxati uchun quyidagi tugmani bosing:',
+            getMainMenuKeyboard(user.role),
+          )
           .catch(() => {});
         return;
       }
+
       if (text === '📍 Lokatsiya yuborish') {
         await ctx
           .reply('Lokatsiyangizni yuboring (Share location).')
@@ -412,8 +489,10 @@ export class BotUpdate {
         return;
       }
     } catch (err) {
-      console.error('onText error:', err);
-      await ctx.reply('Xatolik yuz berdi.').catch(() => {});
+      logBotError(BOT_ERROR_CODES.TEXT, err, ctx);
+      await ctx
+        .reply(userMessageWithCode(BOT_ERROR_CODES.TEXT))
+        .catch(() => {});
     }
   }
 
@@ -501,9 +580,9 @@ export class BotUpdate {
         )
         .catch(() => {});
     } catch (err) {
-      console.error('onLocation error:', err);
+      logBotError(BOT_ERROR_CODES.LOCATION, err, ctx);
       await ctx
-        .reply('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .reply(userMessageWithCode(BOT_ERROR_CODES.LOCATION))
         .catch(() => {});
     }
   }
@@ -552,9 +631,9 @@ export class BotUpdate {
         }
         return;
       }
-      console.error('onConfirmOrder error:', err);
+      logBotError(BOT_ERROR_CODES.CONFIRM_ORDER, err, ctx);
       await ctx
-        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.CONFIRM_ORDER))
         .catch(() => {});
     }
   }
@@ -595,9 +674,9 @@ export class BotUpdate {
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
-      console.error('onCancelOrder error:', err);
+      logBotError(BOT_ERROR_CODES.CANCEL_ORDER, err, ctx);
       await ctx
-        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.CANCEL_ORDER))
         .catch(() => {});
     }
   }
@@ -662,9 +741,9 @@ export class BotUpdate {
         }
         return;
       }
-      console.error('onAcceptOrder error:', err);
+      logBotError(BOT_ERROR_CODES.ACCEPT_ORDER, err, ctx);
       await ctx
-        .answerCbQuery('Xatolik yuz berdi. Qaytadan urinib ko‘ring.')
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.ACCEPT_ORDER))
         .catch(() => {});
     }
   }
@@ -713,8 +792,10 @@ export class BotUpdate {
         }
         return;
       }
-      console.error('onConfirmDelivery error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+      logBotError(BOT_ERROR_CODES.CONFIRM_DELIVERY, err, ctx);
+      await ctx
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.CONFIRM_DELIVERY))
+        .catch(() => {});
     }
   }
 
@@ -756,8 +837,10 @@ export class BotUpdate {
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
-      console.error('onRejectDelivery error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+      logBotError(BOT_ERROR_CODES.REJECT_DELIVERY, err, ctx);
+      await ctx
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.REJECT_DELIVERY))
+        .catch(() => {});
     }
   }
 
@@ -799,8 +882,10 @@ export class BotUpdate {
         await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
         return;
       }
-      console.error('onStartWork error:', err);
-      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+      logBotError(BOT_ERROR_CODES.START_WORK, err, ctx);
+      await ctx
+        .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.START_WORK))
+        .catch(() => {});
     }
   }
 

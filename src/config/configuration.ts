@@ -22,11 +22,19 @@ export const config = {
     return String(process.env.TELEGRAM_BOT_USERNAME ?? '').trim();
   },
 
-  /** API base URL for server-side or fallback (e.g. for logs). */
+  /** API base URL. Never localhost in production — frontend/WebApp must call PUBLIC_URL. */
   get apiBaseUrl(): string {
-    const raw = process.env.API_BASE_URL ?? process.env.PORT;
-    if (raw && String(raw).match(/^https?:\/\//))
-      return String(raw).replace(/\/+$/, '');
+    const isProduction = process.env.NODE_ENV === 'production';
+    const publicUrl = process.env.PUBLIC_URL?.trim();
+    if (publicUrl && publicUrl.match(/^https?:\/\//))
+      return publicUrl.replace(/\/+$/, '');
+    if (isProduction) {
+      console.warn(
+        '[Config] PUBLIC_URL not set in production; API URL may be wrong for WebApp.',
+      );
+    }
+    const raw = process.env.API_BASE_URL?.trim();
+    if (raw && raw.match(/^https?:\/\//)) return raw.replace(/\/+$/, '');
     const port = parseInt(String(process.env.PORT ?? '3000'), 10);
     return `http://localhost:${port}`;
   },

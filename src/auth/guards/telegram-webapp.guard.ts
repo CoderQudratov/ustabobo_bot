@@ -12,6 +12,7 @@ const INIT_DATA_HEADER = 'x-telegram-init-data';
 
 export interface TelegramWebAppUser {
   id: string;
+  telegramId: number;
   login: string;
   role: string;
   fullname: string;
@@ -41,6 +42,7 @@ export class TelegramWebAppGuard implements CanActivate {
     const user = await this.authService.getUserByTgId(tgId);
     (request as Request & { user: TelegramWebAppUser }).user = {
       id: user.id,
+      telegramId: tgId,
       login: user.login,
       role: user.role,
       fullname: user.fullname,

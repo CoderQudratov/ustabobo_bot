@@ -14,6 +14,9 @@ const safeConfig = getSafeStartupConfig();
 console.log('[Startup] BOT_TOKEN prefix:', safeConfig.botTokenPrefix);
 console.log('[Startup] WEBAPP_URL:', safeConfig.webappUrl);
 console.log('[Startup] NODE_ENV:', safeConfig.nodeEnv);
+if (process.env.PUBLIC_URL?.trim()) {
+  console.log('[Startup] PUBLIC_URL:', process.env.PUBLIC_URL.trim());
+}
 console.log(
   '[Startup] TELEGRAM_INIT_DATA_MAX_AGE_SEC:',
   safeConfig.initDataMaxAgeSec,
@@ -29,15 +32,15 @@ process.on('unhandledRejection', (reason: unknown) => {
   console.error('[unhandledRejection]', reason);
 });
 
-/**
- * CORS: barcha Cloudflare tunnel, Telegram WebApp va localhost dan so'rovlarni qabul qilish.
- * BotFather dan qo'shilgan Mini App har qanday HTTPS origin dan ochilishi mumkin — origin cheklanmaydi.
- */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use('/uploads', express.static(UPLOADS_DIR));
   app.enableCors({
-    origin: true,
+    origin: [
+      'https://ustabobo.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [
@@ -62,9 +65,10 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(config.port, '0.0.0.0');
+  const port = parseInt(String(process.env.PORT || '10000'), 10);
+  await app.listen(port, '0.0.0.0');
   console.log(
-    `API: ${config.apiBaseUrl} (port ${config.port}, CORS: barcha origin)`,
+    `API: ${config.apiBaseUrl} (port ${port}, host 0.0.0.0)`,
   );
 }
 void bootstrap();

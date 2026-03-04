@@ -19,6 +19,7 @@ export interface ValidatedInitData {
 }
 
 const DEFAULT_MAX_AGE_SEC = 300; // 5 minutes
+const CLOCK_SKEW_TOLERANCE_SEC = 120; // allow 2 min skew so "session expired" is less frequent
 
 const LOG_PREFIX = '[TelegramInitData]';
 
@@ -125,11 +126,13 @@ export class TelegramInitDataService {
     if (this.maxAgeSec > 0 && authDateNum) {
       const now = Math.floor(Date.now() / 1000);
       const age = now - authDateNum;
-      if (age > this.maxAgeSec) {
+      const maxAllowed = this.maxAgeSec + CLOCK_SKEW_TOLERANCE_SEC;
+      if (age > maxAllowed) {
         if (process.env.NODE_ENV === 'development') {
           console.warn(LOG_PREFIX, 'validation failed: auth_date too old', {
             ageSec: age,
             maxAgeSec: this.maxAgeSec,
+            clockSkew: CLOCK_SKEW_TOLERANCE_SEC,
           });
         }
         throw new UnauthorizedException(

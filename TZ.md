@@ -457,6 +457,9 @@ api (nestjs)
 bot (nestjs-telegraf yoki alohida app)
 web (nextjs erp)
 webapp (nextjs telegram webapp)
+
+**Render deployment:** muhit o‘zgaruvchilari (BOT_TOKEN, PUBLIC_URL, WEBAPP_URL, DATABASE_URL, REDIS_URL), port binding (0.0.0.0, PORT), webhook/polling va health — **RUN.md** da.
+
 18) MVP CHEGARASI (Hozircha YO‘Q)
 MVP ichida bo‘lmaydi:
 

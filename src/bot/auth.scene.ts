@@ -11,6 +11,12 @@ import { Scenes } from 'telegraf';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { getMainMenuKeyboard } from './keyboards';
+import {
+  logBotError,
+  userMessageWithCode,
+  BOT_ERROR_CODES,
+} from './bot-error.util';
+import { Context } from 'telegraf';
 
 interface AuthWizardState extends Scenes.WizardSessionData {
   login?: string;
@@ -165,8 +171,18 @@ export class AuthScene {
         .reply('Muvaffaqiyatli kirildi!', getMainMenuKeyboard(user.role))
         .catch(() => {});
     } catch (err) {
-      console.error(AUTH_LOG, 'Step 1 validate error:', err);
-      await ctx.reply('Xatolik yuz berdi. Qaytadan kirish.').catch(() => {});
+      logBotError(BOT_ERROR_CODES.AUTH_SCENE, err, ctx as Context, {
+        step: 'password_validate',
+        login: state.login ? `${state.login.slice(0, 2)}***` : undefined,
+      });
+      await ctx
+        .reply(
+          userMessageWithCode(
+            BOT_ERROR_CODES.AUTH_SCENE,
+            'Xatolik yuz berdi. Qaytadan kirish.',
+          ),
+        )
+        .catch(() => {});
       await (ctx.scene?.reenter() ?? Promise.resolve()).catch(() => {});
     }
   }

@@ -11,4 +11,14 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+
+  /** For Render port detection and quick health checks. No auth. */
+  @Get('health')
+  @Public()
+  getHealth(): { status: string; service: string } {
+    return {
+      status: 'ok',
+      service: 'ustabobo-backend',
+    };
+  }
 }

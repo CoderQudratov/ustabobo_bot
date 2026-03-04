@@ -4,6 +4,8 @@ import { session } from 'telegraf';
 import { AuthScene } from './auth.scene';
 import { BotUpdate } from './bot.update';
 import { BotNotifyService } from './bot-notify.service';
+import { BotWebhookSetupService } from './bot-webhook-setup.service';
+import { TelegramWebhookController } from './telegram-webhook.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { OrdersModule } from '../orders/orders.module';
 
@@ -26,16 +28,21 @@ import { OrdersModule } from '../orders/orders.module';
             "WEBAPP_URL is not set in .env. Lokalda test qilish uchun: npx localtunnel --port 3001 qilib olingan URLni WEBAPP_URL=... qilib qo'ying.",
           );
         }
+        const publicUrl = process.env.PUBLIC_URL?.trim();
+        const useWebhook =
+          !!publicUrl && publicUrl.startsWith('https://');
         return {
           token,
-          // Session must run first so Stage/wizard can use ctx.session (required for ctx.wizard.state)
           middlewares: [session()],
           include: [BotModule],
+          // Production (Render): use webhook; local: polling
+          launchOptions: useWebhook ? false : undefined,
         };
       },
     }),
   ],
-  providers: [AuthScene, BotUpdate, BotNotifyService],
+  controllers: [TelegramWebhookController],
+  providers: [AuthScene, BotUpdate, BotNotifyService, BotWebhookSetupService],
   exports: [BotNotifyService],
 })
 export class BotModule {}

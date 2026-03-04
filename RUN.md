@@ -113,6 +113,39 @@ Render (yoki boshqa cloud) da backend ishlatishda Redis ulanishini muhit o‘zga
 
 Production: build — `npm run build`, ishga tushirish — `npm run start:prod`.
 
+### Render deployment (to‘liq ro‘yxat)
+
+Render da backend servis uchun quyidagi **Environment** o‘zgaruvchilarini qo‘ying (secret qilmasangiz ham, parollarni hech qachon kodga yozmang):
+
+| O‘zgaruvchi | Majburiy | Misol / izoh |
+|-------------|----------|-------------------------------|
+| **BOT_TOKEN** | Ha | BotFather token |
+| **PUBLIC_URL** | Ha (webhook uchun) | `https://ustabobo-backend.onrender.com` — Render bergan URL; bot webhook shu manzilga ulanadi |
+| **WEBAPP_URL** | Ha | `https://ustabobo.netlify.app` (yoki WebApp hosting manzili) |
+| **DATABASE_URL** | Ha | PostgreSQL ulanish (Render PostgreSQL yoki tashqi) |
+| **REDIS_URL** | Ha | `rediss://default:<PAROL>@...` (Redis Cloud / Render Redis) |
+| **TELEGRAM_INIT_DATA_MAX_AGE_SEC** | Yo‘q | Default 300; WebApp “sessiya eskirgan” kamroq bo‘lishi uchun 600 qilish mumkin |
+| **TELEGRAM_BOT_USERNAME** | Tavsiya | Bot @username (deep linklar uchun) |
+| **JWT_SECRET** | Admin uchun | ERP login |
+| **PORT** | Render o‘rnatadi | O‘rnatmasangiz 3000 |
+
+**Build & start:** Build command: `npm run build`, Start command: `npm run start:prod`.
+
+**Port:** Backend `0.0.0.0` da `PORT` ni tinglaydi. Render “No open ports” ko‘rsatsa, `PORT` ni ishlatayotganingizni tekshiring va `GET /health` ochiq ekanini tekshiring.
+
+**Redis eviction:** Agar Render/Redis “Eviction policy is volatile-lru” deyilsa, Redis sozlamalarida `maxmemory-policy noeviction` qilib qo‘ying (agar xizmat ruxsat bersa). BullMQ noeviction tavsiya qiladi. Boshqa holatda RUN.md da yozilganidek, faqat bir marta ogohlantirish chiqadi.
+
+### Lokalda test qilish
+
+1. **Barcha narsani sozlash:**  
+   `npm run setup` (Docker da Postgres + Redis, db:push, db:seed).
+
+2. **Ishga tushirish:**  
+   `npm run start:dev`
+
+3. **Webhook kerak bo‘lsa (ixtiyoriy):**  
+   Lokalda bot odatda **polling** rejimida ishlaydi (`PUBLIC_URL` bo‘lmasa). Agar webhookni lokalda sinashni xohlasangiz: ngrok yoki cloudflared bilan `https://...` oching, `PUBLIC_URL` va (kerak bo‘lsa) `WEBAPP_URL` ni shu manzilga qo‘ying, keyin `npm run start:prod` (yoki start:dev). Bot “Mode: webhook” deb log yozadi.
+
 ---
 
 ## 2. Barcha narsani bir marta sozlash (setup)
