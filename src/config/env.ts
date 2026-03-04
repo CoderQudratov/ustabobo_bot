@@ -18,6 +18,18 @@ export function validateEnv(): void {
       `BOT_TOKEN hali placeholder ("${BOT_TOKEN_PLACEHOLDER}"). BotFather dan haqiqiy token oling va .env da faqat bitta BOT_TOKEN=... qiling.`,
     );
   }
+
+  if (process.env.NODE_ENV === 'production') {
+    const jwt = process.env.JWT_SECRET?.trim();
+    if (
+      !jwt ||
+      jwt === 'avtopro-erp-secret-change-in-production'
+    ) {
+      throw new Error(
+        "JWT_SECRET production da o'rnatilmagan yoki default qiymatda. .env da kuchli JWT_SECRET=... qiling.",
+      );
+    }
+  }
 }
 
 /** Safe startup config for logging (no secrets). Call after validateEnv(). */

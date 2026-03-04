@@ -38,12 +38,17 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new HttpExceptionFilter());
   app.use('/uploads', express.static(UPLOADS_DIR));
+  const webappOrigin = process.env.WEBAPP_URL?.trim().replace(/\/+$/, '');
+  const corsOrigins: string[] = [
+    'https://ustabobo.netlify.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ];
+  if (webappOrigin && !corsOrigins.includes(webappOrigin)) {
+    corsOrigins.push(webappOrigin);
+  }
   app.enableCors({
-    origin: [
-      'https://ustabobo.netlify.app',
-      'http://localhost:3000',
-      'http://localhost:3001',
-    ],
+    origin: corsOrigins,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [

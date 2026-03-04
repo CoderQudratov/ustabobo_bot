@@ -10,6 +10,7 @@ import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
 import { MasterAuthGuard } from './guards/master-auth.guard';
 import { WebappController } from './webapp.controller';
 import { WebappService } from './webapp.service';
+import { TelegramModule } from '../telegram/telegram.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { WebappService } from './webapp.service';
         process.env.JWT_SECRET ?? 'avtopro-erp-secret-change-in-production',
       signOptions: { expiresIn: '1h' },
     }),
+    TelegramModule,
   ],
   controllers: [AuthController, WebappController],
   providers: [

@@ -29,7 +29,7 @@ const LOG_PREFIX = '[TelegramInitData]';
  *
  * 1) Parse initData, extract hash
  * 2) data_check_string = all keys except hash, sorted alphabetically, key=value joined by "\n"
- * 3) secret_key = HMAC_SHA256(bot_token, "WebAppData")
+ * 3) secret_key = HMAC_SHA256(key: "WebAppData", value: bot_token)
  * 4) computed_hash = hex(HMAC_SHA256(secret_key, data_check_string))
  * 5) Compare computed_hash with provided hash
  * 6) Validate auth_date (max age configurable via TELEGRAM_INIT_DATA_MAX_AGE_SEC)
@@ -81,9 +81,10 @@ export class TelegramInitDataService {
       throw new UnauthorizedException('Invalid Telegram init data');
     }
 
+    // Telegram docs: secret_key = HMAC_SHA256(key: "WebAppData", value: bot_token)
     const secretKey = crypto
-      .createHmac('sha256', this.botToken)
-      .update('WebAppData')
+      .createHmac('sha256', 'WebAppData')
+      .update(this.botToken)
       .digest();
 
     const tryValidate = (dataCheckString: string): boolean => {
@@ -91,7 +92,15 @@ export class TelegramInitDataService {
         .createHmac('sha256', secretKey)
         .update(dataCheckString)
         .digest('hex');
-      return computed === hash;
+      if (computed.length !== hash.length) return false;
+      try {
+        return crypto.timingSafeEqual(
+          Buffer.from(computed, 'hex'),
+          Buffer.from(hash, 'hex'),
+        );
+      } catch {
+        return false;
+      }
     };
 
     // 1) data_check_string from raw pairs (encoded values, per Telegram docs)
@@ -145,7 +154,8 @@ export class TelegramInitDataService {
     const userStr = params.get('user');
     if (userStr) {
       try {
-        const parsed = JSON.parse(decodeURIComponent(userStr)) as {
+        // params.get() already returns URL-decoded value; do not double-decode
+        const parsed = JSON.parse(userStr) as {
           id?: number;
           first_name?: string;
           last_name?: string;
