@@ -2,10 +2,29 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { Product } from '../../generated/prisma/client';
 
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Products where stock_count <= min_limit (column-to-column). Uses raw query. */
+  async getLowStockProducts(): Promise<Product[]> {
+    const rows = await this.prisma.$queryRaw<Product[]>`
+      SELECT * FROM "Product"
+      WHERE stock_count <= min_limit AND stock_count > 0
+      ORDER BY (stock_count::float / NULLIF(min_limit, 0)) ASC
+    `;
+    return rows;
+  }
+
+  /** Products where stock_count <= 0. */
+  async getOutOfStockProducts(): Promise<Product[]> {
+    return this.prisma.product.findMany({
+      where: { stock_count: { lte: 0 } },
+      orderBy: { name: 'asc' },
+    });
+  }
 
   async create(dto: CreateProductDto) {
     return this.prisma.product.create({

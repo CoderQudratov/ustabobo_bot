@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { BroadcastProducer } from '../broadcast/broadcast-producer.service';
 import { BotNotifyService } from '../bot/bot-notify.service';
+import { StockAlertService } from '../products/stock-alert.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { LocationDto } from './dto/location.dto';
 import {
@@ -26,6 +27,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly broadcastProducer: BroadcastProducer,
     private readonly botNotify: BotNotifyService,
+    private readonly stockAlertService: StockAlertService,
   ) {}
 
   async createDraft(masterId: string, dto: CreateOrderDto) {
@@ -821,37 +823,59 @@ export class OrdersService {
     const servicesSum = order.orderItems
       .filter((i) => i.item_type === OrderItemType.service)
       .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
+    // Delivery fee: use project constant (TZ §13); default 30_000 UZS if not set
     const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
     const masterPercent = Number(order.master.percent_rate);
     const driverPercent = order.driver ? Number(order.driver.percent_rate) : 0;
-    const masterFee = (servicesSum * masterPercent) / 100;
-    const driverFee = (deliveryFee * driverPercent) / 100;
     const totalAmount = Number(order.total_amount);
+    // Integer UZS amounts for Transaction and balance updates (percent_rate as 0–100)
+    const ustaHaqi = Math.round((servicesSum * masterPercent) / 100);
+    const kuryerHaqi =
+      order.driver_id && order.driver
+        ? Math.round((deliveryFee * driverPercent) / 100)
+        : 0;
+    const bossFoyda = totalAmount - ustaHaqi - kuryerHaqi;
+
+    const productItems = order.orderItems.filter(
+      (i) => i.item_type === OrderItemType.product && i.product_id,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const prismaTx = tx as unknown as PrismaService;
 
-      await prismaTx.order.update({
-        where: { id: order.id },
+      // (c) Transaction records
+      await prismaTx.transaction.create({
         data: {
-          status: OrderStatus.completed,
-          completed_at: new Date(),
+          order_id: order.id,
+          user_id: order.master_id,
+          amount: ustaHaqi,
+          type: 'master_fee',
         },
       });
-
-      const productItems = order.orderItems.filter(
-        (i) => i.item_type === OrderItemType.product && i.product_id,
-      );
-      for (const item of productItems) {
-        if (!item.product_id) continue;
-        await prismaTx.product.update({
-          where: { id: item.product_id },
+      if (order.driver_id && kuryerHaqi > 0) {
+        await prismaTx.transaction.create({
           data: {
-            stock_count: { decrement: item.quantity },
+            order_id: order.id,
+            user_id: order.driver_id,
+            amount: kuryerHaqi,
+            type: 'driver_fee',
           },
         });
       }
 
+      // (d) Update user balances
+      await prismaTx.user.update({
+        where: { id: order.master_id },
+        data: { balance: { increment: ustaHaqi } },
+      });
+      if (order.driver_id && kuryerHaqi > 0) {
+        await prismaTx.user.update({
+          where: { id: order.driver_id },
+          data: { balance: { increment: kuryerHaqi } },
+        });
+      }
+
+      // (e) Organization balance_due (if corporate)
       if (order.organization_id) {
         await prismaTx.organization.update({
           where: { id: order.organization_id },
@@ -861,17 +885,53 @@ export class OrdersService {
         });
       }
 
+      // (f) Stock decrement — ONLY item_type='product'; check stock before decrement
+      for (const item of productItems) {
+        const productId = item.product_id!;
+        const product = await prismaTx.product.findUnique({
+          where: { id: productId },
+        });
+        if (!product) {
+          throw new BadRequestException(
+            `Mahsulot topilmadi: ${item.item_name || productId}`,
+          );
+        }
+        if (product.stock_count < item.quantity) {
+          throw new BadRequestException(
+            `Omborda yetarli emas: "${product.name}" — mavjud: ${product.stock_count}, kerak: ${item.quantity}`,
+          );
+        }
+        await prismaTx.product.update({
+          where: { id: productId },
+          data: {
+            stock_count: { decrement: item.quantity },
+          },
+        });
+      }
+
+      // (g) Update order status → completed
+      await prismaTx.order.update({
+        where: { id: order.id },
+        data: {
+          status: OrderStatus.completed,
+          completed_at: new Date(),
+          confirm_token: null,
+        },
+      });
+
+      // (h) OrderEvent audit log
       await prismaTx.orderEvent.create({
         data: {
           order_id: order.id,
           actor_user_id: null,
           event_type: 'customer_completed',
           payload: {
-            master_fee: masterFee,
-            driver_fee: driverFee,
+            usta_haqi: ustaHaqi,
+            kuryer_haqi: kuryerHaqi,
+            boss_foyda: bossFoyda,
+            total_amount: totalAmount,
             services_sum: servicesSum,
             delivery_fee: deliveryFee,
-            total_amount: totalAmount,
             organization_balance_added: order.organization_id
               ? totalAmount
               : null,
@@ -879,6 +939,17 @@ export class OrdersService {
         },
       });
     });
+
+    const decrementedProductIds = productItems
+      .map((i) => i.product_id!)
+      .filter(Boolean);
+    if (decrementedProductIds.length > 0) {
+      this.stockAlertService
+        .checkAndAlert(decrementedProductIds)
+        .catch((err: Error) => {
+          console.error('[StockAlert] Failed to send alert:', err?.message ?? err);
+        });
+    }
 
     return this.prisma.order.findUnique({
       where: { id: order.id },

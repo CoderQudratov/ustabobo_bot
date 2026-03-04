@@ -43,6 +43,6 @@ import { OrdersModule } from '../orders/orders.module';
   ],
   controllers: [TelegramWebhookController],
   providers: [AuthScene, BotUpdate, BotNotifyService, BotWebhookSetupService],
-  exports: [BotNotifyService],
+  exports: [TelegrafModule, BotNotifyService],
 })
 export class BotModule {}
