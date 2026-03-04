@@ -34,8 +34,59 @@ export const config = {
   redis: {
     host: process.env.REDIS_HOST ?? 'localhost',
     port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
+    password: process.env.REDIS_PASSWORD ?? undefined,
+    tls: process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1',
   },
 } as const;
+
+/** Redis connection URL if set (e.g. Redis Cloud: rediss://default:PASSWORD@host:port). */
+export function getRedisUrl(): string | undefined {
+  const url = process.env.REDIS_URL?.trim();
+  return url && url.length > 0 ? url : undefined;
+}
+
+/**
+ * BullMQ/ioredis connection options.
+ * If REDIS_URL is set: parsed (host, port, password, tls for rediss://).
+ * Else: REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_TLS.
+ */
+export function getRedisConnectionOptions(): {
+  host: string;
+  port: number;
+  password?: string;
+  tls?: object;
+  maxRetriesPerRequest?: number | null;
+} {
+  const url = getRedisUrl();
+  if (url) {
+    try {
+      const u = new URL(url);
+      const port = u.port ? parseInt(u.port, 10) : 6379;
+      const password = u.password ? decodeURIComponent(u.password) : undefined;
+      const tls = u.protocol === 'rediss:';
+      return {
+        host: u.hostname,
+        port: Number.isNaN(port) ? 6379 : port,
+        password,
+        ...(tls && { tls: {} }),
+        maxRetriesPerRequest: null,
+      };
+    } catch {
+      // fallback to host/port if URL invalid
+    }
+  }
+  const host = process.env.REDIS_HOST ?? 'localhost';
+  const port = parseInt(process.env.REDIS_PORT ?? '6379', 10);
+  const password = process.env.REDIS_PASSWORD?.trim() || undefined;
+  const useTls = process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1';
+  return {
+    host,
+    port: Number.isNaN(port) ? 6379 : port,
+    password,
+    ...(useTls && { tls: {} }),
+    maxRetriesPerRequest: null,
+  };
+}
 
 /** Normalized WebApp base URL; throws if not set (for bot). */
 export function getWebAppBaseUrl(): string {

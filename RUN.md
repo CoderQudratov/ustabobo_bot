@@ -100,6 +100,19 @@ cp .env.example .env
 
 **Muhim:** .env da bir xil kalit ikki marta boʻlmasin (oxirgi qiymat qoladi, BOT_TOKEN placeholder qolsa "Invalid Telegram init data signature" chiqadi). Tekshirish: `npm run check-env`.
 
+### Render yoki production (Redis)
+
+Render (yoki boshqa cloud) da backend ishlatishda Redis ulanishini muhit o‘zgaruvchilari orqali berasiz.
+
+**Tavsiya etiladi:** bitta `REDIS_URL` (Redis Cloud va boshqa TLS-li xizmatlar uchun):
+
+- `REDIS_URL=rediss://default:<PAROL>@<host>:<port>` (`rediss://` — TLS bilan)
+- Parolni hech qachon kodga yozmang; faqat Render Environment da secret sifatida qo‘ying.
+
+**Alternativa:** agar URL ishlatmasangiz: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS=true` (TLS kerak bo‘lsa).
+
+Production: build — `npm run build`, ishga tushirish — `npm run start:prod`.
+
 ---
 
 ## 2. Barcha narsani bir marta sozlash (setup)

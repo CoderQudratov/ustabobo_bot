@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { config } from '../config/configuration';
+import { getRedisConnectionOptions } from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
 import { BroadcastProducer } from './broadcast-producer.service';
 import { BroadcastProcessor } from './broadcast.processor';
@@ -9,10 +9,7 @@ import { BotModule } from '../bot/bot.module';
 @Module({
   imports: [
     BullModule.forRoot({
-      connection: {
-        host: config.redis.host,
-        port: config.redis.port,
-      },
+      connection: getRedisConnectionOptions(),
     }),
     BullModule.registerQueue({ name: 'broadcast_queue' }),
     PrismaModule,
