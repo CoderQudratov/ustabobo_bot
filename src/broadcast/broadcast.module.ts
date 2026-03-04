@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { getRedisConnectionOptions } from '../config/configuration';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -26,7 +26,7 @@ function warnRedisEvictionOnce(): void {
     }),
     BullModule.registerQueue({ name: 'broadcast_queue' }),
     PrismaModule,
-    BotModule,
+    forwardRef(() => BotModule),
   ],
   providers: [BroadcastProducer, BroadcastProcessor],
   exports: [BroadcastProducer],
