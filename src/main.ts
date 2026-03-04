@@ -7,6 +7,8 @@ import express from 'express';
 import { validateEnv, getSafeStartupConfig } from './config/env';
 import { AppModule } from './app.module';
 import { config } from './config/configuration';
+import { PrismaService } from './prisma/prisma.service';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 // Fail fast if BOT_TOKEN missing or placeholder (avoids "Invalid Telegram init data signature")
 validateEnv();
@@ -34,6 +36,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.use('/uploads', express.static(UPLOADS_DIR));
   app.enableCors({
     origin: [
@@ -65,6 +68,19 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  const prisma = app.get(PrismaService);
+  try {
+    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1 FROM "User" LIMIT 1`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Startup] Database not ready or schema missing:', msg);
+    console.error('[Startup] Run: npx prisma migrate deploy');
+    throw err;
+  }
+  console.log('[Startup] DB ready');
+
   const port = parseInt(String(process.env.PORT || '10000'), 10);
   await app.listen(port, '0.0.0.0');
   console.log(

@@ -56,10 +56,14 @@ export class AuthService {
   }
 
   /**
-   * Validates Telegram WebApp initData (HMAC-SHA256 with bot token).
-   * Tries raw then decoded data_check_string so both Telegram clients work.
+   * Validates Telegram WebApp initData per Telegram spec:
+   * - data_check_string = keys (except hash) sorted asc, "k=v" joined by "\n"
+   * - secret_key = HMAC_SHA256(bot_token, "WebAppData")
+   * - computed_hash = HMAC_SHA256(secret_key, data_check_string) in hex
+   * - timing-safe compare with provided hash
+   * - auth_date max age = TELEGRAM_INIT_DATA_MAX_AGE_SEC (default 600) + 120s clock skew
    */
-  validateTelegramInitData(initData: string): { tgId: number } {
+  validateTelegramInitData(initData: string): { tgId: number; authDate: number } {
     const token = process.env.BOT_TOKEN?.trim();
     if (!token) {
       throw new UnauthorizedException('Telegram WebApp not configured');
@@ -80,16 +84,26 @@ export class AuthService {
     if (!hash) {
       throw new UnauthorizedException('Invalid Telegram init data');
     }
+    // secret_key = HMAC_SHA256(bot_token, "WebAppData")
     const secretKey = crypto
       .createHmac('sha256', token)
       .update('WebAppData')
       .digest();
-    const tryValidate = (dataCheckString: string): boolean => {
-      const computed = crypto
+    const computedHex = (dataCheckString: string): string =>
+      crypto
         .createHmac('sha256', secretKey)
         .update(dataCheckString)
         .digest('hex');
-      return computed === hash;
+    const timingSafeEqualHash = (a: string, b: string): boolean => {
+      if (a.length !== b.length || a.length % 2 !== 0) return false;
+      try {
+        return crypto.timingSafeEqual(
+          Buffer.from(a, 'hex'),
+          Buffer.from(b, 'hex'),
+        );
+      } catch {
+        return false;
+      }
     };
     const arr = raw.split('&').filter((s) => !s.startsWith('hash='));
     arr.sort((a, b) => {
@@ -98,18 +112,24 @@ export class AuthService {
       return keyA.localeCompare(keyB);
     });
     const dataCheckStringRaw = arr.join('\n');
-    if (!tryValidate(dataCheckStringRaw)) {
+    let valid =
+      timingSafeEqualHash(computedHex(dataCheckStringRaw), hash);
+    if (!valid) {
       const keys = Array.from(params.keys()).filter((k) => k !== 'hash').sort();
       const dataCheckStringDecoded = keys
         .map((k) => `${k}=${params.get(k)}`)
         .join('\n');
-      if (!tryValidate(dataCheckStringDecoded)) {
-        throw new UnauthorizedException('Invalid Telegram init data signature');
-      }
+      valid = timingSafeEqualHash(
+        computedHex(dataCheckStringDecoded),
+        hash,
+      );
+    }
+    if (!valid) {
+      throw new UnauthorizedException('Invalid Telegram init data signature');
     }
     const maxAgeSec = process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC
       ? parseInt(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC, 10)
-      : 300;
+      : 600;
     const clockSkewSec = 120;
     const authDateStr = params.get('auth_date');
     const authDate = authDateStr ? parseInt(authDateStr, 10) : 0;
@@ -135,7 +155,7 @@ export class AuthService {
     if (user.id == null || typeof user.id !== 'number') {
       throw new UnauthorizedException('Telegram user id missing');
     }
-    return { tgId: user.id };
+    return { tgId: user.id, authDate };
   }
 
   async getMasterByTgId(tgId: number) {

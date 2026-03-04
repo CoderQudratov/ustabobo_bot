@@ -124,27 +124,59 @@ Render da backend servis uchun quyidagi **Environment** o‘zgaruvchilarini qo�
 | **WEBAPP_URL** | Ha | `https://ustabobo.netlify.app` (yoki WebApp hosting manzili) |
 | **DATABASE_URL** | Ha | PostgreSQL ulanish (Render PostgreSQL yoki tashqi) |
 | **REDIS_URL** | Ha | `rediss://default:<PAROL>@...` (Redis Cloud / Render Redis) |
-| **TELEGRAM_INIT_DATA_MAX_AGE_SEC** | Yo‘q | Default 300; WebApp “sessiya eskirgan” kamroq bo‘lishi uchun 600 qilish mumkin |
+| **TELEGRAM_INIT_DATA_MAX_AGE_SEC** | Yo‘q | Default 600; 120s clock skew qo‘shiladi |
 | **TELEGRAM_BOT_USERNAME** | Tavsiya | Bot @username (deep linklar uchun) |
 | **JWT_SECRET** | Admin uchun | ERP login |
-| **PORT** | Render o‘rnatadi | O‘rnatmasangiz 3000 |
+| **PORT** | Render o‘rnatadi | O‘rnatmasangiz 10000 |
 
-**Build & start:** Build command: `npm run build`, Start command: `npm run start:prod`.
+**Build command (muhim — jadval yaratish uchun migrate deploy kerak):**
+
+```bash
+npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
+```
+
+**Start command:** `npm run start:prod`.
+
+Agar build da `prisma migrate deploy` ishlatmasangiz, production DB da jadvalar bo‘lmaydi va `/start` ERR_BOT_001 (The table public.User does not exist) beradi.
 
 **Port:** Backend `0.0.0.0` da `PORT` ni tinglaydi. Render “No open ports” ko‘rsatsa, `PORT` ni ishlatayotganingizni tekshiring va `GET /health` ochiq ekanini tekshiring.
 
 **Redis eviction:** Agar Render/Redis “Eviction policy is volatile-lru” deyilsa, Redis sozlamalarida `maxmemory-policy noeviction` qilib qo‘ying (agar xizmat ruxsat bersa). BullMQ noeviction tavsiya qiladi. Boshqa holatda RUN.md da yozilganidek, faqat bir marta ogohlantirish chiqadi.
 
-### Lokalda test qilish
+**Netlify (WebApp):** Build-time env: `NEXT_PUBLIC_API_URL=https://ustabobo-backend.onrender.com` (backend manzili). Parollarni hech qachon kodga yozmang.
 
-1. **Barcha narsani sozlash:**  
-   `npm run setup` (Docker da Postgres + Redis, db:push, db:seed).
+**Seed (ixtiyoriy):** Production DB bo‘sh bo‘lsa, bir marta seed qilish: Render shell yoki lokalda `DATABASE_URL` ni production ga qo‘yib `npx prisma db seed` ishlating.
 
-2. **Ishga tushirish:**  
+### Render deploy — DB yaratish bo‘yicha aniq qadamlar
+
+1. Render da **Web Service** yarating, repo ulang.
+2. **Environment** ga yuqoridagi o‘zgaruvchilarni qo‘ying (BOT_TOKEN, PUBLIC_URL, WEBAPP_URL, DATABASE_URL, REDIS_URL va hokazo).
+3. **Build command:** `npm ci && npx prisma generate && npx prisma migrate deploy && npm run build`
+4. **Start command:** `npm run start:prod`
+5. Deploy tugagach, `GET https://<PUBLIC_URL>/health` → `{ "status": "ok", "service": "ustabobo-backend" }`. Agar start xato bersa “Database not ready or schema missing” — DATABASE_URL to‘g‘ri va migrate deploy build ichida ishlaganini tekshiring.
+
+### Lokalda test qilish (aniq qadamlar)
+
+1. **O‘rnatish:**  
+   `npm ci && npx prisma generate`
+
+2. **Baza (Docker Postgres):**  
+   `npm run db:up` → 5–10 soniya kuting → keyin:
+   - **Migration bilan:** `npx prisma migrate deploy` (yoki yangi migration: `npm run db:migrate:dev`)
+   - **Yoki push bilan:** `npm run db:push`  
+   Keyin: `npm run db:seed`
+
+3. **Ishga tushirish:**  
    `npm run start:dev`
 
-3. **Webhook kerak bo‘lsa (ixtiyoriy):**  
-   Lokalda bot odatda **polling** rejimida ishlaydi (`PUBLIC_URL` bo‘lmasa). Agar webhookni lokalda sinashni xohlasangiz: ngrok yoki cloudflared bilan `https://...` oching, `PUBLIC_URL` va (kerak bo‘lsa) `WEBAPP_URL` ni shu manzilga qo‘ying, keyin `npm run start:prod` (yoki start:dev). Bot “Mode: webhook” deb log yozadi.
+4. **Build tekshirish:**  
+   `npm run build` — xatosiz tugashi kerak.
+
+5. **Webhook (ixtiyoriy):**  
+   Lokalda bot odatda **polling** rejimida ishlaydi (`PUBLIC_URL` bo‘lmasa). Webhookni sinash: ngrok/cloudflared → `PUBLIC_URL` qo‘ying → `npm run start:prod`. Log da “Mode: webhook” chiqadi.
+
+6. **initData tekshirish:**  
+   Telegram da WebApp ni oching → brauzer/dev tools da `window.Telegram.WebApp.initData` ni copy qiling → so‘rov: `curl -H "x-telegram-init-data: <paste>" https://<API>/webapp/init`. 200 da `ok: true`, `telegramId`, `authDate` keladi; noto‘g‘ri signature da 401: `{ "ok": false, "statusCode": 401, "error": "Unauthorized", "message": "Invalid Telegram init data signature" }`.
 
 ---
 

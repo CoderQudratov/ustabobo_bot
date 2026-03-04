@@ -31,13 +31,13 @@ export function getSafeStartupConfig(): {
   const prefix = token.length >= 10 ? token.slice(0, 10) + '…' : "(yo'q)";
   const webappUrl = (process.env.WEBAPP_URL ?? '').trim() || "(o'rnatilmagan)";
   const maxAge = process.env.TELEGRAM_INIT_DATA_MAX_AGE_SEC;
-  const initDataMaxAgeSec = maxAge ? parseInt(maxAge, 10) : 300;
+  const initDataMaxAgeSec = maxAge ? parseInt(maxAge, 10) : 600;
   return {
     botTokenPrefix: prefix,
     webappUrl,
     nodeEnv: process.env.NODE_ENV ?? 'development',
     initDataMaxAgeSec: Number.isNaN(initDataMaxAgeSec)
-      ? 300
+      ? 600
       : initDataMaxAgeSec,
   };
 }

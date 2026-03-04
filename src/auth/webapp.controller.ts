@@ -35,6 +35,7 @@ export class WebappController {
       telegramId,
       username: user.login,
       firstName,
+      authDate: user.authDate,
       ...catalog,
     };
   }
