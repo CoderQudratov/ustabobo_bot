@@ -11,10 +11,10 @@ import { ProductsModule } from '../products/products.module';
 
 @Module({
   imports: [
-    BroadcastModule,
+    forwardRef(() => BroadcastModule),
     AuthModule,
     forwardRef(() => BotModule),
-    ProductsModule,
+    forwardRef(() => ProductsModule),
   ],
   controllers: [
     OrdersController,
