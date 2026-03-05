@@ -18,23 +18,27 @@ import { AdminModule } from './admin/admin.module';
 import { DebugModule } from './debug/debug.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
+const imports = [
+  PrismaModule,
+  TelegramModule,
+  BotModule,
+  AuthModule,
+  UsersModule,
+  OrganizationsModule,
+  VehiclesModule,
+  ServicesModule,
+  ProductsModule,
+  OrdersModule,
+  BroadcastModule,
+  UploadModule,
+  AdminModule,
+];
+if (process.env.NODE_ENV !== 'production') {
+  imports.push(DebugModule);
+}
+
 @Module({
-  imports: [
-    PrismaModule,
-    TelegramModule,
-    BotModule,
-    AuthModule,
-    UsersModule,
-    OrganizationsModule,
-    VehiclesModule,
-    ServicesModule,
-    ProductsModule,
-    OrdersModule,
-    BroadcastModule,
-    UploadModule,
-    AdminModule,
-    DebugModule,
-  ],
+  imports,
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
 })

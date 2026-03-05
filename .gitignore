@@ -55,7 +55,15 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-/generated/prisma
+# Prisma generated client
+generated/
+
+# Cloudflare tunnel binary — download separately, do not commit
+cloudflared
+
+# Uploads directory (local only)
+uploads/*
+!uploads/.gitkeep
 
 # build outputs
 /dist

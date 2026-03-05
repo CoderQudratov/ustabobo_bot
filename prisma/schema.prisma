@@ -63,7 +63,7 @@ model User {
   percent_rate      Decimal   @db.Decimal(10, 4)
   balance           Decimal   @default(0) @db.Decimal(12, 2)
   is_active         Boolean   @default(true)
-  pin_code          String?
+  pin_code_hash     String?
   is_authenticated  Boolean   @default(false)
   locked_until      DateTime? @db.Timestamptz(6)
   pin_fail_count    Int       @default(0)
@@ -78,7 +78,7 @@ model Transaction {
   id        String   @id @default(uuid()) @db.Uuid
   order_id  String   @db.Uuid
   user_id   String   @db.Uuid
-  amount    Int      // amount in UZS (e.g. 30_000 for delivery fee)
+  amount    Decimal  @db.Decimal(12, 2) // amount in UZS (e.g. 30_000 for delivery fee)
   type      String   // e.g. 'delivery_fee'
   created_at DateTime @default(now())
 
@@ -95,7 +95,7 @@ model Organization {
   contact_person String
   phone          String
   payment_type   PaymentType
-  balance_due    Decimal      @db.Decimal(12, 2)
+  balance_due    Decimal      @default(0) @db.Decimal(12, 2)
   is_active      Boolean      @default(true)
 
   vehicles Vehicle[]
@@ -120,15 +120,17 @@ model Product {
   sale_price  Decimal  @db.Decimal(12, 2)
   stock_count Int
   min_limit   Int
+  is_active   Boolean  @default(true)
   created_at  DateTime @default(now())
 
   orderItems OrderItem[]
 }
 
 model Service {
-  id    String  @id @default(uuid()) @db.Uuid
-  name  String
-  price Decimal @db.Decimal(12, 2)
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  price     Decimal  @db.Decimal(12, 2)
+  is_active Boolean  @default(true)
 
   orderItems OrderItem[]
 }

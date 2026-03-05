@@ -24,8 +24,6 @@ import { AdminUpdateServiceDto } from './dto/update-service.dto';
 import { AdminCreateProductDto } from './dto/create-product.dto';
 import { AdminUpdateProductDto } from './dto/update-product.dto';
 
-const DELIVERY_FEE = 30_000;
-
 const orderInclude = {
   master: { select: { id: true, fullname: true, phone: true, username: true } },
   driver: { select: { id: true, fullname: true, phone: true, username: true } },
@@ -618,7 +616,7 @@ export class AdminService {
       m.total_revenue += Number(order.total_amount);
       m.master_fee += order.transactions
         .filter((t) => t.type === 'master_fee')
-        .reduce((s, t) => s + t.amount, 0);
+        .reduce((s, t) => s + Number(t.amount), 0);
     }
 
     const driverMap = new Map<
@@ -640,7 +638,7 @@ export class AdminService {
       d.deliveries_count++;
       d.driver_fee += order.transactions
         .filter((t) => t.type === 'driver_fee')
-        .reduce((s, t) => s + t.amount, 0);
+        .reduce((s, t) => s + Number(t.amount), 0);
     }
 
     const orgDebts = await this.prisma.organization.findMany({

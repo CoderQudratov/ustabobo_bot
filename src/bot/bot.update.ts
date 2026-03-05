@@ -21,16 +21,16 @@ import {
   userMessageWithCode,
   BOT_ERROR_CODES,
 } from './bot-error.util';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { OrderStatus, Role } from '../../generated/prisma/client';
 import { User } from '../../generated/prisma/client';
-
-const DELIVERY_FEE = 30_000;
+import { calculateOrderTotal } from '../orders/price-calculator';
 const PIN_MAX_FAIL = 3;
 const PIN_LOCK_MINUTES = 5;
 
-/** Session: PIN entry buffer and optional set-PIN mode (when user has no pin_code yet). */
+/** Session: PIN entry buffer and optional set-PIN mode (when user has no pin_code_hash yet). */
 interface SessionWithPin {
   pinBuffer?: string;
   setPinMode?: boolean;
@@ -93,7 +93,7 @@ export class BotUpdate {
   /** Returns user if allowed to act (authenticated or no PIN); otherwise replies and returns null. */
   private async requireAuth(ctx: Context): Promise<
     | (User & {
-        pin_code: string | null;
+        pin_code_hash: string | null;
         is_authenticated: boolean;
         locked_until: Date | null;
         pin_fail_count: number;
@@ -106,7 +106,7 @@ export class BotUpdate {
       where: { tg_id: tgId, is_active: true },
     });
     if (!user) return null;
-    const hasPin = user.pin_code != null && user.pin_code.trim() !== '';
+    const hasPin = user.pin_code_hash != null && user.pin_code_hash.trim() !== '';
     if (hasPin && !user.is_authenticated) {
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         const mins = Math.ceil(
@@ -123,7 +123,7 @@ export class BotUpdate {
       return null;
     }
     return user as User & {
-      pin_code: string | null;
+      pin_code_hash: string | null;
       is_authenticated: boolean;
       locked_until: Date | null;
       pin_fail_count: number;
@@ -179,7 +179,7 @@ export class BotUpdate {
         await ctx.answerCbQuery('Foydalanuvchi topilmadi.').catch(() => {});
         return;
       }
-      // Set-PIN mode: user had no pin_code, now saving first PIN (min 4 digits)
+      // Set-PIN mode: user had no pin_code_hash, now saving first PIN (min 4 digits)
       if (isSetPinMode(ctx)) {
         setPinMode(ctx, false);
         setPinBuffer(ctx, '');
@@ -195,9 +195,10 @@ export class BotUpdate {
             .catch(() => {});
           return;
         }
+        const pinCodeHash = await bcrypt.hash(buf, 10);
         await this.prisma.user.update({
           where: { id: user.id },
-          data: { pin_code: buf, is_authenticated: true, pin_fail_count: 0 },
+          data: { pin_code_hash: pinCodeHash, is_authenticated: true, pin_fail_count: 0 },
         });
         await ctx.answerCbQuery('PIN saqlandi!').catch(() => {});
         await ctx.editMessageText('Asosiy menyu').catch(() => {});
@@ -210,8 +211,10 @@ export class BotUpdate {
         await ctx.answerCbQuery('PIN bloklangan. Kuting.').catch(() => {});
         return;
       }
-      const expected = (user.pin_code ?? '').trim();
-      if (expected && buf === expected) {
+      const pinMatch =
+        user.pin_code_hash &&
+        (await bcrypt.compare(buf, user.pin_code_hash));
+      if (pinMatch) {
         await this.prisma.user.update({
           where: { id: user.id },
           data: { is_authenticated: true, pin_fail_count: 0 },
@@ -352,7 +355,7 @@ export class BotUpdate {
           data: { is_authenticated: false },
         });
         setPinBuffer(ctx, '');
-        if (user.pin_code != null && user.pin_code.trim() !== '') {
+        if (user.pin_code_hash != null && user.pin_code_hash.trim() !== '') {
           const locked =
             user.locked_until && new Date(user.locked_until) > new Date();
           if (locked) {
@@ -553,18 +556,14 @@ export class BotUpdate {
         return;
       }
 
-      const servicesSum = order.orderItems
-        .filter((i) => i.item_type === 'service')
-        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
-      const productsSum = order.orderItems
-        .filter((i) => i.item_type === 'product')
-        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
-      const manualSum = order.orderItems
-        .filter((i) => i.item_type === 'manual_product')
-        .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
-
-      const itemsTotal = servicesSum + productsSum + manualSum;
-      const total = itemsTotal + (order.delivery_needed ? DELIVERY_FEE : 0);
+      const total = calculateOrderTotal(
+        order.orderItems.map((i) => ({
+          item_type: i.item_type,
+          price_at_time: Number(i.price_at_time),
+          quantity: i.quantity,
+        })),
+        order.delivery_needed,
+      );
       const totalFormatted = total.toLocaleString('uz-UZ');
       const keyboard = Markup.inlineKeyboard([
         [

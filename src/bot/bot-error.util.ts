@@ -1,7 +1,5 @@
 import { Context } from 'telegraf';
 
-const ERROR_CODE_PREFIX = 'ERR_BOT_';
-
 /** Map of error codes to short descriptions for logs. */
 export const BOT_ERROR_CODES = {
   START: 'ERR_BOT_001',

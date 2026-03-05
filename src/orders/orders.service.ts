@@ -803,6 +803,38 @@ export class OrdersService {
     return updated;
   }
 
+  /**
+   * Returns order receipt data for GET /customer/confirm/:token (TZ §14.4).
+   * Does not change order status. Throws NotFoundException if token invalid or order not in waiting_customer_confirmation.
+   */
+  async getConfirmData(token: string) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        confirm_token: token,
+        status: OrderStatus.waiting_customer_confirmation,
+      },
+      include: {
+        orderItems: true,
+        master: true,
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Invalid or expired confirmation token');
+    }
+    return {
+      car_number: order.car_number,
+      car_model: order.car_model ?? null,
+      master_fullname: order.master.fullname,
+      orderItems: order.orderItems.map((i) => ({
+        name: i.item_name ?? '—',
+        quantity: i.quantity,
+        price_at_time: Number(i.price_at_time),
+      })),
+      total_amount: Number(order.total_amount),
+      delivery_needed: order.delivery_needed,
+    };
+  }
+
   async customerConfirm(token: string) {
     const order = await this.prisma.order.findFirst({
       where: {

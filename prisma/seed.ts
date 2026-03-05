@@ -33,6 +33,7 @@ const MASTER = {
 async function main() {
   const bossHash = await bcrypt.hash(BOSS.password, 10);
   const masterHash = await bcrypt.hash(MASTER.password, 10);
+  const pinHash = await bcrypt.hash('1234', 10);
 
   await prisma.user.upsert({
     where: { login: BOSS.login },
@@ -65,7 +66,7 @@ async function main() {
       role: MASTER.role,
       percent_rate: MASTER.percent_rate,
       balance: MASTER.balance,
-      pin_code: '1234',
+      pin_code_hash: pinHash,
       is_authenticated: false,
     },
     update: {
@@ -75,7 +76,7 @@ async function main() {
       role: MASTER.role,
       percent_rate: MASTER.percent_rate,
       balance: MASTER.balance,
-      pin_code: '1234',
+      pin_code_hash: pinHash,
       is_authenticated: false,
     },
   });

@@ -23,7 +23,7 @@ export interface TelegramWebAppUser {
  * TelegramInitDataGuard: used on ALL WebApp endpoints (dashboard, wallet, my-orders, new-order,
  * orders create, upload). Reads header "x-telegram-init-data", validates via TelegramInitDataService,
  * finds DB user by tg_id (stored as STRING), attaches request.user. If user not found → 403.
- * PIN gate: if user.pin_code exists and user.is_authenticated === false → 403 "🔐 Botga qayting va PIN kiriting."
+ * PIN gate: if user.pin_code_hash exists and user.is_authenticated === false → 403 "🔐 Botga qayting va PIN kiriting."
  */
 @Injectable()
 export class TelegramInitDataGuard implements CanActivate {
@@ -70,8 +70,8 @@ export class TelegramInitDataGuard implements CanActivate {
 
     // TZ: if PIN exists, WebApp blocked until bot PIN verification
     if (
-      user.pin_code != null &&
-      user.pin_code.trim() !== '' &&
+      user.pin_code_hash != null &&
+      user.pin_code_hash.trim() !== '' &&
       !user.is_authenticated
     ) {
       throw new ForbiddenException('🔐 Botga qayting va PIN kiriting.');

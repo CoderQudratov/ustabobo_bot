@@ -7,6 +7,9 @@ import { Role } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../common/decorators/public.decorator';
 
+/**
+ * @Public() skips global JwtAuthGuard; MasterAuthGuard then accepts Bearer JWT or x-telegram-init-data and sets req.user.
+ */
 interface JwtUser {
   id: string;
   login: string;

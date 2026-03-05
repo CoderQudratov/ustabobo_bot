@@ -22,6 +22,10 @@ import { Public } from '../common/decorators/public.decorator';
 import { MasterAuthGuard } from '../auth/guards/master-auth.guard';
 import { Role } from '../../generated/prisma/client';
 
+/**
+ * WebApp/API endpoints below use @Public() so the global JwtAuthGuard is skipped, then
+ * MasterAuthGuard accepts either Bearer JWT or x-telegram-init-data and sets req.user.
+ */
 interface JwtUser {
   id: string;
   login: string;

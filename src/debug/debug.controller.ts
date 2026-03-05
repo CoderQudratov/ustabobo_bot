@@ -1,29 +1,30 @@
+// WARNING: Debug endpoint — boss only, disable in production
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
-import { TelegramInitDataGuard } from '../auth/guards/telegram-initdata.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { Public } from '../common/decorators/public.decorator';
 
-interface TelegramWebAppUser {
+interface JwtUser {
   id: string;
   login: string;
-  role: string;
+  role: Role;
   fullname: string;
 }
 
 /**
- * Debug endpoint for WebApp: whoami (tg_id, role, is_authenticated).
- * Protected by TelegramInitDataGuard — only valid initData + DB user.
- * Used with Cloudflare tunnel to verify auth state.
+ * Debug endpoints: whoami, initdata/check. Boss-only (JWT). Disable in production.
  */
 @Controller('debug')
-@Public()
-@UseGuards(TelegramInitDataGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.boss)
 export class DebugController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('whoami')
-  async whoami(@Req() req: Request & { user: TelegramWebAppUser }) {
+  async whoami(@Req() req: Request & { user: JwtUser }) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.id },
       select: { tg_id: true, role: true, is_authenticated: true },
@@ -39,14 +40,10 @@ export class DebugController {
   }
 
   /**
-   * DEV: confirms initData validation works. Returns tg_id, username, auth_date_age_sec, is_authenticated, role.
-   * Protected by TelegramInitDataGuard — 200 means initData was valid.
+   * DEV: initData check (auth_date_age_sec etc). Boss-only. Disable in production.
    */
   @Get('initdata/check')
-  async initDataCheck(
-    @Req()
-    req: Request & { user: TelegramWebAppUser; telegramAuthDate?: number },
-  ) {
+  async initDataCheck(@Req() req: Request & { user: JwtUser }) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
@@ -59,14 +56,9 @@ export class DebugController {
     if (!user) {
       return { error: 'User not found' };
     }
-    const authDate = req.telegramAuthDate ?? 0;
-    const authDateAgeSec = authDate
-      ? Math.floor(Date.now() / 1000) - authDate
-      : null;
     return {
       tg_id: user.tg_id,
       username: user.username ?? null,
-      auth_date_age_sec: authDateAgeSec,
       is_authenticated: user.is_authenticated,
       role: user.role,
     };
