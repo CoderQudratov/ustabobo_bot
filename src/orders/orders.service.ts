@@ -774,8 +774,10 @@ export class OrdersService {
     if (order.driver_id !== driverId) {
       throw new ForbiddenException('You can only update orders you accepted');
     }
-    const deliverableStatuses = [OrderStatus.accepted, OrderStatus.received_by_driver];
-    if (!deliverableStatuses.includes(order.status)) {
+    if (
+      order.status !== OrderStatus.accepted &&
+      order.status !== OrderStatus.received_by_driver
+    ) {
       throw new BadRequestException(
         `Order must be in accepted or received_by_driver status. Current status: ${order.status}`,
       );
@@ -900,11 +902,9 @@ export class OrdersService {
       (i) => i.item_type === OrderItemType.product && i.product_id,
     );
 
-    await this.prisma.$transaction(async (tx) => {
-      const prismaTx = tx as unknown as PrismaService;
-
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // (c) Transaction records
-      await prismaTx.transaction.create({
+      await tx.transaction.create({
         data: {
           order_id: order.id,
           user_id: order.master_id,
@@ -913,7 +913,7 @@ export class OrdersService {
         },
       });
       if (order.driver_id && kuryerHaqi > 0) {
-        await prismaTx.transaction.create({
+        await tx.transaction.create({
           data: {
             order_id: order.id,
             user_id: order.driver_id,
@@ -924,12 +924,12 @@ export class OrdersService {
       }
 
       // (d) Update user balances
-      await prismaTx.user.update({
+      await tx.user.update({
         where: { id: order.master_id },
         data: { balance: { increment: ustaHaqi } },
       });
       if (order.driver_id && kuryerHaqi > 0) {
-        await prismaTx.user.update({
+        await tx.user.update({
           where: { id: order.driver_id },
           data: { balance: { increment: kuryerHaqi } },
         });
@@ -937,7 +937,7 @@ export class OrdersService {
 
       // (e) Organization balance_due (if corporate)
       if (order.organization_id) {
-        await prismaTx.organization.update({
+        await tx.organization.update({
           where: { id: order.organization_id },
           data: {
             balance_due: { increment: totalAmount },
@@ -948,7 +948,7 @@ export class OrdersService {
       // (f) Stock decrement — ONLY item_type='product'; check stock before decrement
       for (const item of productItems) {
         const productId = item.product_id!;
-        const product = await prismaTx.product.findUnique({
+        const product = await tx.product.findUnique({
           where: { id: productId },
         });
         if (!product) {
@@ -961,7 +961,7 @@ export class OrdersService {
             `Omborda yetarli emas: "${product.name}" — mavjud: ${product.stock_count}, kerak: ${item.quantity}`,
           );
         }
-        await prismaTx.product.update({
+        await tx.product.update({
           where: { id: productId },
           data: {
             stock_count: { decrement: item.quantity },
@@ -970,7 +970,7 @@ export class OrdersService {
       }
 
       // (g) Update order status → completed
-      await prismaTx.order.update({
+      await tx.order.update({
         where: { id: order.id },
         data: {
           status: OrderStatus.completed,
@@ -980,7 +980,7 @@ export class OrdersService {
       });
 
       // (h) OrderEvent audit log
-      await prismaTx.orderEvent.create({
+      await tx.orderEvent.create({
         data: {
           order_id: order.id,
           actor_user_id: null,
