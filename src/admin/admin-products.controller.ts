@@ -46,4 +46,9 @@ export class AdminProductsController {
   update(@Param('id') id: string, @Body() dto: AdminUpdateProductDto) {
     return this.adminService.updateProduct(id, dto);
   }
+
+  @Patch(':id/toggle-active')
+  toggleActive(@Param('id') id: string) {
+    return this.adminService.toggleProductActive(id);
+  }
 }

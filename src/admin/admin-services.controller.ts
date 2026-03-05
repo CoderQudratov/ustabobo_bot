@@ -41,6 +41,11 @@ export class AdminServicesController {
     return this.adminService.updateService(id, dto);
   }
 
+  @Patch(':id/toggle-active')
+  toggleActive(@Param('id') id: string) {
+    return this.adminService.toggleServiceActive(id);
+  }
+
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.adminService.deleteService(id);

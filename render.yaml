@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ustabobo-bot
+    runtime: node
+    buildCommand: npm ci --include=dev && npm run build:prod
+    startCommand: node dist/main
+    envVars:
+      - key: NODE_ENV
+        value: production

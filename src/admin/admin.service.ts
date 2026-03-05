@@ -240,11 +240,12 @@ export class AdminService {
   async getServices(page = 1, limit = 50) {
     const [items, total] = await Promise.all([
       this.prisma.service.findMany({
+        where: { is_active: true },
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.service.count(),
+      this.prisma.service.count({ where: { is_active: true } }),
     ]);
     return { items, total, page, limit };
   }
@@ -261,8 +262,20 @@ export class AdminService {
   async deleteService(id: string) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service) throw new NotFoundException(`Service with id "${id}" not found`);
-    await this.prisma.service.delete({ where: { id } });
-    return { deleted: true };
+    await this.prisma.service.update({
+      where: { id },
+      data: { is_active: false },
+    });
+    return { deleted: true, soft: true };
+  }
+
+  async toggleServiceActive(id: string) {
+    const service = await this.prisma.service.findUnique({ where: { id } });
+    if (!service) throw new NotFoundException(`Service with id "${id}" not found`);
+    return this.prisma.service.update({
+      where: { id },
+      data: { is_active: !service.is_active },
+    });
   }
 
   // ─── Products ──────────────────────────────────────────────────────────────
@@ -281,11 +294,12 @@ export class AdminService {
   async getProducts(page = 1, limit = 50) {
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
+        where: { is_active: true },
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.product.count(),
+      this.prisma.product.count({ where: { is_active: true } }),
     ]);
     const itemsWithFlag = items.map((p) => ({
       ...p,
@@ -347,6 +361,15 @@ export class AdminService {
     return this.prisma.product.update({
       where: { id },
       data: dto,
+    });
+  }
+
+  async toggleProductActive(id: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) throw new NotFoundException(`Product with id "${id}" not found`);
+    return this.prisma.product.update({
+      where: { id },
+      data: { is_active: !product.is_active },
     });
   }
 

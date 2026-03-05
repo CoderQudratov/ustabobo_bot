@@ -132,7 +132,11 @@ export class BotUpdate {
 
   @Command('check')
   async onCheck(@Ctx() ctx: Context): Promise<void> {
+    const devAdminId = process.env.DEV_ADMIN_TG_ID?.trim();
     const tgId = ctx.from?.id?.toString();
+    // Silently ignore if not the dev admin — do not reveal this command exists
+    if (!devAdminId || tgId !== devAdminId) return;
+
     if (!tgId) {
       await ctx.reply('Foydalanuvchi aniqlanmadi.').catch(() => {});
       return;
@@ -421,10 +425,12 @@ export class BotUpdate {
 
       // Hidden developer commands: switch role (do not set is_authenticated)
       if (text === '/be_driver' || text === '/be_master') {
+        const devAdminId = process.env.DEV_ADMIN_TG_ID?.trim();
+        // Silently ignore for ALL users if DEV_ADMIN_TG_ID is not set or doesn't match
+        if (!devAdminId || tgId !== devAdminId) return;
+
         const user = await this.requireAuth(ctx);
-        if (!user) {
-          return;
-        }
+        if (!user) return;
         const newRole = text === '/be_driver' ? Role.driver : Role.master;
         await this.prisma.user.update({
           where: { id: user.id },
