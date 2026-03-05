@@ -78,7 +78,7 @@ export default function DriverOrderPage() {
     try {
       setLoading(true);
       setError(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
       const res = await fetch(`${apiUrl}/orders/${orderId}`, {
         headers: buildHeaders(),
       });
@@ -115,7 +115,7 @@ export default function DriverOrderPage() {
     try {
       setDelivering(true);
       setError(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
       const res = await fetch(`${apiUrl}/orders/${orderId}/driver-delivered`, {
         method: "POST",
         headers: buildHeaders(),

@@ -774,9 +774,10 @@ export class OrdersService {
     if (order.driver_id !== driverId) {
       throw new ForbiddenException('You can only update orders you accepted');
     }
-    if (order.status !== OrderStatus.accepted) {
+    const deliverableStatuses = [OrderStatus.accepted, OrderStatus.received_by_driver];
+    if (!deliverableStatuses.includes(order.status)) {
       throw new BadRequestException(
-        `Order must be in accepted status. Current status: ${order.status}`,
+        `Order must be in accepted or received_by_driver status. Current status: ${order.status}`,
       );
     }
     const [updated] = await this.prisma.$transaction([
