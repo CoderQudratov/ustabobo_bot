@@ -11,18 +11,22 @@ const CAR_PHOTOS_DIR = join(process.cwd(), 'uploads', 'car-photos');
 export class UploadService {
   constructor(private readonly s3Service: S3Service) {}
 
-  async uploadFile(
-    file: { buffer: Buffer; mimetype?: string; originalname?: string },
-  ): Promise<string> {
+  async uploadFile(file: {
+    buffer: Buffer;
+    mimetype?: string;
+    originalname?: string;
+  }): Promise<string> {
     if (this.s3Service.enabled) {
       return this.s3Service.upload(file, 'car-photos');
     }
     return this.saveLocal(file);
   }
 
-  private async saveLocal(
-    file: { buffer: Buffer; mimetype?: string; originalname?: string },
-  ): Promise<string> {
+  private async saveLocal(file: {
+    buffer: Buffer;
+    mimetype?: string;
+    originalname?: string;
+  }): Promise<string> {
     await mkdir(CAR_PHOTOS_DIR, { recursive: true });
     const filename = `car_${Date.now()}_${randomBytes(8).toString('hex')}.jpg`;
     const path = join(CAR_PHOTOS_DIR, filename);

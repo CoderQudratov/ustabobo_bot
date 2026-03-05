@@ -57,7 +57,10 @@ export class AuthService {
   }
 
   /** Delegates to TelegramInitDataService (single source of truth for initData validation). */
-  validateTelegramInitData(initData: string): { tgId: number; authDate: number } {
+  validateTelegramInitData(initData: string): {
+    tgId: number;
+    authDate: number;
+  } {
     const validated = this.initDataService.validate(initData);
     if (!validated.user?.id) {
       throw new UnauthorizedException('Telegram user missing in init data');

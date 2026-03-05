@@ -140,6 +140,31 @@ export default function MyOrdersPage() {
     loadOrders();
   }, [isReady, loadOrders]);
 
+  // TZ §8.3, §9.1 — Auto-open and scroll to order when ?open=ORDER_ID in URL.
+  // Bot sends inline WebApp button with this URL after masterStartWork / masterConfirmDelivery.
+  useEffect(() => {
+    if (orders.length === 0) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
+    if (!openId) return;
+
+    setExpandedId((prev) => {
+      if (prev === openId) return prev;
+      return openId;
+    });
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`order-${openId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [orders]);
+
   const handleCancel = async (orderId: string) => {
     setActioningId(orderId);
     try {
@@ -420,6 +445,7 @@ export default function MyOrdersPage() {
             {filteredOrders.map((order) => (
               <li
                 key={order.id}
+                id={`order-${order.id}`}
                 className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden shadow-sm"
               >
                 <button

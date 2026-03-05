@@ -18,7 +18,11 @@ function getContextInfo(ctx: Context): Record<string, unknown> {
   const from = ctx.from;
   const chatId = ctx.chat?.id;
   const update = (ctx as any).update;
-  const updateType = update?.message ? 'message' : update?.callback_query ? 'callback_query' : 'unknown';
+  const updateType = update?.message
+    ? 'message'
+    : update?.callback_query
+      ? 'callback_query'
+      : 'unknown';
   return {
     chatId,
     userId: from?.id,

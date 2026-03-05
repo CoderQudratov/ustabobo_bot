@@ -73,10 +73,15 @@ export class AdminService {
     });
   }
 
-  async getUsers(filters: { role?: string; is_active?: boolean }, page = 1, limit = 20) {
+  async getUsers(
+    filters: { role?: string; is_active?: boolean },
+    page = 1,
+    limit = 20,
+  ) {
     const where: { role?: Role; is_active?: boolean } = {};
     if (filters.role) where.role = filters.role as Role;
-    if (typeof filters.is_active === 'boolean') where.is_active = filters.is_active;
+    if (typeof filters.is_active === 'boolean')
+      where.is_active = filters.is_active;
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -172,7 +177,8 @@ export class AdminService {
       where: { id },
       include: { vehicles: true },
     });
-    if (!org) throw new NotFoundException(`Organization with id "${id}" not found`);
+    if (!org)
+      throw new NotFoundException(`Organization with id "${id}" not found`);
     return org;
   }
 
@@ -189,7 +195,8 @@ export class AdminService {
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
     });
-    if (!org) throw new NotFoundException(`Organization with id "${orgId}" not found`);
+    if (!org)
+      throw new NotFoundException(`Organization with id "${orgId}" not found`);
     return this.prisma.vehicle.create({
       data: {
         org_id: orgId,
@@ -214,7 +221,8 @@ export class AdminService {
 
   async updateVehicle(id: string, dto: AdminUpdateVehicleDto) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
-    if (!vehicle) throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    if (!vehicle)
+      throw new NotFoundException(`Vehicle with id "${id}" not found`);
     return this.prisma.vehicle.update({
       where: { id },
       data: dto,
@@ -223,7 +231,8 @@ export class AdminService {
 
   async toggleVehicleActive(id: string) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
-    if (!vehicle) throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    if (!vehicle)
+      throw new NotFoundException(`Vehicle with id "${id}" not found`);
     return this.prisma.vehicle.update({
       where: { id },
       data: { is_active: !vehicle.is_active },
@@ -252,7 +261,8 @@ export class AdminService {
 
   async updateService(id: string, dto: AdminUpdateServiceDto) {
     const service = await this.prisma.service.findUnique({ where: { id } });
-    if (!service) throw new NotFoundException(`Service with id "${id}" not found`);
+    if (!service)
+      throw new NotFoundException(`Service with id "${id}" not found`);
     return this.prisma.service.update({
       where: { id },
       data: dto,
@@ -261,7 +271,8 @@ export class AdminService {
 
   async deleteService(id: string) {
     const service = await this.prisma.service.findUnique({ where: { id } });
-    if (!service) throw new NotFoundException(`Service with id "${id}" not found`);
+    if (!service)
+      throw new NotFoundException(`Service with id "${id}" not found`);
     await this.prisma.service.update({
       where: { id },
       data: { is_active: false },
@@ -271,7 +282,8 @@ export class AdminService {
 
   async toggleServiceActive(id: string) {
     const service = await this.prisma.service.findUnique({ where: { id } });
-    if (!service) throw new NotFoundException(`Service with id "${id}" not found`);
+    if (!service)
+      throw new NotFoundException(`Service with id "${id}" not found`);
     return this.prisma.service.update({
       where: { id },
       data: { is_active: !service.is_active },
@@ -357,7 +369,8 @@ export class AdminService {
 
   async updateProduct(id: string, dto: AdminUpdateProductDto) {
     const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundException(`Product with id "${id}" not found`);
+    if (!product)
+      throw new NotFoundException(`Product with id "${id}" not found`);
     return this.prisma.product.update({
       where: { id },
       data: dto,
@@ -366,7 +379,8 @@ export class AdminService {
 
   async toggleProductActive(id: string) {
     const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundException(`Product with id "${id}" not found`);
+    if (!product)
+      throw new NotFoundException(`Product with id "${id}" not found`);
     return this.prisma.product.update({
       where: { id },
       data: { is_active: !product.is_active },
@@ -394,18 +408,21 @@ export class AdminService {
 
     if (filters.status) where.status = filters.status as OrderStatus;
     if (filters.master_id) where.master_id = filters.master_id;
-    if (filters.organization_id) where.organization_id = filters.organization_id;
+    if (filters.organization_id)
+      where.organization_id = filters.organization_id;
 
     if (filters.from || filters.to) {
       where.created_at = {};
       if (filters.from) {
         const from = new Date(filters.from);
-        if (Number.isNaN(from.getTime())) throw new BadRequestException('Invalid from');
+        if (Number.isNaN(from.getTime()))
+          throw new BadRequestException('Invalid from');
         where.created_at.gte = from;
       }
       if (filters.to) {
         const to = new Date(filters.to);
-        if (Number.isNaN(to.getTime())) throw new BadRequestException('Invalid to');
+        if (Number.isNaN(to.getTime()))
+          throw new BadRequestException('Invalid to');
         to.setHours(23, 59, 59, 999);
         where.created_at.lte = to;
       }
@@ -476,7 +493,11 @@ export class AdminService {
   }
 
   async getAllVehicles(orgId?: string, search?: string) {
-    const where: { org_id?: string; is_active: boolean; OR?: Array<{ plate_number?: object; model?: object }> } = {
+    const where: {
+      org_id?: string;
+      is_active: boolean;
+      OR?: Array<{ plate_number?: object; model?: object }>;
+    } = {
       is_active: true,
     };
     if (orgId) where.org_id = orgId;
@@ -494,9 +515,12 @@ export class AdminService {
     });
   }
 
-  async getClientsHistory(
-    query: { phone?: string; car_number?: string; page?: number; limit?: number },
-  ) {
+  async getClientsHistory(query: {
+    phone?: string;
+    car_number?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { phone, car_number, page = 1, limit = 20 } = query;
     if (!phone?.trim() && !car_number?.trim()) {
       throw new BadRequestException(
@@ -621,7 +645,13 @@ export class AdminService {
 
     const masterMap = new Map<
       string,
-      { master_id: string; fullname: string; orders_count: number; total_revenue: number; master_fee: number }
+      {
+        master_id: string;
+        fullname: string;
+        orders_count: number;
+        total_revenue: number;
+        master_fee: number;
+      }
     >();
     for (const order of completedOrders) {
       const key = order.master_id;
@@ -644,7 +674,12 @@ export class AdminService {
 
     const driverMap = new Map<
       string,
-      { driver_id: string; fullname: string; deliveries_count: number; driver_fee: number }
+      {
+        driver_id: string;
+        fullname: string;
+        deliveries_count: number;
+        driver_fee: number;
+      }
     >();
     for (const order of completedOrders) {
       if (!order.driver_id) continue;

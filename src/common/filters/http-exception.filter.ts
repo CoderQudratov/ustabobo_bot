@@ -30,10 +30,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    res.status(status).json(
-      typeof body === 'object' && body !== null
-        ? body
-        : { statusCode: status, message: msg },
-    );
+    res
+      .status(status)
+      .json(
+        typeof body === 'object' && body !== null
+          ? body
+          : { statusCode: status, message: msg },
+      );
   }
 }

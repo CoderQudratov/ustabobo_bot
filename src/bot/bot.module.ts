@@ -29,8 +29,7 @@ import { OrdersModule } from '../orders/orders.module';
           );
         }
         const publicUrl = process.env.PUBLIC_URL?.trim();
-        const useWebhook =
-          !!publicUrl && publicUrl.startsWith('https://');
+        const useWebhook = !!publicUrl && publicUrl.startsWith('https://');
         return {
           token,
           middlewares: [session()],

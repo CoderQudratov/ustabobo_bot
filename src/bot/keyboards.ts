@@ -105,3 +105,20 @@ export function getDriverOrderInlineButton(orderId: string) {
     ],
   ]);
 }
+
+/**
+ * Inline WebApp button for master — opens specific order in My Orders page.
+ * Used after: work started (masterStartWork) and delivery confirmed (masterConfirmDelivery).
+ * URL format: /my-orders?open=ORDER_ID
+ * TZ §8.3, §9.1 — master must be able to navigate to order with one tap after status change.
+ */
+export function getMasterOrderInlineButton(orderId: string) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.webApp(
+        '📋 Buyurtmani ochish',
+        webAppUrl(`/my-orders?open=${orderId}`),
+      ),
+    ],
+  ]);
+}

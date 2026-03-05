@@ -44,7 +44,11 @@ export class AdminUsersController {
             : undefined;
     const page = pagination?.page ?? 1;
     const limit = pagination?.limit ?? 20;
-    return this.adminService.getUsers({ role, is_active: isActive }, page, limit);
+    return this.adminService.getUsers(
+      { role, is_active: isActive },
+      page,
+      limit,
+    );
   }
 
   @Get(':id')

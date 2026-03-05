@@ -21,10 +21,7 @@ export class AdminVehiclesController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get()
-  list(
-    @Query('org_id') orgId?: string,
-    @Query('search') search?: string,
-  ) {
+  list(@Query('org_id') orgId?: string, @Query('search') search?: string) {
     return this.adminService.getAllVehicles(orgId, search);
   }
 

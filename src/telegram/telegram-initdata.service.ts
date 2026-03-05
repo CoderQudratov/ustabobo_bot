@@ -115,7 +115,9 @@ export class TelegramInitDataService {
       // proceed to auth_date and user checks below
     } else {
       // 2) some clients/specs use decoded values in data_check_string
-      const keys = Array.from(params.keys()).filter((k) => k !== 'hash').sort();
+      const keys = Array.from(params.keys())
+        .filter((k) => k !== 'hash')
+        .sort();
       const dataCheckStringDecoded = keys
         .map((k) => `${k}=${params.get(k)}`)
         .join('\n');

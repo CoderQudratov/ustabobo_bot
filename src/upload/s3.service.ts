@@ -43,8 +43,7 @@ export class S3Service implements OnModuleInit {
     file: { buffer: Buffer; mimetype?: string; originalname?: string },
     folder = 'car-photos',
   ): Promise<string> {
-    const ext =
-      file.originalname?.split('.').pop()?.toLowerCase() || 'jpg';
+    const ext = file.originalname?.split('.').pop()?.toLowerCase() || 'jpg';
     const key = `${folder}/${randomUUID()}.${ext}`;
 
     await this.client.send(

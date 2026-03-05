@@ -93,8 +93,6 @@ async function bootstrap() {
 
   const port = parseInt(String(process.env.PORT || '10000'), 10);
   await app.listen(port, '0.0.0.0');
-  console.log(
-    `API: ${config.apiBaseUrl} (port ${port}, host 0.0.0.0)`,
-  );
+  console.log(`API: ${config.apiBaseUrl} (port ${port}, host 0.0.0.0)`);
 }
 void bootstrap();

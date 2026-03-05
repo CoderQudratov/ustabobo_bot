@@ -41,8 +41,7 @@ export class StockAlertService {
         .map((id) => Number(id));
 
       const lines = lowStock.map(
-        (p) =>
-          `• ${p.name}: ${p.stock_count} ta qoldi (min: ${p.min_limit})`,
+        (p) => `• ${p.name}: ${p.stock_count} ta qoldi (min: ${p.min_limit})`,
       );
       const text = [
         '⚠️ Ombor ogohlantirishi!',

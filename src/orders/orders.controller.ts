@@ -68,10 +68,7 @@ export class OrdersController {
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
   @Roles(Role.master, Role.boss, Role.driver)
-  getOrder(
-    @Param('id') id: string,
-    @Req() req: Request & { user: JwtUser },
-  ) {
+  getOrder(@Param('id') id: string, @Req() req: Request & { user: JwtUser }) {
     return this.ordersService.getOrderForWebApp(id, req.user.id, req.user.role);
   }
 

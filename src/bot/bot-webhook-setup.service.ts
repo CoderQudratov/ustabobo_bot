@@ -20,7 +20,11 @@ export class BotWebhookSetupService implements OnModuleInit {
         await this.bot.telegram.setWebhook(webhookUrl);
         console.log(LOG, 'Mode: webhook', webhookUrl);
       } catch (err) {
-        console.error(LOG, 'setWebhook failed:', err instanceof Error ? err.message : err);
+        console.error(
+          LOG,
+          'setWebhook failed:',
+          err instanceof Error ? err.message : err,
+        );
       }
     } else {
       console.log(LOG, 'Mode: polling (PUBLIC_URL not set or not HTTPS)');

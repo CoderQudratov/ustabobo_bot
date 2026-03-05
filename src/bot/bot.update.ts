@@ -106,7 +106,8 @@ export class BotUpdate {
       where: { tg_id: tgId, is_active: true },
     });
     if (!user) return null;
-    const hasPin = user.pin_code_hash != null && user.pin_code_hash.trim() !== '';
+    const hasPin =
+      user.pin_code_hash != null && user.pin_code_hash.trim() !== '';
     if (hasPin && !user.is_authenticated) {
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         const mins = Math.ceil(
@@ -202,7 +203,11 @@ export class BotUpdate {
         const pinCodeHash = await bcrypt.hash(buf, 10);
         await this.prisma.user.update({
           where: { id: user.id },
-          data: { pin_code_hash: pinCodeHash, is_authenticated: true, pin_fail_count: 0 },
+          data: {
+            pin_code_hash: pinCodeHash,
+            is_authenticated: true,
+            pin_fail_count: 0,
+          },
         });
         await ctx.answerCbQuery('PIN saqlandi!').catch(() => {});
         await ctx.editMessageText('Asosiy menyu').catch(() => {});
@@ -216,8 +221,7 @@ export class BotUpdate {
         return;
       }
       const pinMatch =
-        user.pin_code_hash &&
-        (await bcrypt.compare(buf, user.pin_code_hash));
+        user.pin_code_hash && (await bcrypt.compare(buf, user.pin_code_hash));
       if (pinMatch) {
         await this.prisma.user.update({
           where: { id: user.id },

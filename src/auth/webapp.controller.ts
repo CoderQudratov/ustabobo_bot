@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { Public } from '../common/decorators/public.decorator';
 import {
@@ -25,8 +18,7 @@ export class WebappController {
   async getInit(@Req() req: Request & { user: TelegramWebAppUser }) {
     const user = req.user;
     const telegramId = user.telegramId;
-    const firstName =
-      user.fullname?.trim().split(/\s+/)[0] || user.login || '';
+    const firstName = user.fullname?.trim().split(/\s+/)[0] || user.login || '';
     console.log('WEBAPP INIT USER', telegramId);
 
     const catalog = await this.webappService.getInitData();

@@ -3,6 +3,7 @@ import { InjectBot } from 'nestjs-telegraf';
 import { Markup } from 'telegraf';
 import type { Telegraf } from 'telegraf';
 import { PrismaService } from '../prisma/prisma.service';
+import { getMasterOrderInlineButton } from './keyboards';
 
 /** Order shape needed for post-draft notification (from createDraft result). */
 export interface DraftOrderForNotify {
@@ -105,14 +106,23 @@ export class BotNotifyService {
       .catch(() => {});
   }
 
-  /** After Master clicks Ha: "Ish boshlandi. Yakunlash uchun WebApp-ga kiring." */
-  async sendWorkStartedToMaster(masterTgId: string): Promise<void> {
+  /**
+   * Notifies master that work has started and provides inline WebApp button
+   * to open the order directly. Called after masterStartWork() completes.
+   * TZ §8.3 — master must receive one-tap navigation to order after status → working.
+   */
+  async sendWorkStartedToMaster(
+    masterTgId: string,
+    orderId: string,
+  ): Promise<void> {
     const chatId = Number(masterTgId);
     if (!Number.isFinite(chatId)) return;
+    const keyboard = getMasterOrderInlineButton(orderId);
     await this.bot.telegram
       .sendMessage(
         chatId,
-        '✅ Ish boshlandi. Yakunlash uchun WebApp-ga kiring.',
+        '✅ Ish boshlandi. Buyurtmani yakunlash uchun tugmani bosing:',
+        { reply_markup: keyboard.reply_markup },
       )
       .catch(() => {});
   }
@@ -148,12 +158,25 @@ export class BotNotifyService {
       .catch(() => {});
   }
 
-  /** Notify Master they can start work (after confirming delivery). */
-  async sendMasterCanStartWork(masterTgId: string): Promise<void> {
+  /**
+   * Notifies master that delivery was confirmed and they can start work.
+   * Provides inline WebApp button to open the order directly.
+   * Called after masterConfirmDelivery() with confirmed=true.
+   * TZ §9.1 — master must receive one-tap navigation to order after delivery confirmed.
+   */
+  async sendMasterCanStartWork(
+    masterTgId: string,
+    orderId: string,
+  ): Promise<void> {
     const chatId = Number(masterTgId);
     if (!Number.isFinite(chatId)) return;
+    const keyboard = getMasterOrderInlineButton(orderId);
     await this.bot.telegram
-      .sendMessage(chatId, '✅ Ishni boshlashingiz mumkin.')
+      .sendMessage(
+        chatId,
+        '✅ Yetkazib berish tasdiqlandi. Ishni boshlashingiz mumkin:',
+        { reply_markup: keyboard.reply_markup },
+      )
       .catch(() => {});
   }
 

@@ -488,7 +488,7 @@ export class OrdersService {
       }),
     ]);
     if (order.master?.tg_id) {
-      await this.botNotify.sendWorkStartedToMaster(order.master.tg_id);
+      await this.botNotify.sendWorkStartedToMaster(order.master.tg_id, orderId);
     }
     return this.prisma.order.findUnique({
       where: { id: orderId },
@@ -720,7 +720,7 @@ export class OrdersService {
     });
 
     if (confirmed && order.master?.tg_id) {
-      await this.botNotify.sendMasterCanStartWork(order.master.tg_id);
+      await this.botNotify.sendMasterCanStartWork(order.master.tg_id, orderId);
     }
     if (!confirmed && order.driver?.tg_id) {
       await this.botNotify.sendDeliveryRejectedToDriver(order.driver.tg_id);
@@ -1007,7 +1007,10 @@ export class OrdersService {
       this.stockAlertService
         .checkAndAlert(decrementedProductIds)
         .catch((err: Error) => {
-          console.error('[StockAlert] Failed to send alert:', err?.message ?? err);
+          console.error(
+            '[StockAlert] Failed to send alert:',
+            err?.message ?? err,
+          );
         });
     }
 

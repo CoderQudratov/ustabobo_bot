@@ -86,7 +86,8 @@ export function getRedisConnectionOptions(): {
   const host = process.env.REDIS_HOST ?? 'localhost';
   const port = parseInt(process.env.REDIS_PORT ?? '6379', 10);
   const password = process.env.REDIS_PASSWORD?.trim() || undefined;
-  const useTls = process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1';
+  const useTls =
+    process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1';
   return {
     host,
     port: Number.isNaN(port) ? 6379 : port,
