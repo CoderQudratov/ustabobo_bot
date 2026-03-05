@@ -64,6 +64,17 @@ export class OrdersController {
     return this.ordersService.getMyOrders(telegramId);
   }
 
+  @Get(':id')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.master, Role.boss, Role.driver)
+  getOrder(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    return this.ordersService.getOrderForWebApp(id, req.user.id, req.user.role);
+  }
+
   @Patch(':id/cancel')
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
@@ -130,6 +141,17 @@ export class OrdersController {
     @Req() req: Request & { user: JwtUser },
   ) {
     return this.ordersService.driverFinish(id, req.user.id);
+  }
+
+  @Post(':id/driver-delivered')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.driver)
+  driverDelivered(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    return this.ordersService.driverDelivered(id, req.user.id);
   }
 
   @Post(':id/receive')

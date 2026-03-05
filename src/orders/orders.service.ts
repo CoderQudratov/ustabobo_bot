@@ -293,6 +293,33 @@ export class OrdersService {
     });
   }
 
+  /** Single order for WebApp (driver order page). Allowed if user is master, driver, or boss. */
+  async getOrderForWebApp(orderId: string, userId: string, role: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        master: { select: { id: true, fullname: true, phone: true } },
+        driver: { select: { id: true, fullname: true } },
+        orderItems: {
+          include: {
+            product: { select: { id: true, name: true } },
+            service: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    const isBoss = role === 'boss';
+    const isMaster = order.master_id === userId;
+    const isDriver = order.driver_id === userId;
+    if (!isBoss && !isMaster && !isDriver) {
+      throw new ForbiddenException('Access denied to this order');
+    }
+    return order;
+  }
+
   async setLocation(orderId: string, masterId: string, dto: LocationDto) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
