@@ -274,6 +274,18 @@ export async function driverFinishOrderApi(orderId: string): Promise<void> {
   }
 }
 
+/** POST /orders/:id/driver-delivered — Driver "Yetkazib berdim" (accepted/received_by_driver → delivered_by_driver). */
+export async function driverDeliveredOrderApi(orderId: string): Promise<void> {
+  const res = await apiFetch(`orders/${encodeURIComponent(orderId)}/driver-delivered`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+}
+
 /** POST /orders/:id/receive — usta "Qabul qildim" (delivered_by_driver → working). */
 export async function receiveOrderApi(orderId: string): Promise<void> {
   const res = await apiFetch(`orders/${encodeURIComponent(orderId)}/receive`, {

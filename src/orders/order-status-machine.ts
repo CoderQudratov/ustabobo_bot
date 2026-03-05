@@ -30,6 +30,7 @@ const ALLOWED_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   [OrderStatus.delivered_by_driver]: [
     OrderStatus.received_by_master,
     OrderStatus.working,
+    OrderStatus.received_by_driver,
   ],
   [OrderStatus.received_by_master]: [OrderStatus.working],
   [OrderStatus.working]: [OrderStatus.waiting_customer_confirmation],

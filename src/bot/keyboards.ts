@@ -59,10 +59,10 @@ export function getDriverKeyboard() {
     [
       Markup.button.webApp(
         '📦 Faol buyurtmalar',
-        webAppUrl('/my-orders?filter=active'),
+        webAppUrl('/my-orders?role=driver&filter=active'),
       ),
     ],
-    [Markup.button.webApp('🕒 Tarix', webAppUrl('/my-orders?filter=history'))],
+    [Markup.button.webApp('🕒 Tarix', webAppUrl('/my-orders?role=driver&filter=history'))],
     [Markup.button.webApp('💰 Hamyon', webAppUrl('/wallet'))],
   ]).resize();
 }
@@ -100,7 +100,7 @@ export function getDriverOrderInlineButton(orderId: string) {
     [
       Markup.button.webApp(
         "📦 Buyurtmani ko'rish",
-        webAppUrl(`/driver/order/${orderId}`),
+        webAppUrl(`/driver/order/${orderId}?role=driver`),
       ),
     ],
   ]);

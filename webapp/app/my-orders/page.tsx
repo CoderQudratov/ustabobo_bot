@@ -10,7 +10,7 @@ import {
   fetchMyOrders,
   cancelOrderApi,
   finishOrderApi,
-  driverFinishOrderApi,
+  driverDeliveredOrderApi,
   type MyOrder,
 } from "@/utils/api";
 
@@ -26,7 +26,7 @@ const btnStyle = {
 
 const CANCELABLE_STATUSES = ["draft", "waiting_confirmation"];
 const MASTER_FINISH_STATUS = "working";
-const DRIVER_FINISH_STATUS = "received_by_driver";
+const DRIVER_DELIVERABLE_STATUSES = ["received_by_driver", "accepted"];
 const DELIVERY_FEE = 30_000;
 
 function statusBadgeClass(status: string): string {
@@ -231,7 +231,7 @@ export default function MyOrdersPage() {
   const handleDriverFinish = async (order: MyOrder) => {
     setActioningId(order.id);
     try {
-      if (order.status !== DRIVER_FINISH_STATUS) {
+      if (!DRIVER_DELIVERABLE_STATUSES.includes(order.status)) {
         if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
           window.Telegram.WebApp.showAlert(
             `Yetkazib berishni belgilash mumkin emas. Status: ${order.status}`
@@ -239,11 +239,11 @@ export default function MyOrdersPage() {
         }
         return;
       }
-      await driverFinishOrderApi(order.id);
+      await driverDeliveredOrderApi(order.id);
       setOrders((prev) =>
         prev.map((o) =>
           o.id === order.id
-            ? { ...o, status: "waiting_master_delivery_confirmation" }
+            ? { ...o, status: "delivered_by_driver" }
             : o
         )
       );
@@ -264,7 +264,7 @@ export default function MyOrdersPage() {
 
   const canCancel = (status: string) => CANCELABLE_STATUSES.includes(status);
   const canMasterFinish = (status: string) => status === MASTER_FINISH_STATUS;
-  const canDriverFinish = (status: string) => status === DRIVER_FINISH_STATUS;
+  const canDriverFinish = (status: string) => DRIVER_DELIVERABLE_STATUSES.includes(status);
   const isCompleted = (status: string) => status === "completed";
 
   const DRIVER_ACTIVE_STATUSES = ["received_by_driver", "waiting_master_delivery_confirmation"];
@@ -582,7 +582,7 @@ export default function MyOrdersPage() {
                       >
                         {actioningId === order.id
                           ? "..."
-                          : "🏁 Yetkazib berdim / Yakunlash"}
+                          : "🚚 Yetkazib berdim"}
                       </button>
                     )}
                     {!isDriver && order.status === "waiting_master_delivery_confirmation" && (

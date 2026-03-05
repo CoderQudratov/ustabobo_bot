@@ -659,20 +659,17 @@ export class OrdersService {
         'You can only confirm delivery for your own orders',
       );
     }
+    if (
+      order.status !== OrderStatus.waiting_master_delivery_confirmation &&
+      order.status !== OrderStatus.delivered_by_driver
+    ) {
+      throw new BadRequestException(
+        `Order is not awaiting delivery confirmation. Current status: ${order.status}`,
+      );
+    }
     const targetStatus = confirmed
       ? OrderStatus.working
       : OrderStatus.received_by_driver;
-    try {
-      assertTransition(
-        order.status,
-        targetStatus,
-        confirmed ? 'masterConfirmDelivery' : 'masterRejectDelivery',
-      );
-    } catch (e) {
-      throw new BadRequestException(
-        e instanceof Error ? e.message : 'Invalid status transition',
-      );
-    }
 
     const driverId = order.driver_id;
     const deliveryCreditAmount = DELIVERY_FEE;
@@ -767,6 +764,7 @@ export class OrdersService {
   async driverDelivered(orderId: string, driverId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: { master: { select: { tg_id: true } } },
     });
     if (!order) {
       throw new NotFoundException(`Order with id "${orderId}" not found`);
@@ -796,6 +794,13 @@ export class OrdersService {
         },
       }),
     ]);
+    if (order.master?.tg_id) {
+      await this.botNotify.sendDeliveryConfirmationRequestToMaster(
+        order.master.tg_id,
+        orderId,
+        order.car_photo_url,
+      );
+    }
     return updated;
   }
 
