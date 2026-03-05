@@ -75,14 +75,17 @@ export function getMainMenuKeyboard(role?: string) {
   return getMasterKeyboard();
 }
 
-/** Single WebApp button for driver after Accept: "📦 Buyurtmani ochish". */
-export function getDriverOrderWebAppKeyboard() {
-  return Markup.keyboard([
+/**
+ * Inline WebApp button for driver after Accept order.
+ * Shown INSIDE the message (not as reply keyboard at bottom).
+ */
+export function getDriverOrderInlineKeyboard() {
+  return Markup.inlineKeyboard([
     [
       Markup.button.webApp(
         '📦 Buyurtmani ochish',
         webAppUrl('/my-orders?filter=active'),
       ),
     ],
-  ]).resize();
+  ]);
 }
