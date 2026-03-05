@@ -62,7 +62,12 @@ export function getDriverKeyboard() {
         webAppUrl('/my-orders?role=driver&filter=active'),
       ),
     ],
-    [Markup.button.webApp('🕒 Tarix', webAppUrl('/my-orders?role=driver&filter=history'))],
+    [
+      Markup.button.webApp(
+        '🕒 Tarix',
+        webAppUrl('/my-orders?role=driver&filter=history'),
+      ),
+    ],
     [Markup.button.webApp('💰 Hamyon', webAppUrl('/wallet'))],
   ]).resize();
 }
