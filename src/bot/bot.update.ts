@@ -9,7 +9,7 @@ import { Action, Ctx, Command, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { Markup, Scenes } from 'telegraf';
 import {
-  getDriverOrderInlineKeyboard,
+  getDriverOrderInlineButton,
   getDriverKeyboard,
   getMainMenuKeyboard,
   getMasterKeyboard,
@@ -706,24 +706,24 @@ export class BotUpdate {
 
       await ctx.answerCbQuery('Buyurtma qabul qilindi!').catch(() => {});
 
-      // Edit the accept message — add inline WebApp button directly in the message
+      // Edit the original broadcast message — add inline WebApp button pointing to THIS specific order
       if (
         ctx.callbackQuery?.message &&
         'message_id' in ctx.callbackQuery.message
       ) {
         await ctx
           .editMessageText(
-            "✅ Buyurtma qabul qilindi!\n\n📦 Buyurtmani ko'rish uchun tugmani bosing:",
-            getDriverOrderInlineKeyboard(),
+            `✅ Buyurtma #${orderId.slice(-6).toUpperCase()} qabul qilindi!\n\nBuyurtma tafsilotlarini ko'rish va yetkazib berganingizni tasdiqlash uchun quyidagi tugmani bosing:`,
+            getDriverOrderInlineButton(orderId),
           )
           .catch(() => {});
       }
 
-      // Also send the driver's normal menu keyboard (so bottom menu stays as driver menu)
+      // Restore full driver menu keyboard at the bottom (NOT a standalone button)
       const driverTgId = ctx.from?.id;
       if (driverTgId != null) {
         await ctx.telegram
-          .sendMessage(driverTgId, '📋 Faol buyurtmalaringiz:', {
+          .sendMessage(driverTgId, '📋 Menyu:', {
             reply_markup: getDriverKeyboard().reply_markup,
           })
           .catch(() => {});

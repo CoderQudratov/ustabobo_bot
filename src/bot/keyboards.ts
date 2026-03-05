@@ -89,3 +89,19 @@ export function getDriverOrderInlineKeyboard() {
     ],
   ]);
 }
+
+/**
+ * Inline WebApp button for a specific order.
+ * When pressed, shows Telegram "Launch" popup then opens Mini App at /driver/order/:id
+ * This is an INLINE keyboard (inside the message), NOT a reply keyboard (bottom bar).
+ */
+export function getDriverOrderInlineButton(orderId: string) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.webApp(
+        "📦 Buyurtmani ko'rish",
+        webAppUrl(`/driver/order/${orderId}`),
+      ),
+    ],
+  ]);
+}
