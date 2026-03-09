@@ -1,7 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd erp && npm run build",
-  "outputDirectory": "erp/.next",
-  "installCommand": "cd erp && npm ci",
   "framework": "nextjs"
 }
