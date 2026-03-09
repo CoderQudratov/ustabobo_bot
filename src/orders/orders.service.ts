@@ -320,8 +320,44 @@ export class OrdersService {
     return undefined;
   }
 
-  /** Fetch orders by DB user id (used when auth is via initData guard; no telegramId in URL). */
-  async getMyOrdersByUserId(userId: string, role: string) {
+  /** Fetch orders by DB user id with pagination (same shape as getMyOrders). Use when auth is via req.user, no telegramId in URL. */
+  async getMyOrdersByUserId(
+    userId: string,
+    role: string,
+    opts?: { status?: string; page?: number; limit?: number },
+  ) {
+    const page = opts?.page ?? 1;
+    const limit = opts?.limit ?? 100;
+    const baseWhere =
+      role === 'driver' ? { driver_id: userId } : { master_id: userId };
+    const statusFilter = this.statusFilterForMyOrders(opts?.status);
+    const where = statusFilter
+      ? { ...baseWhere, status: statusFilter }
+      : baseWhere;
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          master: { select: { id: true, fullname: true, login: true } },
+          driver: { select: { id: true, fullname: true } },
+          orderItems: {
+            include: {
+              product: true,
+              service: true,
+            },
+          },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  /** Legacy: fetch orders by DB user id without pagination (used internally). */
+  async getMyOrdersByUserIdLegacy(userId: string, role: string) {
     const where =
       role === 'driver' ? { driver_id: userId } : { master_id: userId };
     return this.prisma.order.findMany({

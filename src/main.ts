@@ -43,7 +43,8 @@ async function bootstrap() {
   const webappOrigin = process.env.WEBAPP_URL?.trim().replace(/\/+$/, '');
   const corsOrigins: string[] = [
     'https://ustabobo.netlify.app',
-    'https://erpusta.netlify.app',
+    'https://usta-erp.vercel.app',
+    'https://ustabobo-bot-z34s.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
   ];
@@ -54,8 +55,14 @@ async function bootstrap() {
   if (erpOrigin && !corsOrigins.includes(erpOrigin)) {
     corsOrigins.push(erpOrigin);
   }
+  const allowOrigin = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (corsOrigins.includes(origin)) return callback(null, true);
+    if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return callback(null, true);
+    callback(null, false);
+  };
   app.enableCors({
-    origin: corsOrigins,
+    origin: allowOrigin,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: [

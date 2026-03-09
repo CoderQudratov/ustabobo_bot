@@ -378,9 +378,9 @@ export interface MyOrdersResponse {
   limit: number;
 }
 
-/** Fetches current user's orders. status=active|completed|cancelled|history, page, limit. */
+/** Fetches current user's orders (uses auth; no telegramId in URL). status=active|completed|cancelled|history, page, limit. */
 export async function fetchMyOrders(
-  telegramId: string | number,
+  _telegramIdOptional: string | number | null,
   opts?: { status?: string; page?: number; limit?: number },
 ): Promise<MyOrdersResponse> {
   const params = new URLSearchParams();
@@ -388,7 +388,7 @@ export async function fetchMyOrders(
   if (opts?.page != null) params.set('page', String(opts.page));
   if (opts?.limit != null) params.set('limit', String(opts.limit));
   const qs = params.toString();
-  const url = `orders/my/${encodeURIComponent(String(telegramId))}${qs ? `?${qs}` : ''}`;
+  const url = `orders/my${qs ? `?${qs}` : ''}`;
   const res = await apiFetch(url, { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -415,7 +415,7 @@ export async function cancelOrderApi(orderId: string): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
 }
 

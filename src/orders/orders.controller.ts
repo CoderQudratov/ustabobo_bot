@@ -50,6 +50,26 @@ export class OrdersController {
     return this.ordersService.createDraft(masterId, dto);
   }
 
+  /** My orders for current user (no telegramId in URL — uses req.user from auth). Prevents 403 mismatch. */
+  @Get('my')
+  @Public()
+  @UseGuards(MasterAuthGuard, RolesGuard)
+  @Roles(Role.master, Role.boss, Role.driver)
+  async getMyOrdersCurrentUser(
+    @Req() req: Request & { user: JwtUser },
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
+    const limitNum = limit != null ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20)) : 100;
+    return this.ordersService.getMyOrdersByUserId(req.user.id, req.user.role, {
+      status: status ?? undefined,
+      page: pageNum,
+      limit: limitNum,
+    });
+  }
+
   @Get('my/:telegramId')
   @Public()
   @UseGuards(MasterAuthGuard, RolesGuard)
@@ -63,7 +83,7 @@ export class OrdersController {
   ) {
     const user = await this.ordersService.findUserByTelegramId(telegramId);
     if (!user || user.id !== req.user.id) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException('Ruxsat yo\'q. Tizimga qayta kiring.');
     }
     const pageNum = page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
     const limitNum = limit != null ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20)) : 100;
