@@ -136,24 +136,26 @@ function Content() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* PAGE HEADER */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-heading text-[28px] font-bold text-text-primary">
-            Buyurtmalar
-          </h1>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Jami {total} ta buyurtma
-          </p>
+      <div className="mb-5 border-b border-[var(--border)] pb-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-1)]">
+              Buyurtmalar
+            </h1>
+            <p className="mt-0.5 text-[13px] text-[var(--text-3)]">
+              Jami {total} ta buyurtma
+            </p>
+          </div>
+          <Button
+            onClick={() => setNewOrderOpen(true)}
+            className="shrink-0"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Yangi buyurtma
+          </Button>
         </div>
-        <Button
-          onClick={() => setNewOrderOpen(true)}
-          className="bg-primary hover:bg-primary-hover text-primary-foreground shrink-0"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Yangi buyurtma
-        </Button>
       </div>
 
       {/* COLLAPSIBLE FILTERS */}
@@ -161,18 +163,18 @@ function Content() {
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-surface-2/50"
+          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-[var(--bg-2)]"
         >
-          <span className="flex items-center gap-2 font-medium text-text-primary">
+          <span className="flex items-center gap-2 font-medium text-[var(--text-1)]">
             Filtrlar
             {activeFiltersCount > 0 && (
-              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+              <span className="rounded-full bg-[var(--accent-light)] px-2 py-0.5 text-xs text-[var(--accent)]">
                 {activeFiltersCount}
               </span>
             )}
           </span>
           <ChevronDown
-            className={cn('h-5 w-5 text-text-muted transition-transform', filtersOpen && 'rotate-180')}
+            className={cn('h-5 w-5 text-[var(--text-3)] transition-transform', filtersOpen && 'rotate-180')}
           />
         </button>
         <div
@@ -182,7 +184,7 @@ function Content() {
           )}
         >
           <div className="overflow-hidden">
-            <CardContent className="flex flex-wrap gap-4 border-t border-border pt-4">
+            <CardContent className="flex flex-wrap gap-4 border-t border-[var(--border)] pt-4">
               <div className="space-y-2">
                 <Label>Holat</Label>
                 <Select value={status || 'all'} onValueChange={(v) => setStatus(v === 'all' ? '' : v)}>
@@ -257,16 +259,22 @@ function Content() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-4">
-              <Skeleton className="h-64 w-full" />
+            <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-shimmer h-[48px] border-b border-[var(--border)] last:border-b-0"
+                  style={{ animationDelay: `${i * 0.05}s` }}
+                />
+              ))}
             </div>
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 text-text-muted">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--bg-2)] text-[var(--text-3)]">
                 <Search className="h-8 w-8" />
               </div>
-              <p className="font-semibold text-text-primary">Ma&apos;lumot topilmadi</p>
-              <p className="text-sm text-text-muted">Filtrlarni o&apos;zgartiring yoki yangi buyurtma qo&apos;shing</p>
+              <p className="font-semibold text-[var(--text-1)]">Ma&apos;lumot topilmadi</p>
+              <p className="text-sm text-[var(--text-3)]">Filtrlarni o&apos;zgartiring yoki yangi buyurtma qo&apos;shing</p>
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Filterni tozalash
               </Button>
@@ -281,8 +289,8 @@ function Content() {
                 }
                 isUpdating={(id) => statusMutation.isPending && statusMutation.variables?.id === id}
               />
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
-                <span className="text-sm text-text-muted">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-3">
+                <span className="text-sm text-[var(--text-3)]">
                   Jami: {total} ta
                 </span>
                 <div className="flex items-center gap-1">
@@ -302,7 +310,7 @@ function Content() {
                       size="sm"
                       className={cn(
                         'min-w-[2rem]',
-                        n === page && 'bg-primary text-primary-foreground hover:bg-primary-hover'
+                        n === page && 'bg-[var(--accent)] text-white hover:opacity-90'
                       )}
                       onClick={() => setPage(n)}
                     >

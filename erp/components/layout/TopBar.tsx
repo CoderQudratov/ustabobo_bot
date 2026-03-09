@@ -41,38 +41,38 @@ export function TopBar() {
   const initials = login ? login.slice(0, 2).toUpperCase() : 'BP';
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4 md:px-6">
-      <h1 className="font-heading text-xl font-bold text-text-primary">
+    <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg)] px-4 md:px-6">
+      <h1 className="text-xl font-bold text-[var(--text-1)]">
         {title}
       </h1>
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
-          className="relative text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+          className="relative text-[var(--text-2)] hover:bg-[var(--bg-3)] hover:text-[var(--text-1)]"
           aria-label="Bildirishnomalar"
         >
           <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] font-medium text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--danger)] text-[10px] font-medium text-white">
             0
           </span>
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+          className="h-[34px] w-[34px] rounded-full text-[var(--text-2)] hover:bg-[var(--bg-3)] hover:text-[var(--text-1)]"
           aria-label={(theme ?? 'dark') === 'dark' ? "Kun rejimiga o'tish" : "Tun rejimiga o'tish"}
           onClick={() => setTheme((theme ?? 'dark') === 'dark' ? 'light' : 'dark')}
         >
-          {(theme ?? 'dark') === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          {(theme ?? 'dark') === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
-        <div className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 font-mono text-xs font-semibold text-primary">
+        <div className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-light)] font-mono text-xs font-semibold text-[var(--accent)]">
           {initials}
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="hidden gap-2 text-text-secondary hover:bg-surface-2 hover:text-text-primary sm:inline-flex"
+          className="hidden gap-2 text-[var(--text-2)] hover:bg-[var(--bg-3)] hover:text-[var(--text-1)] sm:inline-flex"
           onClick={() => logout()}
         >
           <LogOut className="h-4 w-4" />

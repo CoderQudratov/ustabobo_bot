@@ -2,65 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Design tokens: light (default) + dark ──────────────────────────────────── */
+/* ─── Rang sxemasi: clean, neutral, professional ───────────────────────────── */
 @layer base {
   :root {
-    --background: #f8fafc;
-    --surface: #ffffff;
-    --surface-2: #f1f5f9;
-    --border: #e2e8f0;
-    --primary: #6366f1;
-    --primary-hover: #4f46e5;
-    --primary-glow: rgba(99, 102, 241, 0.15);
+    --bg: #ffffff;
+    --bg-2: #f8f9fa;
+    --bg-3: #f1f3f5;
+    --border: #e9ecef;
+    --border-2: #dee2e6;
+    --text-1: #1a1a2e;
+    --text-2: #495057;
+    --text-3: #868e96;
+    --accent: #3b82f6;
+    --accent-light: #eff6ff;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
-    --foreground: #0f172a;
-    --card: #ffffff;
-    --card-foreground: #0f172a;
-    --popover: #ffffff;
-    --popover-foreground: #0f172a;
+    --radius: 8px;
+    /* Tailwind/shadcn compatibility */
+    --background: var(--bg);
+    --foreground: var(--text-1);
+    --surface: var(--bg);
+    --surface-2: var(--bg-2);
+    --card: var(--bg);
+    --card-foreground: var(--text-1);
+    --popover: var(--bg);
+    --popover-foreground: var(--text-1);
+    --primary: var(--accent);
     --primary-foreground: #ffffff;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #f1f5f9;
-    --accent-foreground: #0f172a;
-    --destructive: #ef4444;
+    --secondary: var(--bg-2);
+    --secondary-foreground: var(--text-1);
+    --muted: var(--bg-2);
+    --muted-foreground: var(--text-2);
+    --accent-foreground: var(--text-1);
+    --destructive: var(--danger);
     --destructive-foreground: #ffffff;
-    --input: #e2e8f0;
-    --ring: #6366f1;
-    --chart-1: #6366f1;
-    --chart-2: #10b981;
-    --chart-3: #f59e0b;
+    --input: var(--border-2);
+    --ring: var(--accent);
+    --text-primary: var(--text-1);
+    --text-secondary: var(--text-2);
+    --text-muted: var(--text-3);
+    --chart-1: var(--accent);
+    --chart-2: var(--success);
+    --chart-3: var(--warning);
     --chart-4: #8b5cf6;
     --chart-5: #ec4899;
-    --radius: 0.5rem;
   }
   .dark {
-    --background: #0a0a0f;
-    --surface: #12121a;
-    --surface-2: #1a1a28;
-    --border: #2a2a3d;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #475569;
-    --foreground: #f1f5f9;
-    --card: #12121a;
-    --card-foreground: #f1f5f9;
-    --popover: #12121a;
-    --popover-foreground: #f1f5f9;
-    --secondary: #1a1a28;
-    --secondary-foreground: #f1f5f9;
-    --muted: #1a1a28;
-    --muted-foreground: #94a3b8;
-    --accent: #1a1a28;
-    --accent-foreground: #f1f5f9;
-    --input: #1a1a28;
+    --bg: #111318;
+    --bg-2: #1c1f26;
+    --bg-3: #252931;
+    --border: #2e333d;
+    --border-2: #383e4a;
+    --text-1: #f1f3f5;
+    --text-2: #adb5bd;
+    --text-3: #6c757d;
+    --accent: #60a5fa;
+    --accent-light: rgba(96, 165, 250, 0.1);
+    --background: var(--bg);
+    --foreground: var(--text-1);
+    --surface: var(--bg);
+    --surface-2: var(--bg-2);
+    --card: var(--bg);
+    --card-foreground: var(--text-1);
+    --popover: var(--bg);
+    --popover-foreground: var(--text-1);
+    --primary: var(--accent);
+    --secondary: var(--bg-2);
+    --secondary-foreground: var(--text-1);
+    --muted: var(--bg-2);
+    --muted-foreground: var(--text-2);
+    --accent-foreground: var(--text-1);
+    --input: var(--border-2);
+    --text-primary: var(--text-1);
+    --text-secondary: var(--text-2);
+    --text-muted: var(--text-3);
   }
 }
 
@@ -85,19 +101,6 @@
   }
 }
 
-@keyframes blob {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(20px, -20px) scale(1.05);
-  }
-  66% {
-    transform: translate(-10px, 10px) scale(0.95);
-  }
-}
-
 .animate-fade-in-up {
   animation: fadeInUp 0.4s ease-out forwards;
 }
@@ -105,44 +108,12 @@
 .animate-shimmer {
   background: linear-gradient(
     90deg,
-    var(--surface-2) 0%,
-    var(--surface) 50%,
-    var(--surface-2) 100%
+    var(--bg-3) 25%,
+    var(--bg-2) 50%,
+    var(--bg-3) 75%
   );
-  background-size: 200% 100%;
+  background-size: 400px 100%;
   animation: shimmer 1.5s infinite;
-}
-
-.animate-blob {
-  animation: blob 8s ease-in-out infinite;
-}
-
-/* ─── Global table (ERP jadvallar) ────────────────────────────────────────── */
-@layer components {
-  .erp-table thead tr {
-    @apply bg-surface border-b border-border;
-  }
-  .erp-table th {
-    @apply px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-secondary;
-  }
-  .erp-table tbody tr {
-    @apply border-b border-border transition-colors duration-200 hover:bg-surface-2;
-  }
-  .erp-table tbody tr:last-child {
-    @apply border-b-0;
-  }
-  .erp-table td {
-    @apply px-4 py-3 text-sm;
-  }
-  .erp-table td:first-child {
-    @apply font-semibold text-text-primary;
-  }
-  .erp-table .cell-number {
-    @apply font-mono text-right tabular-nums;
-  }
-  .erp-table-empty {
-    @apply flex flex-col items-center justify-center gap-2 py-12 text-text-muted;
-  }
 }
 
 @layer utilities {

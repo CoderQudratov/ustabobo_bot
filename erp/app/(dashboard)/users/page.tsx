@@ -158,41 +158,43 @@ export default function UsersPage() {
   })();
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-heading text-[28px] font-bold text-text-primary">
-            Xodimlar
-          </h1>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Jami {total} ta xodim
-          </p>
+    <div className="space-y-5">
+      <div className="mb-5 border-b border-[var(--border)] pb-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-1)]">
+              Xodimlar
+            </h1>
+            <p className="mt-0.5 text-[13px] text-[var(--text-3)]">
+              Jami {total} ta xodim
+            </p>
+          </div>
+          <Button
+            onClick={() => setAddOpen(true)}
+            className="shrink-0"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Yangi xodim
+          </Button>
         </div>
-        <Button
-          onClick={() => setAddOpen(true)}
-          className="bg-primary hover:bg-primary-hover text-primary-foreground shrink-0"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Yangi xodim
-        </Button>
       </div>
 
       <Card>
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-surface-2/50"
+          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-[var(--bg-2)]"
         >
-          <span className="flex items-center gap-2 font-medium text-text-primary">
+          <span className="flex items-center gap-2 font-medium text-[var(--text-1)]">
             Filtrlar
             {activeFiltersCount > 0 && (
-              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+              <span className="rounded-full bg-[var(--accent-light)] px-2 py-0.5 text-xs text-[var(--accent)]">
                 {activeFiltersCount}
               </span>
             )}
           </span>
           <ChevronDown
-            className={cn('h-5 w-5 text-text-muted transition-transform', filtersOpen && 'rotate-180')}
+            className={cn('h-5 w-5 text-[var(--text-3)] transition-transform', filtersOpen && 'rotate-180')}
           />
         </button>
         <div
@@ -202,7 +204,7 @@ export default function UsersPage() {
           )}
         >
           <div className="overflow-hidden">
-            <CardContent className="flex flex-wrap items-end gap-4 border-t border-border pt-4">
+            <CardContent className="flex flex-wrap items-end gap-4 border-t border-[var(--border)] pt-4">
               <div className="space-y-2">
                 <span className="text-sm font-medium">Rol</span>
                 <Select
@@ -258,14 +260,21 @@ export default function UsersPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <Skeleton className="h-64 w-full" />
+            <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-shimmer h-[48px] border-b border-[var(--border)] last:border-b-0"
+                />
+              ))}
+            </div>
           ) : filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 text-text-muted">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--bg-2)] text-[var(--text-3)]">
                 <Users className="h-8 w-8" />
               </div>
-              <p className="font-semibold text-text-primary">Ma&apos;lumot topilmadi</p>
-              <p className="text-sm text-text-muted">Filtrlarni o&apos;zgartiring</p>
+              <p className="font-semibold text-[var(--text-1)]">Ma&apos;lumot topilmadi</p>
+              <p className="text-sm text-[var(--text-3)]">Filtrlarni o&apos;zgartiring</p>
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Filterni tozalash
               </Button>
@@ -275,18 +284,18 @@ export default function UsersPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="p-3 text-left font-medium">
+                    <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
                         Telegram ID
                       </th>
-                      <th className="p-3 text-left font-medium">Ism</th>
-                      <th className="p-3 text-left font-medium">Rol</th>
-                      <th className="p-3 text-left font-medium">Telefon</th>
-                      <th className="p-3 text-left font-medium">
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Ism</th>
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Rol</th>
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Telefon</th>
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
                         Ro‘yxatdan o‘tgan
                       </th>
-                      <th className="p-3 text-left font-medium">Holati</th>
-                      <th className="p-3 text-right font-medium">Amallar</th>
+                      <th className="p-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Holati</th>
+                      <th className="p-3 text-right text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Amallar</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -294,7 +303,7 @@ export default function UsersPage() {
                       <tr>
                         <td
                           colSpan={7}
-                          className="p-6 text-center text-muted-foreground"
+                          className="p-6 text-center text-[var(--text-3)]"
                         >
                           {items.length === 0
                             ? 'Xodimlar yo‘q'
@@ -302,15 +311,12 @@ export default function UsersPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredItems.map((u, idx) => (
+                      filteredItems.map((u) => (
                         <tr
                           key={u.id}
-                          className={cn(
-                            'h-14 border-b border-border transition-colors hover:bg-surface-2',
-                            idx % 2 === 1 && 'bg-surface-2/60'
-                          )}
+                          className="h-14 border-b border-[var(--border)] transition-colors hover:bg-[var(--bg-2)]"
                         >
-                          <td className="p-3 font-mono text-muted-foreground">
+                          <td className="p-3 font-mono text-[var(--text-3)]">
                             {u.tg_id ?? '—'}
                           </td>
                           <td className="p-3">
@@ -332,7 +338,7 @@ export default function UsersPage() {
                           <td className="p-3 font-mono text-sm tracking-wide text-muted-foreground">
                             {u.phone}
                           </td>
-                          <td className="p-3 text-muted-foreground">
+                          <td className="p-3 text-[var(--text-3)]">
                             {u.created_at
                               ? new Date(u.created_at).toLocaleDateString(
                                   'uz-UZ'
@@ -388,8 +394,8 @@ export default function UsersPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
-                <span className="text-sm text-text-muted">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-3">
+                <span className="text-sm text-[var(--text-3)]">
                   Jami: {total}
                   {debouncedSearch && ` (qidiruv: ${filteredItems.length})`}
                 </span>
@@ -410,7 +416,7 @@ export default function UsersPage() {
                       size="sm"
                       className={cn(
                         'min-w-[2rem]',
-                        n === page && 'bg-primary text-primary-foreground hover:bg-primary-hover'
+                        n === page && 'bg-[var(--accent)] text-white hover:opacity-90'
                       )}
                       onClick={() => setPage(n)}
                     >

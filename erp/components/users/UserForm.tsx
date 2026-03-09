@@ -115,7 +115,7 @@ export function UserForm({
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? 'Yangi xodim' : 'Tahrirlash'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-6 pb-6">
           <div>
             <Label>Ism</Label>
             <Input {...form.register('fullname')} />

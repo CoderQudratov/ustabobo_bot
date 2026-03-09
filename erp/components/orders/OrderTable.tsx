@@ -75,114 +75,131 @@ export function OrderTable({
   isUpdating?: (id: string) => boolean;
 }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>#</TableHead>
-          <TableHead>Mijoz</TableHead>
-          <TableHead>Mashina</TableHead>
-          <TableHead>Xizmat turi</TableHead>
-          <TableHead>Usta</TableHead>
-          <TableHead className="text-right">Summa</TableHead>
-          <TableHead>Holati</TableHead>
-          <TableHead>Vaqt</TableHead>
-          <TableHead className="w-20">Amallar</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {orders.map((o, idx) => (
-          <TableRow
-            key={o.id}
-            className={cn(
-              'h-14 cursor-pointer border-b border-border transition-colors hover:bg-surface-2',
-              idx % 2 === 1 && 'bg-surface-2/60'
-            )}
-            onClick={() => onRowClick(o)}
-          >
-            <TableCell className="font-mono text-muted-foreground">
-              {o.id.slice(0, 8)}
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-3">
-                <div
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                    avatarColor(o.client_name || '')
-                  )}
-                >
-                  {initials(o.client_name || '—')}
-                </div>
-                <div>
-                  <div className="font-medium text-text-primary">{o.client_name}</div>
-                  <div className="font-mono text-xs tracking-wide text-muted-foreground">{o.client_phone}</div>
-                </div>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div>
-                <div>{o.car_number}</div>
-                {o.car_model && (
-                  <div className="text-xs text-muted-foreground">{o.car_model}</div>
-                )}
-              </div>
-            </TableCell>
-            <TableCell>{getServiceName(o)}</TableCell>
-            <TableCell>{o.master?.fullname ?? '—'}</TableCell>
-            <TableCell className="text-right font-bold text-success tabular-nums">
-              {Number(o.total_amount).toLocaleString('uz-UZ')} so&apos;m
-            </TableCell>
-            <TableCell onClick={(e) => e.stopPropagation()}>
-              {onStatusChange ? (
-                <Select
-                  value={o.status}
-                  onValueChange={(v) => onStatusChange(o, v as OrderStatus)}
-                  disabled={isUpdating?.(o.id)}
-                >
-                  <SelectTrigger className="h-8 w-36 border-0 bg-transparent shadow-none hover:bg-surface-2">
-                    <SelectValue>
-                      <StatusBadge status={o.status} />
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {orderStatusLabel(s)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <StatusBadge status={o.status} />
-              )}
-            </TableCell>
-            <TableCell className="text-muted-foreground">
-              {format(new Date(o.created_at), 'dd.MM.yy HH:mm')}
-            </TableCell>
-            <TableCell onClick={(e) => e.stopPropagation()}>
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400"
-                  onClick={() => onRowClick(o)}
-                  title="Ko'rish"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
-                  onClick={() => onRowClick(o)}
-                  title="Tahrirlash"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </div>
-            </TableCell>
+    <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
+      <Table>
+        <TableHeader>
+          <TableRow className="border-b border-[var(--border)] hover:bg-transparent">
+            <TableHead className="h-11 bg-[var(--bg-2)] px-4 py-3 text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              #
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Mijoz
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Mashina
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Xizmat turi
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Usta
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-right text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Summa
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Holati
+            </TableHead>
+            <TableHead className="bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Vaqt
+            </TableHead>
+            <TableHead className="w-[120px] bg-[var(--bg-2)] text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">
+              Amallar
+            </TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {orders.map((o) => (
+            <TableRow
+              key={o.id}
+              className="cursor-pointer border-b border-[var(--border)] transition-colors hover:bg-[var(--bg-2)]"
+              onClick={() => onRowClick(o)}
+            >
+              <TableCell className="px-4 py-[13px] font-mono text-[13.5px] text-[var(--text-3)]">
+                {o.id.slice(0, 8)}
+              </TableCell>
+              <TableCell className="px-4 py-[13px] text-[13.5px]">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                      avatarColor(o.client_name || '')
+                    )}
+                  >
+                    {initials(o.client_name || '—')}
+                  </div>
+                  <div>
+                    <div className="font-medium text-[var(--text-1)]">{o.client_name}</div>
+                    <div className="font-mono text-xs tracking-wide text-[var(--text-3)]">{o.client_phone}</div>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="px-4 py-[13px] text-[13.5px]">
+                <div>
+                  <div>{o.car_number}</div>
+                  {o.car_model && (
+                    <div className="text-xs text-[var(--text-3)]">{o.car_model}</div>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="px-4 py-[13px] text-[13.5px]">{getServiceName(o)}</TableCell>
+              <TableCell className="px-4 py-[13px] text-[13.5px]">{o.master?.fullname ?? '—'}</TableCell>
+              <TableCell className="px-4 py-[13px] text-right font-mono text-[13.5px] font-semibold text-[var(--success)]">
+                {Number(o.total_amount).toLocaleString('uz-UZ')} so&apos;m
+              </TableCell>
+              <TableCell className="px-4 py-[13px]" onClick={(e) => e.stopPropagation()}>
+                {onStatusChange ? (
+                  <Select
+                    value={o.status}
+                    onValueChange={(v) => onStatusChange(o, v as OrderStatus)}
+                    disabled={isUpdating?.(o.id)}
+                  >
+                    <SelectTrigger className="h-8 w-36 border-0 bg-transparent shadow-none hover:bg-[var(--bg-2)]">
+                      <SelectValue>
+                        <StatusBadge status={o.status} />
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {orderStatusLabel(s)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <StatusBadge status={o.status} />
+                )}
+              </TableCell>
+              <TableCell className="px-4 py-[13px] font-mono text-xs text-[var(--text-3)]">
+                {format(new Date(o.created_at), 'dd.MM.yy HH:mm')}
+              </TableCell>
+              <TableCell className="px-4 py-[13px]" onClick={(e) => e.stopPropagation()}>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-[30px] w-[30px] rounded-md border-0 text-blue-500 hover:bg-blue-500/10 hover:text-blue-600"
+                    onClick={() => onRowClick(o)}
+                    title="Ko'rish"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-[30px] w-[30px] rounded-md border-0 text-amber-500 hover:bg-amber-500/10 hover:text-amber-600"
+                    onClick={() => onRowClick(o)}
+                    title="Tahrirlash"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
