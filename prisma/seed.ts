@@ -20,6 +20,16 @@ const BOSS = {
   balance: 0,
 };
 
+const USTABOBO = {
+  login: 'ustabobo',
+  password: 'umid2526',
+  fullname: 'Ustabobo Admin',
+  phone: '+998901234567',
+  role: 'boss' as const,
+  percent_rate: 0,
+  balance: 0,
+};
+
 const MASTER = {
   login: 'usta1',
   password: 'admin123',
@@ -32,6 +42,7 @@ const MASTER = {
 
 async function main() {
   const bossHash = await bcrypt.hash(BOSS.password, 10);
+  const ustaboboHash = await bcrypt.hash(USTABOBO.password, 10);
   const masterHash = await bcrypt.hash(MASTER.password, 10);
   const pinHash = await bcrypt.hash('1234', 10);
 
@@ -53,6 +64,27 @@ async function main() {
       role: BOSS.role,
       percent_rate: BOSS.percent_rate,
       balance: BOSS.balance,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { login: USTABOBO.login },
+    create: {
+      login: USTABOBO.login,
+      password_hash: ustaboboHash,
+      fullname: USTABOBO.fullname,
+      phone: USTABOBO.phone,
+      role: USTABOBO.role,
+      percent_rate: USTABOBO.percent_rate,
+      balance: USTABOBO.balance,
+    },
+    update: {
+      password_hash: ustaboboHash,
+      fullname: USTABOBO.fullname,
+      phone: USTABOBO.phone,
+      role: USTABOBO.role,
+      percent_rate: USTABOBO.percent_rate,
+      balance: USTABOBO.balance,
     },
   });
 
@@ -81,7 +113,7 @@ async function main() {
     },
   });
 
-  console.log('Seed completed: Boss (admin) and Master (usta1) created/updated.');
+  console.log('Seed completed: Boss (admin), Ustabobo (ustabobo), Master (usta1) created/updated.');
 }
 
 main()
