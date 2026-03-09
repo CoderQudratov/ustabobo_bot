@@ -30,7 +30,9 @@ async function proxy(
   token: string | null,
   retried = false
 ): Promise<Response> {
-  const backendUrl = `${getBackendUrl()}/${path.replace(/^\//, '')}`;
+  const basePath = path.replace(/^\//, '');
+  const search = request.nextUrl.searchParams.toString();
+  const backendUrl = `${getBackendUrl()}/${basePath}${search ? `?${search}` : ''}`;
   const headers = new Headers(request.headers);
   headers.delete('host');
   headers.delete('connection');
