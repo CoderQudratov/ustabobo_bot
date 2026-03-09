@@ -26,6 +26,7 @@ import {
 import {
   isValidUzbekPhone,
   isValidUzbekPlate,
+  normalizeUzbekPlate,
   UZBEK_PHONE_PLACEHOLDER,
   UZBEK_PLATE_PLACEHOLDER,
 } from "@/utils/validation";
@@ -280,8 +281,9 @@ export default function NewOrderPage() {
         setError("Telefon raqami noto‘g‘ri. Masalan: 90 123 45 67");
         return;
       }
-      if (!isValidUzbekPlate(carNum)) {
-        setError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+      const carNumNorm = normalizeUzbekPlate(carNum);
+      if (!isValidUzbekPlate(carNumNorm)) {
+        setError("Mashina raqami noto‘g‘ri. Masalan: 01 111 AAA yoki 01 A 123 AA");
         return;
       }
       const hasServices = selectedServices.length > 0;
@@ -305,8 +307,9 @@ export default function NewOrderPage() {
       setError("Telefon raqami noto‘g‘ri. Masalan: 90 123 45 67");
       return;
     }
-    if (!isValidUzbekPlate(carNum)) {
-      setError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+    const carNumNorm = normalizeUzbekPlate(carNum);
+    if (!isValidUzbekPlate(carNumNorm)) {
+      setError("Mashina raqami noto‘g‘ri. Masalan: 01 111 AAA yoki 01 A 123 AA");
       return;
     }
     const hasServices = selectedServices.length > 0;
@@ -318,7 +321,7 @@ export default function NewOrderPage() {
     const payload: CreateOrderPayload = {
       client_name: name,
       client_phone: phone,
-      car_number: carNum,
+      car_number: carNumNorm,
       car_model: carModel.trim() || undefined,
       car_photo_url: carPhotoUrl.trim() || undefined,
       organization_id: isOrgVehicle && orgId ? orgId : undefined,
@@ -443,6 +446,7 @@ export default function NewOrderPage() {
                 placeholder={UZBEK_PLATE_PLACEHOLDER}
                 value={carNumber}
                 onChange={(e) => setCarNumber(e.target.value)}
+                onBlur={() => carNumber.trim() && setCarNumber(normalizeUzbekPlate(carNumber))}
                 disabled={isCarFieldsDisabled}
                 className="input-webapp"
                 required
@@ -950,6 +954,7 @@ export default function NewOrderPage() {
                   placeholder={UZBEK_PLATE_PLACEHOLDER}
                   value={newVehiclePlate}
                   onChange={(e) => setNewVehiclePlate(e.target.value)}
+                  onBlur={() => newVehiclePlate.trim() && setNewVehiclePlate(normalizeUzbekPlate(newVehiclePlate))}
                   className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 />
                 <input
@@ -995,15 +1000,16 @@ export default function NewOrderPage() {
                   disabled={newVehicleSubmitting || !newVehiclePlate.trim() || !newVehicleModel.trim()}
                   onClick={async () => {
                     setNewVehicleError("");
-                    if (!isValidUzbekPlate(newVehiclePlate.trim())) {
-                      setNewVehicleError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+                    const plateNorm = normalizeUzbekPlate(newVehiclePlate.trim());
+                    if (!isValidUzbekPlate(plateNorm)) {
+                      setNewVehicleError("Mashina raqami noto‘g‘ri. Masalan: 01 111 AAA yoki 01 A 123 AA");
                       return;
                     }
                     setNewVehicleSubmitting(true);
                     try {
                       const yearNum = newVehicleYear.trim() ? parseInt(newVehicleYear.trim(), 10) : undefined;
                       const created = await createWebappVehicle(orgId, {
-                        plate_number: newVehiclePlate.trim(),
+                        plate_number: plateNorm,
                         model: newVehicleModel.trim(),
                         year: yearNum && !Number.isNaN(yearNum) ? yearNum : undefined,
                         color: newVehicleColor.trim() || undefined,

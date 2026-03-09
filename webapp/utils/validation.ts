@@ -20,18 +20,29 @@ export function isValidUzbekPhone(value: string): boolean {
 export const UZBEK_PHONE_PLACEHOLDER = "90 123 45 67";
 
 /**
- * O'zbekiston davlat raqami: 01-14 (hudud), harf, 1-3 raqam, 2 harf.
- * Masalan: 01 A 123 AA, 10 B 45 BB
+ * O'zbekiston davlat raqami — yuridik va jismoniy shaxslar, barcha turlari.
+ * Hudud: 01–99. Kiritilgan matn katta harfga o‘giriladi.
+ *
+ * Qabul qilinadigan formatlar:
+ * 1) XX ZZZ LLL — masalan: 01 111 AAA, 01 200 BAA, 99 555 ABC
+ * 2) XX Y ZZZ YY — masalan: 01 A 123 AA, 10 B 45 BB
  */
-export const UZBEK_PLATE_REGEX = /^(0[1-9]|1[0-4])\s*[A-Za-z]\s*\d{1,3}\s*[A-Za-z]{2}$/;
+const REGION = "0[1-9]|[1-9][0-9]"; // 01–99
+const FORMAT_ZZZ_LLL = new RegExp(`^(${REGION})\\d{3}[A-Za-z]{3}$`);      // XX ZZZ LLL
+const FORMAT_Y_ZZZ_YY = new RegExp(`^(${REGION})[A-Za-z]\\d{1,3}[A-Za-z]{2}$`); // XX Y ZZZ YY
 
+export const UZBEK_PLATE_REGEX = new RegExp(
+  `^(${REGION})(\\d{3}[A-Za-z]{3}|[A-Za-z]\\d{1,3}[A-Za-z]{2})$`
+);
+
+/** Bo‘shliqlarni bitta qilib, katta harfga o‘giradi (kirishda ko‘rsatish uchun). */
 export function normalizeUzbekPlate(value: string): string {
-  return value.replace(/\s+/g, "").trim().toUpperCase();
+  return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 export function isValidUzbekPlate(value: string): boolean {
-  const norm = normalizeUzbekPlate(value);
-  return /^(0[1-9]|1[0-4])[A-Z]\d{1,3}[A-Z]{2}$/.test(norm);
+  const s = value.trim().toUpperCase().replace(/\s+/g, "");
+  return FORMAT_ZZZ_LLL.test(s) || FORMAT_Y_ZZZ_YY.test(s);
 }
 
-export const UZBEK_PLATE_PLACEHOLDER = "01 A 123 AA";
+export const UZBEK_PLATE_PLACEHOLDER = "01 111 AAA yoki 01 A 123 AA";
