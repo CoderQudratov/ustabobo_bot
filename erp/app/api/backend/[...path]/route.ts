@@ -12,12 +12,16 @@ async function doRefresh(request: NextRequest): Promise<string | null> {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
 
-  const res = await fetch(`${getBackendUrl()}/admin/auth/refresh`, {
+  const refreshInit: RequestInit & { duplex?: 'half' } = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
-    duplex: 'half', // ✅ QUSHILDI
-  });
+    duplex: 'half',
+  };
+  const res = await fetch(
+    `${getBackendUrl()}/admin/auth/refresh`,
+    refreshInit as RequestInit
+  );
 
   if (!res.ok) return null;
   const data = await res.json().catch(() => ({}));
@@ -40,16 +44,16 @@ async function proxy(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const init: RequestInit = {
+  const init: RequestInit & { duplex?: 'half' } = {
     method: request.method,
     headers,
   };
   if (['POST', 'PATCH', 'PUT'].includes(request.method) && request.body) {
     init.body = request.body;
-    init.duplex = 'half'; // ✅ BU LINIYA QUSHILDI!
+    init.duplex = 'half';
   }
 
-  const res = await fetch(backendUrl, init);
+  const res = await fetch(backendUrl, init as RequestInit);
 
   if (res.status === 401 && !retried) {
     const newToken = await doRefresh(request);
