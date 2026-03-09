@@ -6,7 +6,6 @@ import { apiGet } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import {
   BarChart,
   Bar,
@@ -17,19 +16,24 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  PieChart,
-  Pie,
-  Legend,
 } from 'recharts';
 import type { DashboardRes } from '@/lib/dashboard';
 import { formatSom } from '@/lib/dashboard';
-import { orderStatusLabel } from '@/lib/types';
 import type { OrderStatus } from '@/lib/types';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import {
   useWeeklyOrders,
   useWeeklyRevenue,
-  useOrderStatusPie,
 } from '@/hooks/useDashboardCharts';
+import {
+  DollarSign,
+  ClipboardList,
+  Zap,
+  AlertTriangle,
+  TrendingUp,
+  RefreshCw,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 function useDashboard() {
   return useQuery({
@@ -41,22 +45,52 @@ function useDashboard() {
 }
 
 const CHART_COLORS = {
-  bar: 'hsl(var(--primary))',
-  line: 'hsl(var(--chart-2))',
-  pie: ['#3b82f6', '#22c55e', '#eab308', '#ef4444'],
+  bar: '#6366f1',
+  line: '#10b981',
+  lineGradient: ['#6366f1', '#6366f100'],
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Kutilmoqda',
-  in_progress: 'Jarayonda',
-  completed: 'Tugallandi',
-  cancelled: 'Bekor qilindi',
-};
+const STAT_CARDS = [
+  {
+    key: 'revenue',
+    title: 'Bugungi daromad',
+    icon: DollarSign,
+    iconColor: 'text-warning',
+    getValue: (d: DashboardRes | undefined) =>
+      d != null ? formatSom(d.today_revenue) : '—',
+    trend: null as number | null,
+  },
+  {
+    key: 'orders',
+    title: 'Bugungi buyurtmalar',
+    icon: ClipboardList,
+    iconColor: 'text-primary',
+    getValue: (d: DashboardRes | undefined) => String(d?.today_orders ?? '—'),
+    trend: null,
+  },
+  {
+    key: 'active',
+    title: 'Aktiv buyurtmalar',
+    icon: Zap,
+    iconColor: 'text-success',
+    getValue: (d: DashboardRes | undefined) => String(d?.active_orders ?? '—'),
+    trend: null,
+  },
+  {
+    key: 'lowStock',
+    title: 'Kam qolgan mahsulotlar',
+    icon: AlertTriangle,
+    iconColor: 'text-danger',
+    getValue: (d: DashboardRes | undefined) =>
+      String(d?.low_stock_count ?? '—'),
+    trend: null,
+  },
+];
 
 function ChartSkeleton({ className }: { className?: string }) {
   return (
     <Skeleton
-      className={className}
+      className={cn('bg-surface-2 animate-shimmer', className)}
       style={{ minHeight: 280 }}
     />
   );
@@ -64,7 +98,7 @@ function ChartSkeleton({ className }: { className?: string }) {
 
 function ChartError({ message }: { message: string }) {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center text-sm text-destructive">
+    <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-danger/30 bg-danger/5 p-4 text-center text-sm text-danger">
       {message}
     </div>
   );
@@ -75,7 +109,6 @@ export default function DashboardPage() {
   const { data: dashboard, isLoading: dashLoading } = useDashboard();
   const weeklyOrders = useWeeklyOrders();
   const weeklyRevenue = useWeeklyRevenue();
-  const orderStatusPie = useOrderStatusPie();
 
   const loading = dashLoading;
   const recentOrders = dashboard?.recent_orders ?? [];
@@ -83,156 +116,73 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>🔄 1 daqiqada yangilanadi</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              queryClient.refetchQueries({ queryKey: ['dashboard'] })
-            }
-          >
-            Yangilash
-          </Button>
-        </div>
+        <p className="text-sm text-text-muted">
+          🔄 1 daqiqada yangilanadi
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-border text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+          onClick={() =>
+            queryClient.refetchQueries({ queryKey: ['dashboard'] })
+          }
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Yangilash
+        </Button>
       </div>
 
-      {/* 4 karta */}
+      {/* 4 stat kartalar */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Bugungi buyurtmalar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <span className="text-2xl font-bold">
-                {dashboard?.today_orders ?? 0}
-              </span>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Bugungi tushum
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-24" />
-            ) : (
-              <span className="text-2xl font-bold">
-                {dashboard != null
-                  ? formatSom(dashboard.today_revenue)
-                  : '—'}
-              </span>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Aktiv buyurtmalar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <span className="text-2xl font-bold">
-                {dashboard?.active_orders ?? 0}
-              </span>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Kam qolgan zapchastlar
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <span className="text-2xl font-bold">
-                {dashboard?.low_stock_count ?? 0}
-              </span>
-            )}
-          </CardContent>
-        </Card>
+        {STAT_CARDS.map((card, i) => {
+          const Icon = card.icon;
+          return (
+            <Card
+              key={card.key}
+              className="border-border bg-surface transition-all duration-200 hover:border-primary hover:shadow-lg hover:shadow-primary-glow animate-fade-in-up"
+              style={{ animationDelay: `${i * 100}ms` }}
+            >
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-text-secondary">
+                  {card.title}
+                </CardTitle>
+                <Icon className={`h-5 w-5 ${card.iconColor}`} />
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <Skeleton className="h-9 w-24 bg-surface-2 animate-shimmer" />
+                ) : (
+                  <>
+                    <div className="font-mono text-3xl font-bold text-text-primary">
+                      {card.getValue(dashboard)}
+                    </div>
+                    {card.trend != null && (
+                      <div
+                        className={cn(
+                          'mt-1 flex items-center gap-1 text-xs',
+                          card.trend >= 0 ? 'text-success' : 'text-danger'
+                        )}
+                      >
+                        <TrendingUp className="h-3 w-3" />
+                        {card.trend >= 0 ? '+' : ''}
+                        {card.trend}% o‘tgan kuniga nisbatan
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Oxirgi buyurtmalar */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Oxirgi buyurtmalar</CardTitle>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/orders">Barchasini ko‘rish →</Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-32 w-full" />
-          ) : recentOrders.length === 0 ? (
-            <p className="text-muted-foreground">Buyurtmalar yo‘q</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="p-3 text-left font-medium">Buyurtma №</th>
-                    <th className="p-3 text-left font-medium">Mijoz</th>
-                    <th className="p-3 text-left font-medium">Xizmat</th>
-                    <th className="p-3 text-right font-medium">Summa</th>
-                    <th className="p-3 text-left font-medium">Holati</th>
-                    <th className="p-3 text-left font-medium">Vaqt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((o) => (
-                    <tr key={o.id} className="border-b">
-                      <td className="p-3 font-mono text-xs">{o.id.slice(0, 8)}</td>
-                      <td className="p-3">{o.client_name}</td>
-                      <td className="p-3">{o.service_name}</td>
-                      <td className="p-3 text-right">
-                        {formatSom(o.total_amount)}
-                      </td>
-                      <td className="p-3">
-                        <Badge
-                          variant={
-                            o.status === 'completed' ? 'default' : 'secondary'
-                          }
-                        >
-                          {orderStatusLabel(o.status as OrderStatus)}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-muted-foreground">
-                        {new Date(o.created_at).toLocaleString('uz-UZ', {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Diagrammalar */}
+      {/* Grafiklar */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* BarChart — 7 kunlik buyurtmalar */}
-        <Card>
+        <Card className="border-border bg-surface">
           <CardHeader>
-            <CardTitle>Oxirgi 7 kun — buyurtmalar</CardTitle>
+            <CardTitle className="font-heading text-text-primary">
+              Oxirgi 7 kun — buyurtmalar
+            </CardTitle>
           </CardHeader>
           <CardContent className="w-full">
             {weeklyOrders.isLoading && (
@@ -243,7 +193,7 @@ export default function DashboardPage() {
                 message={
                   weeklyOrders.error instanceof Error
                     ? weeklyOrders.error.message
-                    : 'Ma’lumot yuklanmadi'
+                    : "Ma'lumot yuklanmadi"
                 }
               />
             )}
@@ -254,18 +204,33 @@ export default function DashboardPage() {
                     data={weeklyOrders.data.items}
                     margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-50" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="var(--border)"
+                      opacity={0.5}
+                    />
                     <XAxis
                       dataKey="date"
+                      tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                       tickFormatter={(v) => {
                         const d = new Date(v);
                         return `${d.getDate()}.${d.getMonth() + 1}`;
                       }}
-                      fontSize={12}
                     />
-                    <YAxis fontSize={12} allowDecimals={false} />
+                    <YAxis
+                      tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                      allowDecimals={false}
+                    />
                     <Tooltip
-                      labelFormatter={(v) => new Date(v).toLocaleDateString('uz-UZ')}
+                      contentStyle={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        color: 'var(--text-primary)',
+                      }}
+                      labelFormatter={(v) =>
+                        new Date(v).toLocaleDateString('uz-UZ')
+                      }
                       formatter={(value) => [value ?? 0, 'Buyurtmalar']}
                     />
                     <Bar
@@ -281,17 +246,18 @@ export default function DashboardPage() {
             {weeklyOrders.isSuccess &&
               (!weeklyOrders.data?.items?.length ||
                 weeklyOrders.data.items.length === 0) && (
-                <div className="flex min-h-[280px] items-center justify-center text-muted-foreground">
-                  Ma’lumot yo‘q
+                <div className="flex min-h-[280px] items-center justify-center text-text-muted">
+                  Ma'lumot yo'q
                 </div>
               )}
           </CardContent>
         </Card>
 
-        {/* LineChart — 7 kunlik tushum */}
-        <Card>
+        <Card className="border-border bg-surface">
           <CardHeader>
-            <CardTitle>Oxirgi 7 kun — tushum (so‘m)</CardTitle>
+            <CardTitle className="font-heading text-text-primary">
+              Oxirgi 7 kun — tushum (so'm)
+            </CardTitle>
           </CardHeader>
           <CardContent className="w-full">
             {weeklyRevenue.isLoading && (
@@ -302,7 +268,7 @@ export default function DashboardPage() {
                 message={
                   weeklyRevenue.error instanceof Error
                     ? weeklyRevenue.error.message
-                    : 'Ma’lumot yuklanmadi'
+                    : "Ma'lumot yuklanmadi"
                 }
               />
             )}
@@ -314,20 +280,41 @@ export default function DashboardPage() {
                       data={weeklyRevenue.data.items}
                       margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                     >
+                      <defs>
+                        <linearGradient
+                          id="lineGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor={CHART_COLORS.bar}
+                            stopOpacity={0.3}
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor={CHART_COLORS.bar}
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        className="opacity-50"
+                        stroke="var(--border)"
+                        opacity={0.5}
                       />
                       <XAxis
                         dataKey="date"
+                        tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                         tickFormatter={(v) => {
                           const d = new Date(v);
                           return `${d.getDate()}.${d.getMonth() + 1}`;
                         }}
-                        fontSize={12}
                       />
                       <YAxis
-                        fontSize={12}
+                        tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                         tickFormatter={(v) =>
                           v >= 1_000_000
                             ? `${v / 1_000_000} mln`
@@ -337,17 +324,26 @@ export default function DashboardPage() {
                         }
                       />
                       <Tooltip
+                        contentStyle={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px',
+                          color: 'var(--text-primary)',
+                        }}
                         labelFormatter={(v) =>
                           new Date(v).toLocaleDateString('uz-UZ')
                         }
-                        formatter={(value) => [formatSom(Number(value ?? 0)), 'Tushum']}
+                        formatter={(value) => [
+                          formatSom(Number(value ?? 0)),
+                          'Tushum',
+                        ]}
                       />
                       <Line
                         type="monotone"
                         dataKey="revenue"
                         stroke={CHART_COLORS.line}
                         strokeWidth={2}
-                        dot={{ r: 4 }}
+                        dot={{ r: 4, fill: 'var(--surface)' }}
                         name="Tushum"
                       />
                     </LineChart>
@@ -357,68 +353,83 @@ export default function DashboardPage() {
             {weeklyRevenue.isSuccess &&
               (!weeklyRevenue.data?.items?.length ||
                 weeklyRevenue.data.items.length === 0) && (
-                <div className="flex min-h-[280px] items-center justify-center text-muted-foreground">
-                  Ma’lumot yo‘q
+                <div className="flex min-h-[280px] items-center justify-center text-text-muted">
+                  Ma'lumot yo'q
                 </div>
               )}
           </CardContent>
         </Card>
       </div>
 
-      {/* PieChart — buyurtma holatlari */}
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Buyurtma holatlari taqsimoti</CardTitle>
+      {/* Oxirgi buyurtmalar */}
+      <Card className="border-border bg-surface">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="font-heading text-text-primary">
+            Oxirgi buyurtmalar
+          </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-border text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+            asChild
+          >
+            <Link href="/orders">Barchasini ko'rish →</Link>
+          </Button>
         </CardHeader>
-        <CardContent className="w-full">
-          {orderStatusPie.isLoading && (
-            <ChartSkeleton className="h-[280px] w-full" />
+        <CardContent>
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton
+                  key={i}
+                  className="h-12 w-full bg-surface-2 animate-shimmer"
+                />
+              ))}
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <div className="erp-table-empty">
+              <ClipboardList className="h-12 w-12 text-text-muted" />
+              <p>Ma'lumot topilmadi</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="erp-table w-full text-sm">
+                <thead>
+                  <tr>
+                    <th>Buyurtma №</th>
+                    <th>Mijoz</th>
+                    <th>Xizmat</th>
+                    <th className="text-right">Summa</th>
+                    <th>Holati</th>
+                    <th>Vaqt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOrders.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-mono text-xs">
+                        {o.id.slice(0, 8)}
+                      </td>
+                      <td>{o.client_name}</td>
+                      <td>{o.service_name}</td>
+                      <td className="cell-number">
+                        {formatSom(o.total_amount)}
+                      </td>
+                      <td>
+                        <StatusBadge status={o.status as OrderStatus} />
+                      </td>
+                      <td className="text-text-muted">
+                        {new Date(o.created_at).toLocaleString('uz-UZ', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-          {orderStatusPie.isError && (
-            <ChartError
-              message={
-                orderStatusPie.error instanceof Error
-                  ? orderStatusPie.error.message
-                  : 'Ma’lumot yuklanmadi'
-              }
-            />
-          )}
-          {orderStatusPie.isSuccess &&
-            orderStatusPie.data?.items?.length > 0 && (
-              <div className="mx-auto h-[280px] w-full max-w-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={orderStatusPie.data.items.map((item, i) => ({
-                        ...item,
-                        name:
-                          STATUS_LABELS[item.status] ?? item.status,
-                        fill: CHART_COLORS.pie[i % CHART_COLORS.pie.length],
-                      }))}
-                      dataKey="count"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius="80%"
-                      label={({ name, percent }) =>
-                        `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                      }
-                    />
-                    <Tooltip
-                      formatter={(value) => [value ?? 0, 'Buyurtmalar']}
-                    />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          {orderStatusPie.isSuccess &&
-            (!orderStatusPie.data?.items?.length ||
-              orderStatusPie.data.items.length === 0) && (
-              <div className="flex min-h-[280px] items-center justify-center text-muted-foreground">
-                Ma’lumot yo‘q
-              </div>
-            )}
         </CardContent>
       </Card>
     </div>

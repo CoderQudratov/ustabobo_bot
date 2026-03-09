@@ -15,7 +15,7 @@ export default function DashboardLayout({
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -33,7 +33,7 @@ export default function DashboardLayout({
         <div className="print:hidden">
           <Sidebar />
         </div>
-        <main className="flex-1 overflow-auto bg-muted/30 p-4 md:p-6 print:bg-white print:p-0">
+        <main className="flex-1 overflow-auto bg-background p-4 md:p-6 print:bg-white print:p-0">
           {children}
         </main>
       </div>
