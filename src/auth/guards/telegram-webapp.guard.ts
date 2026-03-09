@@ -41,12 +41,18 @@ export class TelegramWebAppGuard implements CanActivate {
     }
     const { tgId, authDate } = this.authService.validateTelegramInitData(raw);
     const user = await this.authService.getUserByTgId(tgId);
+    const role = user.role != null ? String(user.role) : '';
+    if (!role || !['master', 'driver', 'boss'].includes(role)) {
+      throw new UnauthorizedException(
+        'Foydalanuvchi topilmadi. Bot orqali kirish qiling.',
+      );
+    }
     (request as Request & { user: TelegramWebAppUser }).user = {
       id: user.id,
       telegramId: tgId,
       authDate,
       login: user.login,
-      role: user.role,
+      role,
       fullname: user.fullname,
     };
     return true;

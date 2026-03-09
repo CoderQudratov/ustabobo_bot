@@ -147,6 +147,10 @@ async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Resp
     clearWebappAuth();
     if (onSessionExpired) onSessionExpired();
   }
+  if (res.status === 403) {
+    clearWebappAuth();
+    if (onSessionExpired) onSessionExpired();
+  }
   return res;
 }
 

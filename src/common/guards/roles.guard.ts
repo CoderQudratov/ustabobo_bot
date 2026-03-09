@@ -24,11 +24,15 @@ export class RolesGuard implements CanActivate {
       .switchToHttp()
       .getRequest<{ user: { role: Role } }>();
     if (!user?.role) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException(
+        'Ruxsat yo\'q. Ilovani Telegram bot orqali qayta oching.',
+      );
     }
     const hasRole = requiredRoles.includes(user.role);
     if (!hasRole) {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenException(
+        'Ruxsat yo\'q. Ilovani Telegram bot orqali qayta oching.',
+      );
     }
     return true;
   }
