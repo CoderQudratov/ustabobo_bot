@@ -33,7 +33,7 @@ export class BotAuthMiddleware implements OnModuleInit {
         ctx.message && 'text' in ctx.message
           ? (ctx.message as { text: string }).text?.trim() ?? ''
           : '';
-      if (text && /^\/?(start|help)$/i.test(text)) return next();
+      if (text && /^\/?(start|help|logout)$/i.test(text)) return next();
 
       const sceneCtx = ctx as Scenes.SceneContext<Scenes.SceneSessionData>;
       if (sceneCtx.scene?.current?.id === 'auth') return next();

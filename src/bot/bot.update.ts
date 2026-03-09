@@ -718,6 +718,36 @@ export class BotUpdate {
     await ctx.reply(msg).catch(() => {});
   }
 
+  @Command('logout')
+  async onLogout(@Ctx() ctx: Context): Promise<void> {
+    const tgId = ctx.from?.id?.toString();
+    if (!tgId) {
+      await ctx.reply('Foydalanuvchi aniqlanmadi.').catch(() => {});
+      return;
+    }
+    const sceneCtx = ctx as Scenes.SceneContext<Scenes.SceneSessionData>;
+    if (sceneCtx.scene) {
+      await sceneCtx.scene.leave().catch(() => {});
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { tg_id: tgId },
+    });
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          last_authenticated_at: null,
+          is_authenticated: false,
+        },
+      });
+    }
+    await ctx
+      .reply(
+        '👋 Siz tizimdan chiqdingiz.\n\nQayta kirish uchun /start bosing.',
+      )
+      .catch(() => {});
+  }
+
   @Start()
   async onStart(@Ctx() ctx: Context): Promise<void> {
     try {
