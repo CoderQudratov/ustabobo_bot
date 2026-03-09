@@ -43,11 +43,14 @@ export default function ClientHistoryPage() {
   const { data, isLoading } = useClientHistory(filters);
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const limit = 20;
+  const limit = 10;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Mijoz tarixi</h1>
+      <div className="mb-5 border-b border-[var(--border)] pb-5">
+        <h1 className="text-xl font-bold text-[var(--text-1)]">Mijoz tarixi</h1>
+        <p className="mt-0.5 text-[13px] text-[var(--text-3)]">Buyurtmalar bo‘yicha qidiruv</p>
+      </div>
 
       {/* Qidiruv */}
       <Card>
@@ -128,7 +131,7 @@ export default function ClientHistoryPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/50">
+                    <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                       <th className="p-3 text-left font-medium">Ism</th>
                       <th className="p-3 text-left font-medium">Telegram</th>
                       <th className="p-3 text-left font-medium">Telefon</th>
@@ -156,7 +159,7 @@ export default function ClientHistoryPage() {
                       </tr>
                     ) : (
                       items.map((c) => (
-                        <tr key={c.client_phone} className="border-b">
+                        <tr key={c.client_phone} className="border-b border-[var(--border)]">
                           <td className="p-3 font-medium">{c.client_name}</td>
                           <td className="p-3 text-muted-foreground">—</td>
                           <td className="p-3">{c.client_phone}</td>
@@ -187,7 +190,7 @@ export default function ClientHistoryPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-2">
                 <span className="text-muted-foreground">
                   Jami: {total} mijoz
                 </span>
@@ -283,10 +286,10 @@ function ClientDetailDialog({
                   Bu mijoz uchun buyurtmalar topilmadi
                 </p>
               ) : (
-                <div className="overflow-x-auto rounded border">
+                <div className="overflow-x-auto rounded border border-[var(--border)]">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
+                      <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                         <th className="p-2 text-left font-medium">Sana</th>
                         <th className="p-2 text-left font-medium">Xizmat</th>
                         <th className="p-2 text-left font-medium">Mashina</th>
@@ -296,7 +299,7 @@ function ClientDetailDialog({
                     </thead>
                     <tbody>
                       {data.orders.map((o) => (
-                        <tr key={o.id} className="border-b">
+                        <tr key={o.id} className="border-b border-[var(--border)]">
                           <td className="p-2">
                             {format(
                               new Date(o.created_at),

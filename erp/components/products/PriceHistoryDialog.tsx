@@ -64,7 +64,7 @@ export function PriceHistoryDialog({
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
+                  <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                     <th className="p-3 text-left font-medium">Sana</th>
                     <th className="p-3 text-right font-medium">Kelgan narx</th>
                     <th className="p-3 text-right font-medium">Sotish narx</th>
@@ -74,7 +74,7 @@ export function PriceHistoryDialog({
                 </thead>
                 <tbody>
                   {items.map((h) => (
-                    <tr key={h.id} className="border-b">
+                    <tr key={h.id} className="border-b border-[var(--border)]">
                       <td className="p-3">
                         {new Date(h.created_at).toLocaleString('uz-UZ', {
                           dateStyle: 'medium',

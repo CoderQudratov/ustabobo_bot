@@ -173,7 +173,7 @@ export default function ProductsPage() {
                 <>
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
+                      <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                         <th className="p-3 text-left">Nomi</th>
                         <th className="p-3 text-right">Kelgan narx</th>
                         <th className="p-3 text-right">Sotish narx</th>
@@ -185,7 +185,7 @@ export default function ProductsPage() {
                     </thead>
                     <tbody>
                       {items.map((p) => (
-                        <tr key={p.id} className="border-b">
+                        <tr key={p.id} className="border-b border-[var(--border)]">
                           <td className="p-3">{p.name}</td>
                           <td className="p-3 text-right">
                             {Number(p.cost_price).toLocaleString('uz-UZ')}
@@ -254,7 +254,7 @@ export default function ProductsPage() {
                       ))}
                     </tbody>
                   </table>
-                  <div className="flex justify-between border-t px-4 py-2">
+                  <div className="flex justify-between border-t border-[var(--border)] px-4 py-2">
                     <span className="text-muted-foreground">Jami: {total}</span>
                     <div className="flex gap-2">
                       <Button

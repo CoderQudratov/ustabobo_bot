@@ -382,7 +382,7 @@ export default function ReportsPage() {
                           formatter={(v) => [formatSom(Number(v ?? 0)), 'Qarz']}
                           content={({ payload }) =>
                             payload?.[0] ? (
-                              <div className="rounded border bg-background px-3 py-2 text-sm shadow">
+                              <div className="rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm shadow">
                                 {payload[0].payload.fullName}: {formatSom(payload[0].value as number)}
                               </div>
                             ) : null
@@ -432,7 +432,7 @@ export default function ReportsPage() {
             <CardContent>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b">
+                  <tr className="border-b border-[var(--border)]">
                     <th className="p-2 text-left">Usta</th>
                     <th className="p-2 text-right">Tushum</th>
                     <th className="p-2 text-right">Haq</th>
@@ -440,7 +440,7 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {(data.master_breakdown ?? []).map((m) => (
-                    <tr key={m.master_id} className="border-b">
+                    <tr key={m.master_id} className="border-b border-[var(--border)]">
                       <td className="p-2">{m.fullname}</td>
                       <td className="p-2 text-right">
                         {m.total_revenue.toLocaleString('uz-UZ')}
@@ -462,14 +462,14 @@ export default function ReportsPage() {
             <CardContent>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b">
+                  <tr className="border-b border-[var(--border)]">
                     <th className="p-2 text-left">Tashkilot</th>
                     <th className="p-2 text-right">Qarz</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(data.organization_debts ?? []).map((o) => (
-                    <tr key={o.id} className="border-b">
+                    <tr key={o.id} className="border-b border-[var(--border)]">
                       <td className="p-2">{o.name}</td>
                       <td className="p-2 text-right">
                         {o.balance_due.toLocaleString('uz-UZ')} so‘m

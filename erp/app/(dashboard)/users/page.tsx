@@ -107,7 +107,7 @@ export default function UsersPage() {
 
   const params = new URLSearchParams();
   params.set('page', String(page));
-  params.set('limit', '20');
+  params.set('limit', '10');
   if (role) params.set('role', role);
   if (isActive === 'true') params.set('is_active', 'true');
   if (isActive === 'false') params.set('is_active', 'false');
@@ -145,7 +145,7 @@ export default function UsersPage() {
     setSearchInput('');
     setPage(1);
   };
-  const limit = 20;
+  const limit = 10;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
   const pageNumbers = (() => {
     const p: number[] = [];

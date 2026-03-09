@@ -37,7 +37,7 @@ function Content() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const limit = 20;
+  const limit = 10;
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');

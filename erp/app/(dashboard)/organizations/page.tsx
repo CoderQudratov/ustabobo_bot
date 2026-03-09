@@ -6,11 +6,12 @@ import { apiGet, apiDelete } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { Eye, Pencil, Plus, Trash2, Building2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { OrgFormDialog } from '@/components/organizations/OrgFormDialog';
 import { formatSom } from '@/lib/dashboard';
 import {
@@ -55,7 +56,7 @@ export default function OrganizationsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['organizations', page],
     queryFn: () =>
-      apiGet<OrganizationsListRes>(`/admin/organizations?page=${page}&limit=20`),
+      apiGet<OrganizationsListRes>(`/admin/organizations?page=${page}&limit=10`),
   });
 
   const deleteMutation = useMutation({
@@ -69,20 +70,41 @@ export default function OrganizationsPage() {
   });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const total = data?.total ?? 0;
   const filteredItems = useMemo(() => {
     if (!search.trim()) return items;
     const q = search.trim().toLowerCase();
     return items.filter((o) => o.name.toLowerCase().includes(q));
   }, [items, search]);
 
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / 10)) : 1;
+  const pageNumbers = (() => {
+    const p: number[] = [];
+    const show = 3;
+    let start = Math.max(1, page - 1);
+    let end = Math.min(totalPages, start + show - 1);
+    if (end - start + 1 < show) start = Math.max(1, end - show + 1);
+    for (let i = start; i <= end; i++) p.push(i);
+    return p;
+  })();
+
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Tashkilotlar</h1>
-        <Button onClick={() => setAddOpen(true)}>Yangi tashkilot</Button>
+    <div className="space-y-5">
+      <div className="mb-5 border-b border-[var(--border)] pb-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-1)]">Tashkilotlar</h1>
+            <p className="mt-0.5 text-[13px] text-[var(--text-3)]">
+              Jami {total} ta tashkilot
+            </p>
+          </div>
+          <Button onClick={() => setAddOpen(true)} className="shrink-0">
+            <Plus className="mr-2 h-4 w-4" />
+            Yangi tashkilot
+          </Button>
+        </div>
       </div>
 
-      {/* Qidiruv — tashkilot nomi bo‘yicha (frontend filter) */}
       <div className="mb-4">
         <Input
           type="search"
@@ -107,111 +129,114 @@ export default function OrganizationsPage() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <Skeleton className="h-64 w-full" />
+            <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-shimmer h-[48px] border-b border-[var(--border)] last:border-b-0"
+                />
+              ))}
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--bg-2)] text-[var(--text-3)]">
+                <Building2 className="h-8 w-8" />
+              </div>
+              <p className="font-semibold text-[var(--text-1)]">Ma&apos;lumot topilmadi</p>
+              <p className="text-sm text-[var(--text-3)]">Qidiruvni o&apos;zgartiring</p>
+            </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="p-3 text-left font-medium">Tashkilot nomi</th>
-                      <th className="p-3 text-left font-medium">Telefon</th>
-                      <th className="p-3 text-left font-medium">Mashinalari soni</th>
-                      <th className="p-3 text-left font-medium">Qarz summasi</th>
-                      <th className="p-3 text-left font-medium">Holati</th>
-                      <th className="p-3 text-right font-medium">Amallar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredItems.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="p-6 text-center text-muted-foreground"
-                        >
-                          {items.length === 0
-                            ? 'Tashkilotlar yo‘q'
-                            : 'Qidiruv bo‘yicha natija topilmadi'}
-                        </td>
+              <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)]">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13.5px]">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
+                        <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Tashkilot nomi</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Telefon</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Mashinalari soni</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Qarz summasi</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Holati</th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-3)]">Amallar</th>
                       </tr>
-                    ) : (
-                      filteredItems.map((o) => (
-                        <tr key={o.id} className="border-b">
-                          <td className="p-3">
+                    </thead>
+                    <tbody>
+                      {filteredItems.map((o) => (
+                        <tr
+                          key={o.id}
+                          className="border-b border-[var(--border)] transition-colors hover:bg-[var(--bg-2)]"
+                        >
+                          <td className="px-4 py-[13px]">
                             <Link
                               href={`/organizations/${o.id}`}
-                              className="font-medium hover:underline"
+                              className="font-medium text-[var(--text-1)] hover:underline"
                             >
                               {o.name}
                             </Link>
                           </td>
-                          <td className="p-3">{o.phone}</td>
-                          <td className="p-3">
-                            {o.vehicle_count != null
-                              ? o.vehicle_count
-                              : '—'}
+                          <td className="px-4 py-[13px] font-mono text-[var(--text-2)]">{o.phone}</td>
+                          <td className="px-4 py-[13px] text-[var(--text-2)]">
+                            {o.vehicle_count != null ? o.vehicle_count : '—'}
                           </td>
-                          <td className="p-3">
+                          <td className="px-4 py-[13px] font-mono font-semibold text-[var(--success)]">
                             {formatSom(Number(o.balance_due))}
                           </td>
-                          <td className="p-3">
-                            <Badge
-                              variant={
-                                o.is_active ? 'default' : 'secondary'
-                              }
-                            >
+                          <td className="px-4 py-[13px]">
+                            <Badge variant={o.is_active ? 'default' : 'secondary'}>
                               {o.is_active ? 'Aktiv' : 'Nofaol'}
                             </Badge>
                           </td>
-                          <td className="p-3 text-right">
-                            <div className="flex flex-wrap justify-end gap-1">
-                              <Button variant="ghost" size="sm" asChild>
-                                <Link href={`/organizations/${o.id}`}>
-                                  Ko‘rish →
+                          <td className="px-4 py-[13px] text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-[30px] w-[30px] rounded-md text-blue-500 hover:bg-blue-500/10" asChild>
+                                <Link href={`/organizations/${o.id}`} title="Ko'rish">
+                                  <Eye className="h-4 w-4" />
                                 </Link>
                               </Button>
-                              <Button variant="ghost" size="sm" asChild>
-                                <Link href={`/organizations/${o.id}`}>
-                                  Tahrirlash
+                              <Button variant="ghost" size="icon" className="h-[30px] w-[30px] rounded-md text-amber-500 hover:bg-amber-500/10" asChild>
+                                <Link href={`/organizations/${o.id}`} title="Tahrirlash">
+                                  <Pencil className="h-4 w-4" />
                                 </Link>
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
+                                size="icon"
+                                className="h-[30px] w-[30px] rounded-md text-red-500 hover:bg-red-500/10"
+                                title="O'chirish"
                                 onClick={() => setDeleteId(o.id)}
                               >
-                                O‘chirish
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
-                <span className="text-muted-foreground">
-                  Jami: {data?.total ?? 0}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-3">
+                <span className="text-sm text-[var(--text-3)]">
+                  Jami: {total}
                   {search.trim() && ` (filtr: ${filteredItems.length})`}
                 </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Oldingi
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="disabled:opacity-40 disabled:cursor-not-allowed">
+                    ← Oldingi
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!data || page * 20 >= data.total}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Keyingi
+                  {pageNumbers.map((n) => (
+                    <Button
+                      key={n}
+                      variant={n === page ? 'default' : 'ghost'}
+                      size="sm"
+                      className={cn('min-w-[2rem]', n === page && 'bg-[var(--accent)] text-white hover:opacity-90')}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </Button>
+                  ))}
+                  <Button variant="ghost" size="sm" disabled={!data || page >= totalPages} onClick={() => setPage((p) => p + 1)} className="disabled:opacity-40 disabled:cursor-not-allowed">
+                    Keyingi →
                   </Button>
                 </div>
               </div>

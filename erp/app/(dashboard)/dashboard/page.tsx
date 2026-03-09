@@ -116,13 +116,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-text-muted">
+        <p className="text-sm text-[var(--text-3)]">
           🔄 1 daqiqada yangilanadi
         </p>
         <Button
           variant="outline"
           size="sm"
-          className="border-border text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+          className="text-[var(--text-2)] hover:bg-[var(--bg-3)]"
           onClick={() =>
             queryClient.refetchQueries({ queryKey: ['dashboard'] })
           }
@@ -139,11 +139,11 @@ export default function DashboardPage() {
           return (
             <Card
               key={card.key}
-              className="border-border bg-surface transition-all duration-200 hover:border-primary hover:shadow-lg hover:shadow-primary-glow animate-fade-in-up"
+              className="animate-fade-in-up transition-all duration-200 hover:shadow-md"
               style={{ animationDelay: `${i * 100}ms` }}
             >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-text-secondary">
+                <CardTitle className="text-sm font-medium text-[var(--text-2)]">
                   {card.title}
                 </CardTitle>
                 <Icon className={`h-5 w-5 ${card.iconColor}`} />
@@ -153,7 +153,7 @@ export default function DashboardPage() {
                   <Skeleton className="h-9 w-24 bg-surface-2 animate-shimmer" />
                 ) : (
                   <>
-                    <div className="font-mono text-3xl font-bold text-text-primary">
+                    <div className="font-mono text-3xl font-bold text-[var(--text-1)]">
                       {card.getValue(dashboard)}
                     </div>
                     {card.trend != null && (
@@ -178,9 +178,9 @@ export default function DashboardPage() {
 
       {/* Grafiklar */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-border bg-surface">
+        <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-text-primary">
+            <CardTitle className="text-[var(--text-1)]">
               Oxirgi 7 kun — buyurtmalar
             </CardTitle>
           </CardHeader>
@@ -253,9 +253,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-surface">
+        <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-text-primary">
+            <CardTitle className="text-[var(--text-1)]">
               Oxirgi 7 kun — tushum (so'm)
             </CardTitle>
           </CardHeader>
@@ -362,17 +362,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Oxirgi buyurtmalar */}
-      <Card className="border-border bg-surface">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="font-heading text-text-primary">
+          <CardTitle className="text-[var(--text-1)]">
             Oxirgi buyurtmalar
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-border text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-            asChild
-          >
+          <Button variant="outline" size="sm" className="text-[var(--text-2)] hover:bg-[var(--bg-3)]" asChild>
             <Link href="/orders">Barchasini ko'rish →</Link>
           </Button>
         </CardHeader>

@@ -72,7 +72,7 @@ function OrderDetailBody({ order }: { order: Order }) {
         <p><strong>Jami:</strong> {Number(order.total_amount).toLocaleString('uz-UZ')} so‘m</p>
       </div>
       {order.car_photo_url && (
-        <div className="h-48 w-full overflow-hidden rounded-md border">
+        <div className="h-48 w-full overflow-hidden rounded-md border border-[var(--border)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={order.car_photo_url} alt="Mashina" className="h-full w-full object-contain" />
         </div>

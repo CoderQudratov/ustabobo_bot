@@ -21,7 +21,7 @@ export function useClientHistory(filters: ClientHistoryFilters) {
   params.set('from', filters.from);
   params.set('to', filters.to);
   params.set('page', String(filters.page));
-  params.set('limit', '20');
+  params.set('limit', '10');
   if (filters.status) params.set('status', filters.status);
   if (filters.search.trim()) params.set('search', filters.search.trim());
 

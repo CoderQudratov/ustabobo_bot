@@ -101,8 +101,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-2)] md:flex">
+      {/* Desktop — to'liq balandlik */}
+      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-2)] md:flex">
         <div className="flex h-full flex-col p-4">
           <div className="shrink-0 px-2 pb-4">
             <div className="text-xl font-bold text-[var(--accent)]">

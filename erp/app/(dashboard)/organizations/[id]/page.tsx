@@ -242,7 +242,7 @@ export default function OrganizationDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
+                  <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                     <th className="p-3 text-left font-medium">Raqam</th>
                     <th className="p-3 text-left font-medium">Model</th>
                     <th className="p-3 text-left font-medium">Oxirgi servis</th>
@@ -252,7 +252,7 @@ export default function OrganizationDetailPage() {
                 </thead>
                 <tbody>
                   {org.vehicles.map((v) => (
-                    <tr key={v.id} className="border-b">
+                    <tr key={v.id} className="border-b border-[var(--border)]">
                       <td className="p-3 font-medium">{v.plate_number}</td>
                       <td className="p-3">{v.model}</td>
                       <td className="p-3">
@@ -316,7 +316,7 @@ export default function OrganizationDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
+                  <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                     <th className="p-3 text-left font-medium">Sana</th>
                     <th className="p-3 text-left font-medium">Xizmat turi</th>
                     <th className="p-3 text-left font-medium">Narx</th>
@@ -411,7 +411,7 @@ function OrderRow({ order }: { order: Order }) {
     order.orderItems?.find((i) => i.item_name)?.item_name ??
     '—';
   return (
-    <tr className="border-b">
+    <tr className="border-b border-[var(--border)]">
       <td className="p-3">
         {new Date(order.created_at).toLocaleDateString('uz-UZ')}
       </td>

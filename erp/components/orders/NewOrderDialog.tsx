@@ -247,7 +247,7 @@ export function NewOrderDialog({
 
           <div className="space-y-2">
             <Label>Xizmatlar</Label>
-            <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-2">
+            <div className="max-h-40 overflow-y-auto rounded-md border border-[var(--border)] p-2 space-y-2">
               {serviceList.map((s) => (
                 <div
                   key={s.id}

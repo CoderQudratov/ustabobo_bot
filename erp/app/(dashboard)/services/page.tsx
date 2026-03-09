@@ -74,16 +74,22 @@ export default function ServicesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Xizmatlar</h1>
-        <Button
-          onClick={() => {
-            setEditService(null);
-            setOpen(true);
-          }}
-        >
-          + Xizmat qo&apos;shish
-        </Button>
+      <div className="mb-5 border-b border-[var(--border)] pb-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[var(--text-1)]">Xizmatlar</h1>
+            <p className="mt-0.5 text-[13px] text-[var(--text-3)]">Jami {data?.total ?? 0} ta xizmat</p>
+          </div>
+          <Button
+            onClick={() => {
+              setEditService(null);
+              setOpen(true);
+            }}
+            className="shrink-0"
+          >
+            + Xizmat qo&apos;shish
+          </Button>
+        </div>
       </div>
 
       {/* Table or empty state */}
@@ -105,7 +111,7 @@ export default function ServicesPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
+                  <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                     <th className="p-3 text-left font-medium">Nomi</th>
                     <th className="p-3 text-right font-medium">Narxi (so&apos;m)</th>
                     <th className="p-3 text-right font-medium">Davomiyligi (min)</th>
@@ -115,7 +121,7 @@ export default function ServicesPage() {
                 </thead>
                 <tbody>
                   {items.map((s) => (
-                    <tr key={s.id} className="border-b">
+                    <tr key={s.id} className="border-b border-[var(--border)]">
                       <td className="p-3 font-medium">{s.name}</td>
                       <td className="p-3 text-right">
                         {priceValue(s).toLocaleString('uz-UZ')} so&apos;m

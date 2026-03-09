@@ -62,7 +62,7 @@ export default function LoginPage() {
       />
 
       <div className="relative z-10 w-full max-w-sm">
-        <div className="rounded-2xl border border-border bg-surface p-10 shadow-xl">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-10 shadow-xl">
           <div className="mb-8 text-center">
             <div className="mb-2 text-3xl">⚙️</div>
             <h1 className="font-heading text-2xl font-bold text-text-primary">
@@ -95,7 +95,7 @@ export default function LoginPage() {
                   id="login"
                   type="text"
                   autoComplete="username"
-                  className="h-11 border-border bg-surface-2 pl-10 text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="h-11 border border-[var(--border-2)] bg-[var(--bg-2)] pl-10 text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
                   {...register('login')}
                 />
               </div>
@@ -116,7 +116,7 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   autoComplete="current-password"
-                  className="h-11 border-border bg-surface-2 pl-10 text-text-primary placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="h-11 border border-[var(--border-2)] bg-[var(--bg-2)] pl-10 text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
                   {...register('password')}
                 />
               </div>

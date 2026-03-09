@@ -26,14 +26,14 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="print:hidden">
+      <div className="print:hidden shrink-0">
         <TopBar />
       </div>
-      <div className="flex flex-1 overflow-hidden">
-        <div className="print:hidden">
+      <div className="flex min-h-0 flex-1">
+        <div className="print:hidden flex h-full min-h-0">
           <Sidebar />
         </div>
-        <main className="flex-1 overflow-auto bg-background p-4 md:p-6 print:bg-white print:p-0">
+        <main className="min-w-0 flex-1 overflow-auto bg-[var(--bg)] p-4 md:p-6 print:bg-white print:p-0">
           {children}
         </main>
       </div>

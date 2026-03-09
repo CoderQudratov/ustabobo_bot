@@ -191,8 +191,8 @@ function Content() {
       {plate && data && (
         <>
           {/* Print header — faqat chop etishda ko'rinadi */}
-          <div className="hidden print:block mb-6 pb-4 border-b">
-            <div className="h-12 w-32 border border-dashed rounded mb-4 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+          <div className="hidden print:block mb-6 pb-4 border-b border-[var(--border)]">
+            <div className="h-12 w-32 border border-dashed border-[var(--border)] rounded mb-4 bg-[var(--bg-2)] flex items-center justify-center text-xs text-muted-foreground">
               Logotip
             </div>
             <h2 className="text-lg font-bold">Mashina servis hisob-varaqi</h2>
