@@ -64,9 +64,6 @@ export default function OrganizationsPage() {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       toast.success('O‘chirildi');
     },
-    onError: (e: Error) => {
-      toast.error(e.message);
-    },
   });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);

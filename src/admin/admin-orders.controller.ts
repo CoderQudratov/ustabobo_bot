@@ -1,10 +1,20 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../../generated/prisma/client';
 import { AdminService } from './admin.service';
 import { AdminOrdersQueryDto } from './dto/orders-query.dto';
+import { AdminCreateOrderDto } from './dto/create-order.dto';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,14 +33,28 @@ export class AdminOrdersController {
         to: query.to,
         master_id: query.master_id,
         organization_id: query.organization_id,
+        search: query.search,
       },
       page,
       limit,
     );
   }
 
+  @Post()
+  create(@Body() dto: AdminCreateOrderDto) {
+    return this.adminService.createOrder(dto);
+  }
+
   @Get(':id')
   getOne(@Param('id') id: string) {
     return this.adminService.getOrderById(id);
+  }
+
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    return this.adminService.updateOrderStatus(id, body.status as any);
   }
 }

@@ -2,37 +2,44 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { getToken } from '@/lib/auth';
 
 export function useAuth() {
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const token = mounted ? getToken() : null;
-  const isLoginPage = pathname === '/login';
-
   useEffect(() => {
-    if (!mounted) return;
-    if (!token && !isLoginPage) {
-      router.replace('/login');
-    }
-  }, [mounted, token, isLoginPage, router]);
+    if (!mounted || pathname === '/login') return;
 
-  return { token, isAuthenticated: !!token };
+    fetch('/api/auth/status', { credentials: 'include' })
+      .then((r) => {
+        setIsAuthenticated(r.ok);
+        if (!r.ok) {
+          router.replace('/login');
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        router.replace('/login');
+      });
+  }, [mounted, pathname, router]);
+
+  const isLoading = mounted && pathname !== '/login' && isAuthenticated === null;
+
+  return {
+    isAuthenticated: isAuthenticated === true,
+    isLoading,
+  };
 }
 
-export function getLoginFromToken(): string | null {
-  const t = getToken();
-  if (!t) return null;
-  try {
-    const payload = JSON.parse(atob(t.split('.')[1] ?? ''));
-    return payload.login ?? null;
-  } catch {
-    return null;
-  }
+export async function getLoginFromToken(): Promise<string | null> {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.login ?? null;
 }

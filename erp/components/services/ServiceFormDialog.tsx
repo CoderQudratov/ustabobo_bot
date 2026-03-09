@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPost, apiPatch } from '@/lib/api';
-import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,12 +30,10 @@ export function ServiceFormDialog({
   const createMu = useMutation({
     mutationFn: (d: z.infer<typeof schema>) => apiPost('/admin/services', d),
     onSuccess,
-    onError: (e: Error) => toast.error(e.message),
   });
   const updateMu = useMutation({
     mutationFn: (d: z.infer<typeof schema>) => apiPatch(`/admin/services/${service!.id}`, d),
     onSuccess,
-    onError: (e: Error) => toast.error(e.message),
   });
   const isEdit = !!service;
   const pending = createMu.isPending || updateMu.isPending;

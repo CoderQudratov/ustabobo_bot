@@ -68,10 +68,11 @@ model User {
   locked_until      DateTime? @db.Timestamptz(6)
   pin_fail_count    Int       @default(0)
 
-  ordersAsMaster   Order[]        @relation("OrderMaster")
-  ordersAsDriver   Order[]        @relation("OrderDriver")
-  orderEvents      OrderEvent[]
-  transactions     Transaction[]
+  ordersAsMaster        Order[]               @relation("OrderMaster")
+  ordersAsDriver        Order[]               @relation("OrderDriver")
+  orderEvents           OrderEvent[]
+  transactions          Transaction[]
+  productPriceHistories ProductPriceHistory[]
 }
 
 model Transaction {
@@ -123,7 +124,21 @@ model Product {
   is_active   Boolean  @default(true)
   created_at  DateTime @default(now())
 
-  orderItems OrderItem[]
+  orderItems       OrderItem[]
+  priceHistories   ProductPriceHistory[]
+}
+
+model ProductPriceHistory {
+  id               String   @id @default(uuid()) @db.Uuid
+  product_id       String   @db.Uuid
+  cost_price       Decimal  @db.Decimal(12, 2)
+  sale_price       Decimal  @db.Decimal(12, 2)
+  changed_by_id    String?  @db.Uuid
+  note             String?
+  created_at       DateTime @default(now())
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  changedBy User? @relation(fields: [changed_by_id], references: [id], onDelete: SetNull)
 }
 
 model Service {

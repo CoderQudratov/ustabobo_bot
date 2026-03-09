@@ -22,4 +22,8 @@ export class AdminOrdersQueryDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
   organization_id?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

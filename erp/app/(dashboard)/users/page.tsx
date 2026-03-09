@@ -100,7 +100,6 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('O‘zgartirildi');
     },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   return (

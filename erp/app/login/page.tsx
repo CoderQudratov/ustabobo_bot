@@ -5,12 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { setToken } from '@/lib/auth';
-import { apiPost } from '@/lib/api';
+import { login } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { toast } from 'sonner';
 
 const schema = z.object({
@@ -23,6 +28,7 @@ type FormData = z.infer<typeof schema>;
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -34,16 +40,15 @@ export default function LoginPage() {
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await apiPost<{ access_token: string }>('/admin/auth/login', {
-        login: data.login,
-        password: data.password,
-      });
-      setToken(res.access_token);
+      await login(data.login, data.password);
       toast.success('Kirish muvaffaqiyatli');
       router.replace('/dashboard');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Login yoki parol noto‘g‘ri');
+      const msg = e instanceof Error ? e.message : 'Login yoki parol noto‘g‘ri';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -58,6 +63,9 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="login">Login</Label>
               <Input
@@ -67,7 +75,9 @@ export default function LoginPage() {
                 {...register('login')}
               />
               {errors.login && (
-                <p className="text-sm text-destructive">{errors.login.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.login.message}
+                </p>
               )}
             </div>
             <div className="space-y-2">
@@ -79,7 +89,9 @@ export default function LoginPage() {
                 {...register('password')}
               />
               {errors.password && (
-                <p className="text-sm text-destructive">{errors.password.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
               )}
             </div>
             <Button type="submit" disabled={loading}>

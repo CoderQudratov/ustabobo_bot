@@ -1,9 +1,20 @@
+/** Oxirgi buyurtma (dashboard recent_orders) */
+export interface RecentOrderItem {
+  id: string;
+  client_name: string;
+  service_name: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+}
+
 /** Dashboard API response (GET /admin/dashboard) */
 export interface DashboardRes {
   today_orders: number;
   today_revenue: number;
   active_orders: number;
   low_stock_count: number;
+  recent_orders: RecentOrderItem[];
 }
 
 /** One day in weekly orders (GET /admin/dashboard/weekly-orders) */

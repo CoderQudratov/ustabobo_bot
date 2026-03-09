@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -458,7 +459,6 @@ function AddVehicleDialog({
         model: d.model,
       }),
     onSuccess,
-    onError: (e: Error) => toast.error(e.message),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -538,7 +538,6 @@ function EditOrgDialog({
     mutationFn: (d: z.infer<typeof editOrgSchema>) =>
       apiPatch(`/admin/organizations/${org.id}`, d),
     onSuccess,
-    onError: (e: Error) => toast.error(e.message),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -631,7 +630,6 @@ function PaymentDialog({
         balance_due: Math.max(0, currentDebt - amount),
       }),
     onSuccess,
-    onError: (e: Error) => toast.error(e.message),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -688,7 +686,7 @@ function DeleteOrgAction({
   const mutation = useMutation({
     mutationFn: () => apiDelete(`/admin/organizations/${orgId}`),
     onSuccess: onDone,
-    onError: (e: Error) => onError(e.message),
+    onError: (e: Error) => onError(getErrorMessage(e)),
   });
   return (
     <AlertDialogAction

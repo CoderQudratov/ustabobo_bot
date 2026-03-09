@@ -13,7 +13,13 @@ export interface JwtPayload {
 
 export interface TokenResponse {
   access_token: string;
+  refresh_token: string;
   expires_in: number;
+}
+
+export interface RefreshPayload {
+  sub: string;
+  type: 'refresh';
 }
 
 @Injectable()
@@ -53,6 +59,31 @@ export class AuthService {
     };
     const expiresIn = 3600; // 1 hour
     const access_token = this.jwtService.sign(payload, { expiresIn });
+    const refreshPayload: RefreshPayload = { sub: user.id, type: 'refresh' };
+    const refresh_token = this.jwtService.sign(refreshPayload, {
+      expiresIn: 604800,
+    }); // 7 days
+    return { access_token, refresh_token, expires_in: expiresIn };
+  }
+
+  async refresh(refreshToken: string): Promise<Omit<TokenResponse, 'refresh_token'>> {
+    const payload = this.jwtService.verify<RefreshPayload>(refreshToken);
+    if (payload?.type !== 'refresh' || !payload.sub) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub, is_active: true },
+    });
+    if (!user || user.role !== 'boss') {
+      throw new UnauthorizedException('User not found or ERP access denied');
+    }
+    const jwtPayload: JwtPayload = {
+      sub: user.id,
+      login: user.login,
+      role: user.role as Role,
+    };
+    const expiresIn = 3600;
+    const access_token = this.jwtService.sign(jwtPayload, { expiresIn });
     return { access_token, expires_in: expiresIn };
   }
 

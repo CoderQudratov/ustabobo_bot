@@ -18,6 +18,11 @@ import { AdminService } from './admin.service';
 export class AdminReportsController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('vehicles/by-plate/:plateNumber')
+  getVehicleByPlate(@Param('plateNumber') plateNumber: string) {
+    return this.adminService.getVehicleByPlate(plateNumber);
+  }
+
   @Get('vehicles/:id/history')
   getVehicleHistory(
     @Param('id') id: string,
@@ -30,6 +35,40 @@ export class AdminReportsController {
       Math.max(1, parseInt(String(limit), 10) || 20),
     );
     return this.adminService.getVehicleHistory(id, pageNum, limitNum);
+  }
+
+  @Get('clients/individuals')
+  getIndividualClients(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+    return this.adminService.getIndividualClients({
+      from,
+      to,
+      status,
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
+  }
+
+  @Get('clients/individuals/orders')
+  getClientOrders(
+    @Query('phone') phone: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('status') status?: string,
+  ) {
+    if (!phone?.trim()) {
+      throw new BadRequestException('phone is required');
+    }
+    return this.adminService.getClientOrders(phone, { from, to, status });
   }
 
   @Get('clients/history')

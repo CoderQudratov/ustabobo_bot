@@ -13,6 +13,7 @@ import {
   Role,
   PaymentType,
 } from '../../generated/prisma/client';
+import type { Prisma } from '../../generated/prisma/client';
 import { AdminCreateUserDto } from './dto/create-user.dto';
 import { AdminUpdateUserDto } from './dto/update-user.dto';
 import { AdminCreateOrganizationDto } from './dto/create-organization.dto';
@@ -23,6 +24,9 @@ import { AdminCreateServiceDto } from './dto/create-service.dto';
 import { AdminUpdateServiceDto } from './dto/update-service.dto';
 import { AdminCreateProductDto } from './dto/create-product.dto';
 import { AdminUpdateProductDto } from './dto/update-product.dto';
+import { AdminStockInDto } from './dto/stock-in.dto';
+import { AdminCreateOrderDto } from './dto/create-order.dto';
+import { calculateOrderTotal, DELIVERY_FEE } from '../orders/price-calculator';
 
 const orderInclude = {
   master: { select: { id: true, fullname: true, phone: true, username: true } },
@@ -292,7 +296,7 @@ export class AdminService {
 
   // ─── Products ──────────────────────────────────────────────────────────────
   async createProduct(dto: AdminCreateProductDto) {
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: {
         name: dto.name,
         cost_price: dto.cost_price,
@@ -301,17 +305,40 @@ export class AdminService {
         min_limit: dto.min_limit,
       },
     });
+    await this.prisma.productPriceHistory.create({
+      data: {
+        product_id: product.id,
+        cost_price: product.cost_price,
+        sale_price: product.sale_price,
+        note: 'Yaratildi',
+      },
+    });
+    return product;
   }
 
-  async getProducts(page = 1, limit = 50) {
+  async getProducts(
+    page = 1,
+    limit = 50,
+    opts?: { sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count'; sortOrder?: 'asc' | 'desc' },
+  ) {
+    const orderBy =
+      opts?.sortBy === 'cost_price'
+        ? { cost_price: opts.sortOrder ?? 'asc' }
+        : opts?.sortBy === 'sale_price'
+          ? { sale_price: opts.sortOrder ?? 'asc' }
+          : opts?.sortBy === 'stock_count'
+            ? { stock_count: opts.sortOrder ?? 'asc' }
+            : { name: opts?.sortOrder ?? 'asc' };
+
+    const where = { is_active: true };
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
-        where: { is_active: true },
+        where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { name: 'asc' },
+        orderBy,
       }),
-      this.prisma.product.count({ where: { is_active: true } }),
+      this.prisma.product.count({ where }),
     ]);
     const itemsWithFlag = items.map((p) => ({
       ...p,
@@ -337,7 +364,7 @@ export class AdminService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [todayOrders, todayRevenue, activeOrders, lowStockResult] =
+    const [todayOrders, todayRevenue, activeOrders, lowStockResult, recentOrders] =
       await Promise.all([
         this.prisma.order.count({
           where: { created_at: { gte: today, lt: tomorrow } },
@@ -357,24 +384,83 @@ export class AdminService {
         this.prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(*)::int as count FROM "Product" WHERE stock_count <= min_limit
         `,
+        this.prisma.order.findMany({
+          take: 5,
+          orderBy: { created_at: 'desc' },
+          select: {
+            id: true,
+            client_name: true,
+            total_amount: true,
+            status: true,
+            created_at: true,
+            orderItems: {
+              select: {
+                item_name: true,
+                service: { select: { name: true } },
+              },
+            },
+          },
+        }),
       ]);
+
+    const recent = recentOrders.map((o) => {
+      const withService = o.orderItems.find(
+        (i) => (i as { service?: { name: string } }).service,
+      ) as { item_name: string | null; service: { name: string } } | undefined;
+      const fallback = o.orderItems[0] as
+        | { item_name: string | null }
+        | undefined;
+      const serviceName =
+        withService?.service?.name ?? fallback?.item_name ?? '—';
+      return {
+        id: o.id,
+        client_name: o.client_name,
+        service_name: serviceName,
+        total_amount: Number(o.total_amount),
+        status: o.status,
+        created_at: o.created_at,
+      };
+    });
 
     return {
       today_orders: todayOrders,
       today_revenue: Number(todayRevenue._sum.total_amount ?? 0),
       active_orders: activeOrders,
       low_stock_count: lowStockResult[0]?.count ?? 0,
+      recent_orders: recent,
     };
   }
 
-  async updateProduct(id: string, dto: AdminUpdateProductDto) {
+  async updateProduct(
+    id: string,
+    dto: AdminUpdateProductDto,
+    changedByUserId?: string,
+  ) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
-    return this.prisma.product.update({
+
+    const priceChanged =
+      (dto.cost_price != null && Number(dto.cost_price) !== Number(product.cost_price)) ||
+      (dto.sale_price != null && Number(dto.sale_price) !== Number(product.sale_price));
+
+    const updated = await this.prisma.product.update({
       where: { id },
       data: dto,
     });
+
+    if (priceChanged) {
+      await this.prisma.productPriceHistory.create({
+        data: {
+          product_id: id,
+          cost_price: updated.cost_price,
+          sale_price: updated.sale_price,
+          changed_by_id: changedByUserId ?? null,
+          note: 'Tahrirlash',
+        },
+      });
+    }
+    return updated;
   }
 
   async toggleProductActive(id: string) {
@@ -387,7 +473,82 @@ export class AdminService {
     });
   }
 
-  // ─── Orders (read-only) ────────────────────────────────────────────────────
+  async deleteProduct(id: string) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product)
+      throw new NotFoundException(`Product with id "${id}" not found`);
+    await this.prisma.product.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  async stockIn(
+    productId: string,
+    dto: AdminStockInDto,
+    changedByUserId?: string,
+  ) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product)
+      throw new NotFoundException(`Product with id "${productId}" not found`);
+
+    const newStock = product.stock_count + dto.quantity;
+    const costPrice =
+      dto.price_per_unit != null ? dto.price_per_unit : Number(product.cost_price);
+    const salePrice = Number(product.sale_price);
+
+    await this.prisma.$transaction([
+      this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          stock_count: newStock,
+          cost_price: costPrice,
+        },
+      }),
+      this.prisma.productPriceHistory.create({
+        data: {
+          product_id: productId,
+          cost_price: costPrice,
+          sale_price: salePrice,
+          changed_by_id: changedByUserId ?? null,
+          note: dto.note ?? null,
+        },
+      }),
+    ]);
+
+    return this.prisma.product.findUnique({ where: { id: productId } });
+  }
+
+  async getProductPriceHistory(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product)
+      throw new NotFoundException(`Product with id "${productId}" not found`);
+
+    const items = await this.prisma.productPriceHistory.findMany({
+      where: { product_id: productId },
+      orderBy: { created_at: 'desc' },
+      include: {
+        changedBy: { select: { id: true, fullname: true } },
+      },
+    });
+
+    return {
+      items: items.map((h) => ({
+        id: h.id,
+        cost_price: Number(h.cost_price),
+        sale_price: Number(h.sale_price),
+        created_at: h.created_at,
+        changed_by: h.changedBy
+          ? { id: h.changedBy.id, fullname: h.changedBy.fullname }
+          : null,
+        note: h.note,
+      })),
+    };
+  }
+
+  // ─── Orders ─────────────────────────────────────────────────────────────────
   async getOrders(
     filters: {
       status?: string;
@@ -395,18 +556,22 @@ export class AdminService {
       to?: string;
       master_id?: string;
       organization_id?: string;
+      search?: string;
     },
     page = 1,
     limit = 20,
   ) {
-    const where: {
-      status?: OrderStatus;
-      created_at?: { gte?: Date; lte?: Date };
-      master_id?: string;
-      organization_id?: string;
-    } = {};
+    const where: Prisma.OrderWhereInput = {};
 
-    if (filters.status) where.status = filters.status as OrderStatus;
+    if (filters.status) {
+      if (filters.status === 'pending') {
+        where.status = {
+          notIn: [OrderStatus.completed, OrderStatus.cancelled],
+        };
+      } else {
+        where.status = filters.status as OrderStatus;
+      }
+    }
     if (filters.master_id) where.master_id = filters.master_id;
     if (filters.organization_id)
       where.organization_id = filters.organization_id;
@@ -428,6 +593,14 @@ export class AdminService {
       }
     }
 
+    if (filters.search?.trim()) {
+      const q = filters.search.trim();
+      where.OR = [
+        { client_name: { contains: q, mode: 'insensitive' } },
+        { client_phone: { contains: q } },
+      ];
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -441,6 +614,185 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
+  async updateOrderStatus(orderId: string, status: OrderStatus) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order "${orderId}" not found`);
+    }
+    const updateData: { status: OrderStatus; completed_at?: Date } = {
+      status,
+    };
+    if (status === 'completed') {
+      updateData.completed_at = new Date();
+    }
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: updateData,
+      include: orderInclude,
+    });
+  }
+
+  async createOrder(dto: AdminCreateOrderDto) {
+    const serviceIds = dto.service_ids ?? [];
+    const products = dto.products ?? [];
+    const manualProducts = dto.manual_products ?? [];
+
+    if (
+      serviceIds.length === 0 &&
+      products.length === 0 &&
+      manualProducts.length === 0
+    ) {
+      throw new BadRequestException(
+        'Kamida bitta xizmat, mahsulot yoki qo\'lda kiritilgan mahsulot kerak',
+      );
+    }
+
+    const master = await this.prisma.user.findFirst({
+      where: { id: dto.master_id, role: Role.master, is_active: true },
+    });
+    if (!master) {
+      throw new BadRequestException('Usta topilmadi');
+    }
+
+    if (dto.organization_id && dto.vehicle_id) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: dto.vehicle_id, org_id: dto.organization_id },
+      });
+      if (!vehicle) {
+        throw new BadRequestException(
+          'Mashina ushbu tashkilotga tegishli emas',
+        );
+      }
+    } else if (dto.organization_id || dto.vehicle_id) {
+      throw new BadRequestException(
+        'organization_id va vehicle_id birga berilishi kerak',
+      );
+    }
+
+    const [services, productRecords] = await Promise.all([
+      serviceIds.length > 0
+        ? this.prisma.service.findMany({
+            where: { id: { in: serviceIds } },
+          })
+        : [],
+      products.length > 0
+        ? this.prisma.product.findMany({
+            where: {
+              id: { in: products.map((p) => p.product_id) },
+            },
+          })
+        : [],
+    ]);
+
+    if (services.length !== serviceIds.length) {
+      const foundIds = new Set(services.map((s) => s.id));
+      const missing = serviceIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(`Xizmatlar topilmadi: ${missing.join(', ')}`);
+    }
+    const requiredProductIds = [...new Set(products.map((p) => p.product_id))];
+    if (productRecords.length !== requiredProductIds.length) {
+      const foundIds = new Set(productRecords.map((p) => p.id));
+      const missing = requiredProductIds.filter((id) => !foundIds.has(id));
+      if (missing.length) {
+        throw new BadRequestException(`Mahsulotlar topilmadi: ${missing.join(', ')}`);
+      }
+    }
+
+    const servicePriceMap = new Map<string, number>(
+      services.map((s) => [s.id, Number(s.price)] as [string, number]),
+    );
+    const productPriceMap = new Map<string, number>(
+      productRecords.map(
+        (p) => [p.id, Number(p.sale_price)] as [string, number],
+      ),
+    );
+
+    const itemData: Array<{
+      order_id: string;
+      item_type: OrderItemType;
+      product_id?: string;
+      service_id?: string;
+      item_name?: string;
+      quantity: number;
+      price_at_time: number;
+    }> = [];
+
+    for (const serviceId of serviceIds) {
+      const price = Number(servicePriceMap.get(serviceId) ?? 0);
+      itemData.push({
+        order_id: '',
+        item_type: OrderItemType.service,
+        service_id: serviceId,
+        quantity: 1,
+        price_at_time: price,
+      });
+    }
+    for (const p of products) {
+      const price = Number(productPriceMap.get(p.product_id) ?? 0);
+      itemData.push({
+        order_id: '',
+        item_type: OrderItemType.product,
+        product_id: p.product_id,
+        quantity: p.quantity,
+        price_at_time: price,
+      });
+    }
+    for (const mp of manualProducts) {
+      itemData.push({
+        order_id: '',
+        item_type: OrderItemType.manual_product,
+        item_name: mp.name,
+        quantity: mp.quantity,
+        price_at_time: Number(mp.price),
+      });
+    }
+
+    const orderItemsForTotal = itemData.map((d) => ({
+      item_type: d.item_type,
+      price_at_time: d.price_at_time,
+      quantity: d.quantity,
+    }));
+    const totalAmount = calculateOrderTotal(orderItemsForTotal, dto.delivery_needed);
+
+    const order = await this.prisma.order.create({
+      data: {
+        master_id: dto.master_id,
+        organization_id: dto.organization_id ?? null,
+        vehicle_id: dto.vehicle_id ?? null,
+        client_name: dto.client_name,
+        client_phone: dto.client_phone,
+        car_number: dto.car_number,
+        car_model: dto.car_model ?? null,
+        delivery_needed: dto.delivery_needed,
+        status: OrderStatus.draft,
+        total_amount: totalAmount,
+      },
+    });
+
+    for (const d of itemData) {
+      d.order_id = order.id;
+    }
+
+    await this.prisma.orderItem.createMany({
+      data: itemData.map((d) => ({
+        order_id: d.order_id,
+        item_type: d.item_type,
+        product_id: d.product_id,
+        service_id: d.service_id,
+        item_name: d.item_name,
+        quantity: d.quantity,
+        price_at_time: Number(d.price_at_time),
+      })),
+    });
+
+    return this.prisma.order.findUnique({
+      where: { id: order.id },
+      include: orderInclude,
+    });
+  }
+
   async getOrderById(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
@@ -448,6 +800,24 @@ export class AdminService {
     });
     if (!order) throw new NotFoundException(`Order with id "${id}" not found`);
     return order;
+  }
+
+  async getVehicleByPlate(plateNumber: string) {
+    const normalized = plateNumber.trim().replace(/\s+/g, ' ').toUpperCase();
+    if (!normalized) {
+      throw new NotFoundException('Davlat raqami kiriting');
+    }
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: {
+        is_active: true,
+        plate_number: { equals: normalized, mode: 'insensitive' },
+      },
+      include: { organization: { select: { name: true } } },
+    });
+    if (!vehicle) {
+      throw new NotFoundException(`Mashina "${plateNumber}" topilmadi`);
+    }
+    return vehicle;
   }
 
   async getVehicleHistory(vehicleId: string, page = 1, limit = 20) {
@@ -458,9 +828,10 @@ export class AdminService {
     if (!vehicle) {
       throw new NotFoundException('Mashina topilmadi');
     }
-    const [orders, total] = await Promise.all([
+    const where = { vehicle_id: vehicleId };
+    const [orders, total, aggregate, lastOrder] = await Promise.all([
       this.prisma.order.findMany({
-        where: { vehicle_id: vehicleId },
+        where,
         include: {
           master: { select: { id: true, fullname: true, phone: true } },
           driver: { select: { id: true, fullname: true } },
@@ -475,14 +846,53 @@ export class AdminService {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.order.count({ where: { vehicle_id: vehicleId } }),
+      this.prisma.order.count({ where }),
+      this.prisma.order.aggregate({
+        where: { ...where, status: 'completed' },
+        _sum: { total_amount: true },
+      }),
+      this.prisma.order.findFirst({
+        where,
+        orderBy: { created_at: 'desc' },
+        select: { created_at: true, completed_at: true },
+      }),
     ]);
+
+    const totalSpent = aggregate._sum.total_amount
+      ? Number(aggregate._sum.total_amount)
+      : 0;
+    const lastServiceDate = lastOrder
+      ? (lastOrder.completed_at ?? lastOrder.created_at)
+      : null;
+
+    const serviceCounts = new Map<string, number>();
+    const allOrderItems = await this.prisma.orderItem.findMany({
+      where: { order: { vehicle_id: vehicleId } },
+      include: { service: { select: { name: true } } },
+    });
+    for (const item of allOrderItems) {
+      if (item.service?.name) {
+        serviceCounts.set(
+          item.service.name,
+          (serviceCounts.get(item.service.name) ?? 0) + (item.quantity || 1),
+        );
+      }
+    }
+    const mostUsedService =
+      [...serviceCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
     return {
       vehicle: {
         id: vehicle.id,
         plate_number: vehicle.plate_number,
         model: vehicle.model,
         organization: vehicle.organization?.name ?? null,
+      },
+      stats: {
+        total_services: total,
+        total_spent: totalSpent,
+        last_service_date: lastServiceDate?.toISOString() ?? null,
+        most_used_service: mostUsedService,
       },
       orders,
       total,
@@ -513,6 +923,175 @@ export class AdminService {
       include: { organization: { select: { name: true } } },
       orderBy: { plate_number: 'asc' },
     });
+  }
+
+  async getIndividualClients(filters: {
+    from?: string;
+    to?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { from, to, status, search, page = 1, limit = 20 } = filters;
+    const where: {
+      organization_id: null;
+      created_at?: { gte?: Date; lte?: Date };
+      status?: OrderStatus;
+      OR?: Array<{ client_name?: object; client_phone?: object }>;
+    } = { organization_id: null };
+
+    if (from || to) {
+      where.created_at = {};
+      if (from) {
+        const d = new Date(from);
+        if (!Number.isNaN(d.getTime())) where.created_at.gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          where.created_at.lte = d;
+        }
+      }
+    }
+    if (status) where.status = status as OrderStatus;
+    if (search?.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { client_name: { contains: q, mode: 'insensitive' } },
+        { client_phone: { contains: q } },
+      ];
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: {
+        client_phone: true,
+        client_name: true,
+        total_amount: true,
+        status: true,
+        created_at: true,
+        completed_at: true,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const clientMap = new Map<
+      string,
+      {
+        client_phone: string;
+        client_name: string;
+        total_orders: number;
+        total_spent: number;
+        last_activity: Date;
+      }
+    >();
+
+    for (const o of orders) {
+      const key = o.client_phone;
+      if (!clientMap.has(key)) {
+        clientMap.set(key, {
+          client_phone: o.client_phone,
+          client_name: o.client_name,
+          total_orders: 0,
+          total_spent: 0,
+          last_activity: o.completed_at
+            ? new Date(o.completed_at)
+            : new Date(o.created_at),
+        });
+      }
+      const c = clientMap.get(key)!;
+      c.total_orders++;
+      if (o.status === 'completed') {
+        c.total_spent += Number(o.total_amount);
+      }
+      const act = o.completed_at
+        ? new Date(o.completed_at)
+        : new Date(o.created_at);
+      if (act > c.last_activity) c.last_activity = act;
+    }
+
+    const clients = [...clientMap.values()].sort(
+      (a, b) => b.last_activity.getTime() - a.last_activity.getTime(),
+    );
+    const total = clients.length;
+    const start = (page - 1) * limit;
+    const items = clients.slice(start, start + limit);
+
+    return {
+      items: items.map((c) => ({
+        client_phone: c.client_phone,
+        client_name: c.client_name,
+        total_orders: c.total_orders,
+        total_spent: c.total_spent,
+        last_activity: c.last_activity.toISOString(),
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async getClientOrders(clientPhone: string, filters?: { from?: string; to?: string; status?: string }) {
+    const where: {
+      organization_id: null;
+      client_phone: string;
+      created_at?: { gte?: Date; lte?: Date };
+      status?: OrderStatus;
+    } = { organization_id: null, client_phone: clientPhone };
+
+    if (filters?.from || filters?.to) {
+      where.created_at = {};
+      if (filters.from) {
+        const d = new Date(filters.from);
+        if (!Number.isNaN(d.getTime())) where.created_at.gte = d;
+      }
+      if (filters.to) {
+        const d = new Date(filters.to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          where.created_at.lte = d;
+        }
+      }
+    }
+    if (filters?.status) where.status = filters.status as OrderStatus;
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      include: {
+        master: { select: { fullname: true } },
+        orderItems: {
+          include: { service: { select: { name: true } } },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const totalSpent = orders
+      .filter((o) => o.status === 'completed')
+      .reduce((s, o) => s + Number(o.total_amount), 0);
+
+    return {
+      client: {
+        client_phone: clientPhone,
+        client_name: orders[0]?.client_name ?? '',
+        total_orders: orders.length,
+        total_spent: totalSpent,
+      },
+      orders: orders.map((o) => ({
+        id: o.id,
+        created_at: o.created_at,
+        completed_at: o.completed_at,
+        status: o.status,
+        total_amount: Number(o.total_amount),
+        car_number: o.car_number,
+        car_model: o.car_model,
+        service_name:
+          (o.orderItems.find((i) => (i as { service?: { name: string } }).service) as { service: { name: string } } | undefined)
+            ?.service?.name ?? '—',
+      })),
+    };
   }
 
   async getClientsHistory(query: {
@@ -745,8 +1324,21 @@ export class AdminService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
+    const dailyMap = new Map<string, number>();
+    for (const order of completedOrders) {
+      const d = order.completed_at
+        ? new Date(order.completed_at).toISOString().slice(0, 10)
+        : '';
+      if (!d) continue;
+      dailyMap.set(d, (dailyMap.get(d) ?? 0) + Number(order.total_amount));
+    }
+    const daily_revenue = [...dailyMap.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, revenue]) => ({ date, revenue }));
+
     return {
       period: { from: dateFrom, to: dateTo },
+      daily_revenue,
       summary: {
         total_orders: totalOrders,
         total_revenue: totalRevenue,

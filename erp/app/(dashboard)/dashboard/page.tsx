@@ -1,9 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { apiGet } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import {
   BarChart,
   Bar,
@@ -20,6 +23,8 @@ import {
 } from 'recharts';
 import type { DashboardRes } from '@/lib/dashboard';
 import { formatSom } from '@/lib/dashboard';
+import { orderStatusLabel } from '@/lib/types';
+import type { OrderStatus } from '@/lib/types';
 import {
   useWeeklyOrders,
   useWeeklyRevenue,
@@ -30,6 +35,8 @@ function useDashboard() {
   return useQuery({
     queryKey: ['dashboard'],
     queryFn: () => apiGet<DashboardRes>('/admin/dashboard'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -64,16 +71,32 @@ function ChartError({ message }: { message: string }) {
 }
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
   const { data: dashboard, isLoading: dashLoading } = useDashboard();
   const weeklyOrders = useWeeklyOrders();
   const weeklyRevenue = useWeeklyRevenue();
   const orderStatusPie = useOrderStatusPie();
 
   const loading = dashLoading;
+  const recentOrders = dashboard?.recent_orders ?? [];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>🔄 1 daqiqada yangilanadi</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              queryClient.refetchQueries({ queryKey: ['dashboard'] })
+            }
+          >
+            Yangilash
+          </Button>
+        </div>
+      </div>
 
       {/* 4 karta */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -144,6 +167,65 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Oxirgi buyurtmalar */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Oxirgi buyurtmalar</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/orders">Barchasini ko‘rish →</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : recentOrders.length === 0 ? (
+            <p className="text-muted-foreground">Buyurtmalar yo‘q</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="p-3 text-left font-medium">Buyurtma №</th>
+                    <th className="p-3 text-left font-medium">Mijoz</th>
+                    <th className="p-3 text-left font-medium">Xizmat</th>
+                    <th className="p-3 text-right font-medium">Summa</th>
+                    <th className="p-3 text-left font-medium">Holati</th>
+                    <th className="p-3 text-left font-medium">Vaqt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOrders.map((o) => (
+                    <tr key={o.id} className="border-b">
+                      <td className="p-3 font-mono text-xs">{o.id.slice(0, 8)}</td>
+                      <td className="p-3">{o.client_name}</td>
+                      <td className="p-3">{o.service_name}</td>
+                      <td className="p-3 text-right">
+                        {formatSom(o.total_amount)}
+                      </td>
+                      <td className="p-3">
+                        <Badge
+                          variant={
+                            o.status === 'completed' ? 'default' : 'secondary'
+                          }
+                        >
+                          {orderStatusLabel(o.status as OrderStatus)}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {new Date(o.created_at).toLocaleString('uz-UZ', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Diagrammalar */}
       <div className="grid gap-6 lg:grid-cols-2">

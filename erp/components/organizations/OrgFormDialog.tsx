@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPost } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,7 @@ export function OrgFormDialog({ onSuccess, onCancel }: { onSuccess: () => void; 
   const mutation = useMutation({
     mutationFn: (d: FormData) => apiPost('/admin/organizations', d),
     onSuccess,
-    onError: (e: Error) => form.setError('root', { message: e.message }),
+    onError: (e: Error) => form.setError('root', { message: getErrorMessage(e) }),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
