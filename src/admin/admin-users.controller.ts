@@ -14,17 +14,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../../generated/prisma/client';
-import { AdminService } from './admin.service';
+import { AdminService, AdminRequestUser } from './admin.service';
 import { AdminCreateUserDto } from './dto/create-user.dto';
 import { AdminUpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from './dto/pagination.dto';
-
-interface JwtUser {
-  id: string;
-  login: string;
-  role: Role;
-  fullname: string;
-}
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,8 +26,8 @@ export class AdminUsersController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post()
-  create(@Body() dto: AdminCreateUserDto) {
-    return this.adminService.createUser(dto);
+  create(@Body() dto: AdminCreateUserDto, @Req() req: Request & { user: AdminRequestUser }) {
+    return this.adminService.createUser(dto, req.user);
   }
 
   @Get()
@@ -42,6 +35,7 @@ export class AdminUsersController {
     @Query('role') role?: string,
     @Query('is_active') is_active?: string,
     @Query() pagination?: PaginationDto,
+    @Req() req?: Request & { user: AdminRequestUser },
   ) {
     const isActive =
       is_active === undefined
@@ -57,24 +51,29 @@ export class AdminUsersController {
       { role, is_active: isActive },
       page,
       limit,
+      req?.user,
     );
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.adminService.getUserById(id);
+  getOne(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+    return this.adminService.getUserById(id, req.user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: AdminUpdateUserDto) {
-    return this.adminService.updateUser(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: AdminUpdateUserDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    return this.adminService.updateUser(id, dto, req.user);
   }
 
   @Patch(':id/toggle-active')
   toggleActive(
     @Param('id') id: string,
-    @Req() req: Request & { user: JwtUser },
+    @Req() req: Request & { user: AdminRequestUser },
   ) {
-    return this.adminService.toggleUserActive(id, req.user?.id);
+    return this.adminService.toggleUserActive(id, req.user?.id, req.user);
   }
 }

@@ -6,13 +6,15 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../../generated/prisma/client';
-import { AdminService } from './admin.service';
+import { AdminService, AdminRequestUser } from './admin.service';
 import { AdminCreateOrganizationDto } from './dto/create-organization.dto';
 import { AdminUpdateOrganizationDto } from './dto/update-organization.dto';
 import { AdminCreateVehicleDto } from './dto/create-vehicle.dto';
@@ -25,42 +27,54 @@ export class AdminOrganizationsController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post()
-  create(@Body() dto: AdminCreateOrganizationDto) {
-    return this.adminService.createOrganization(dto);
+  create(
+    @Body() dto: AdminCreateOrganizationDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    return this.adminService.createOrganization(dto, req.user);
   }
 
   @Get()
-  list(@Query() pagination?: PaginationDto) {
+  list(
+    @Query() pagination?: PaginationDto,
+    @Req() req?: Request & { user: AdminRequestUser },
+  ) {
     const page = pagination?.page ?? 1;
     const limit = pagination?.limit ?? 20;
-    return this.adminService.getOrganizations(page, limit);
+    return this.adminService.getOrganizations(page, limit, req?.user);
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string) {
-    return this.adminService.getOrganizationById(id);
+  getOne(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+    return this.adminService.getOrganizationById(id, req.user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: AdminUpdateOrganizationDto) {
-    return this.adminService.updateOrganization(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: AdminUpdateOrganizationDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    return this.adminService.updateOrganization(id, dto, req.user);
   }
 
   @Post(':orgId/vehicles')
   createVehicle(
     @Param('orgId') orgId: string,
     @Body() dto: AdminCreateVehicleDto,
+    @Req() req: Request & { user: AdminRequestUser },
   ) {
-    return this.adminService.createVehicle(orgId, dto);
+    return this.adminService.createVehicle(orgId, dto, req.user);
   }
 
   @Get(':orgId/vehicles')
   listVehicles(
     @Param('orgId') orgId: string,
     @Query() pagination?: PaginationDto,
+    @Req() req?: Request & { user: AdminRequestUser },
   ) {
     const page = pagination?.page ?? 1;
     const limit = pagination?.limit ?? 50;
-    return this.adminService.getVehiclesByOrg(orgId, page, limit);
+    return this.adminService.getVehiclesByOrg(orgId, page, limit, req?.user);
   }
 }

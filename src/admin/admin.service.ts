@@ -40,6 +40,16 @@ const orderInclude = {
   },
 } as const;
 
+export interface AdminRequestUser {
+  id: string;
+  login: string;
+  role: Role;
+  fullname: string;
+  tg_id?: string | null;
+  is_super_admin?: boolean;
+  tenant_id?: string | null;
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -47,8 +57,14 @@ export class AdminService {
     private readonly productsService: ProductsService,
   ) {}
 
+  /** Tenant izolyatsiyasi: super_admin da filter yo'q, aks holda tenant_id. */
+  private tenantFilter(user: AdminRequestUser): { tenant_id?: string | null } {
+    if (user?.is_super_admin) return {};
+    return { tenant_id: user?.tenant_id ?? null };
+  }
+
   // ─── Users ─────────────────────────────────────────────────────────────────
-  async createUser(dto: AdminCreateUserDto) {
+  async createUser(dto: AdminCreateUserDto, user: AdminRequestUser) {
     console.log('[createUser] dto:', JSON.stringify(dto));
     try {
       const fullname = dto.fullname?.trim();
@@ -78,6 +94,7 @@ export class AdminService {
           role: dto.role,
           percent_rate,
           is_active: dto.is_active ?? true,
+          tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
         },
       });
     } catch (e) {
@@ -94,8 +111,11 @@ export class AdminService {
     filters: { role?: string; is_active?: boolean },
     page = 1,
     limit = 20,
+    user?: AdminRequestUser,
   ) {
-    const where: { role?: Role; is_active?: boolean } = {};
+    const where: { role?: Role; is_active?: boolean; tenant_id?: string | null } = {
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+    };
     if (filters.role) where.role = filters.role as Role;
     if (typeof filters.is_active === 'boolean')
       where.is_active = filters.is_active;
@@ -122,7 +142,7 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async getUserById(id: string) {
+  async getUserById(id: string, requestUser?: AdminRequestUser) {
     if (!this.isValidUuid(id)) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
@@ -139,14 +159,19 @@ export class AdminService {
         balance: true,
         is_active: true,
         tg_id: true,
+        tenant_id: true,
       },
     });
     if (!user) throw new NotFoundException(`User with id "${id}" not found`);
-    return user;
+    if (requestUser && !requestUser.is_super_admin && user.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`User with id "${id}" not found`);
+    }
+    const { tenant_id: _t, ...rest } = user;
+    return rest;
   }
 
-  async updateUser(id: string, dto: AdminUpdateUserDto) {
-    await this.getUserById(id);
+  async updateUser(id: string, dto: AdminUpdateUserDto, requestUser?: AdminRequestUser) {
+    await this.getUserById(id, requestUser);
     const percent_rate = dto.percent_rate ?? dto.commission ?? undefined;
     const data: Prisma.UserUpdateInput = {
       ...(dto.fullname !== undefined && { fullname: dto.fullname }),
@@ -165,10 +190,11 @@ export class AdminService {
     });
   }
 
-  async toggleUserActive(id: string, requesterId?: string) {
+  async toggleUserActive(id: string, requesterId?: string, requestUser?: AdminRequestUser) {
     if (!this.isValidUuid(id)) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
+    await this.getUserById(id, requestUser);
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     if (requesterId && id === requesterId) {
@@ -191,7 +217,7 @@ export class AdminService {
   }
 
   // ─── Organizations ─────────────────────────────────────────────────────────
-  async createOrganization(dto: AdminCreateOrganizationDto) {
+  async createOrganization(dto: AdminCreateOrganizationDto, user: AdminRequestUser) {
     return this.prisma.organization.create({
       data: {
         name: dto.name,
@@ -199,34 +225,40 @@ export class AdminService {
         phone: dto.phone,
         payment_type: dto.payment_type,
         balance_due: dto.balance_due ?? 0,
+        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
       },
     });
   }
 
-  async getOrganizations(page = 1, limit = 20) {
+  async getOrganizations(page = 1, limit = 20, user?: AdminRequestUser) {
+    const where = this.tenantFilter(user ?? ({} as AdminRequestUser));
     const [items, total] = await Promise.all([
       this.prisma.organization.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.organization.count(),
+      this.prisma.organization.count({ where }),
     ]);
     return { items, total, page, limit };
   }
 
-  async getOrganizationById(id: string) {
+  async getOrganizationById(id: string, requestUser?: AdminRequestUser) {
     const org = await this.prisma.organization.findUnique({
       where: { id },
       include: { vehicles: true },
     });
     if (!org)
       throw new NotFoundException(`Organization with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && org.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Organization with id "${id}" not found`);
+    }
     return org;
   }
 
-  async updateOrganization(id: string, dto: AdminUpdateOrganizationDto) {
-    await this.getOrganizationById(id);
+  async updateOrganization(id: string, dto: AdminUpdateOrganizationDto, requestUser?: AdminRequestUser) {
+    await this.getOrganizationById(id, requestUser);
     return this.prisma.organization.update({
       where: { id },
       data: dto,
@@ -234,7 +266,7 @@ export class AdminService {
   }
 
   // ─── Vehicles ───────────────────────────────────────────────────────────────
-  async createVehicle(orgId: string, dto: AdminCreateVehicleDto) {
+  async createVehicle(orgId: string, dto: AdminCreateVehicleDto, user: AdminRequestUser) {
     console.log('[createVehicle] orgId:', orgId);
     console.log('[createVehicle] dto:', JSON.stringify(dto));
     try {
@@ -245,6 +277,9 @@ export class AdminService {
         where: { id: orgId },
       });
       if (!org) throw new NotFoundException('Tashkilot topilmadi');
+      if (!user.is_super_admin && org.tenant_id !== user.tenant_id) {
+        throw new NotFoundException('Tashkilot topilmadi');
+      }
       return await this.prisma.vehicle.create({
         data: {
           org_id: orgId,
@@ -253,6 +288,7 @@ export class AdminService {
           ...(dto.year != null && { year: dto.year }),
           ...(dto.color?.trim() && { color: dto.color.trim() }),
           ...(dto.vin?.trim() && { vin: dto.vin.trim() }),
+          tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
         },
       });
     } catch (e) {
@@ -265,33 +301,40 @@ export class AdminService {
     }
   }
 
-  async getVehiclesByOrg(orgId: string, page = 1, limit = 50) {
+  async getVehiclesByOrg(orgId: string, page = 1, limit = 50, user?: AdminRequestUser) {
+    const where = { org_id: orgId, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
     const [items, total] = await Promise.all([
       this.prisma.vehicle.findMany({
-        where: { org_id: orgId },
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { plate_number: 'asc' },
       }),
-      this.prisma.vehicle.count({ where: { org_id: orgId } }),
+      this.prisma.vehicle.count({ where }),
     ]);
     return { items, total, page, limit };
   }
 
-  async updateVehicle(id: string, dto: AdminUpdateVehicleDto) {
+  async updateVehicle(id: string, dto: AdminUpdateVehicleDto, requestUser?: AdminRequestUser) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && vehicle.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    }
     return this.prisma.vehicle.update({
       where: { id },
       data: dto,
     });
   }
 
-  async toggleVehicleActive(id: string) {
+  async toggleVehicleActive(id: string, requestUser?: AdminRequestUser) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && vehicle.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Vehicle with id "${id}" not found`);
+    }
     return this.prisma.vehicle.update({
       where: { id },
       data: { is_active: !vehicle.is_active },
@@ -299,39 +342,50 @@ export class AdminService {
   }
 
   // ─── Services ───────────────────────────────────────────────────────────────
-  async createService(dto: AdminCreateServiceDto) {
+  async createService(dto: AdminCreateServiceDto, user: AdminRequestUser) {
     return this.prisma.service.create({
-      data: { name: dto.name, price: dto.price },
+      data: {
+        name: dto.name,
+        price: dto.price,
+        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+      },
     });
   }
 
-  async getServices(page = 1, limit = 50) {
+  async getServices(page = 1, limit = 50, user?: AdminRequestUser) {
+    const where = { is_active: true, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
     const [items, total] = await Promise.all([
       this.prisma.service.findMany({
-        where: { is_active: true },
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { name: 'asc' },
       }),
-      this.prisma.service.count({ where: { is_active: true } }),
+      this.prisma.service.count({ where }),
     ]);
     return { items, total, page, limit };
   }
 
-  async updateService(id: string, dto: AdminUpdateServiceDto) {
+  async updateService(id: string, dto: AdminUpdateServiceDto, requestUser?: AdminRequestUser) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Service with id "${id}" not found`);
+    }
     return this.prisma.service.update({
       where: { id },
       data: dto,
     });
   }
 
-  async deleteService(id: string) {
+  async deleteService(id: string, requestUser?: AdminRequestUser) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Service with id "${id}" not found`);
+    }
     await this.prisma.service.update({
       where: { id },
       data: { is_active: false },
@@ -339,10 +393,13 @@ export class AdminService {
     return { deleted: true, soft: true };
   }
 
-  async toggleServiceActive(id: string) {
+  async toggleServiceActive(id: string, requestUser?: AdminRequestUser) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Service with id "${id}" not found`);
+    }
     return this.prisma.service.update({
       where: { id },
       data: { is_active: !service.is_active },
@@ -350,7 +407,7 @@ export class AdminService {
   }
 
   // ─── Products ──────────────────────────────────────────────────────────────
-  async createProduct(dto: AdminCreateProductDto) {
+  async createProduct(dto: AdminCreateProductDto, user: AdminRequestUser) {
     const salePrice = dto.sale_price ?? dto.selling_price;
     if (salePrice == null || salePrice <= 0) {
       throw new BadRequestException(
@@ -364,6 +421,7 @@ export class AdminService {
         sale_price: salePrice,
         stock_count: dto.stock_count,
         min_limit: dto.min_limit ?? dto.min_stock ?? 0,
+        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
       },
     });
     await this.prisma.productPriceHistory.create({
@@ -384,6 +442,7 @@ export class AdminService {
       sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count';
       sortOrder?: 'asc' | 'desc';
     },
+    user?: AdminRequestUser,
   ) {
     const orderBy =
       opts?.sortBy === 'cost_price'
@@ -394,7 +453,7 @@ export class AdminService {
             ? { stock_count: opts.sortOrder ?? 'asc' }
             : { name: opts?.sortOrder ?? 'asc' };
 
-    const where = { is_active: true };
+    const where = { is_active: true, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
@@ -411,8 +470,14 @@ export class AdminService {
     return { items: itemsWithFlag, total, page, limit };
   }
 
-  async getProductsLowStock(page = 1, limit = 50) {
-    const lowStock = await this.productsService.getLowStockProducts();
+  async getProductsLowStock(page = 1, limit = 50, user?: AdminRequestUser) {
+    const tf = this.tenantFilter(user ?? ({} as AdminRequestUser));
+    const where = { is_active: true, ...tf };
+    const allProducts = await this.prisma.product.findMany({
+      where,
+      select: { id: true, name: true, stock_count: true, min_limit: true, cost_price: true, sale_price: true },
+    });
+    const lowStock = allProducts.filter((p) => p.stock_count <= p.min_limit);
     const total_low_stock_count = lowStock.length;
     const start = (page - 1) * limit;
     const products = lowStock.slice(start, start + limit).map((p) => ({
@@ -422,7 +487,8 @@ export class AdminService {
     return { products, total_low_stock_count, page, limit };
   }
 
-  async getDashboard() {
+  async getDashboard(user?: AdminRequestUser) {
+    const tf = this.tenantFilter(user ?? ({} as AdminRequestUser));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -436,10 +502,11 @@ export class AdminService {
       recentOrders,
     ] = await Promise.all([
       this.prisma.order.count({
-        where: { created_at: { gte: today, lt: tomorrow } },
+        where: { ...tf, created_at: { gte: today, lt: tomorrow } },
       }),
       this.prisma.order.aggregate({
         where: {
+          ...tf,
           status: OrderStatus.completed,
           completed_at: { gte: today, lt: tomorrow },
         },
@@ -447,13 +514,18 @@ export class AdminService {
       }),
       this.prisma.order.count({
         where: {
+          ...tf,
           status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
         },
       }),
-      this.prisma.$queryRaw<[{ count: number }]>`
-          SELECT COUNT(*)::int as count FROM "Product" WHERE stock_count <= min_limit
-        `,
+      this.prisma.product
+        .findMany({
+          where: { ...tf, is_active: true },
+          select: { stock_count: true, min_limit: true },
+        })
+        .then((rows) => ({ _count: rows.filter((r) => r.stock_count <= r.min_limit).length })),
       this.prisma.order.findMany({
+        where: tf,
         take: 5,
         orderBy: { created_at: 'desc' },
         select: {
@@ -495,7 +567,7 @@ export class AdminService {
       today_orders: todayOrders,
       today_revenue: Number(todayRevenue._sum.total_amount ?? 0),
       active_orders: activeOrders,
-      low_stock_count: lowStockResult[0]?.count ?? 0,
+      low_stock_count: (lowStockResult as { _count?: number })._count ?? 0,
       recent_orders: recent,
     };
   }
@@ -504,10 +576,14 @@ export class AdminService {
     id: string,
     dto: AdminUpdateProductDto,
     changedByUserId?: string,
+    requestUser?: AdminRequestUser,
   ) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Product with id "${id}" not found`);
+    }
 
     const priceChanged =
       (dto.cost_price != null &&
@@ -534,20 +610,26 @@ export class AdminService {
     return updated;
   }
 
-  async toggleProductActive(id: string) {
+  async toggleProductActive(id: string, requestUser?: AdminRequestUser) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Product with id "${id}" not found`);
+    }
     return this.prisma.product.update({
       where: { id },
       data: { is_active: !product.is_active },
     });
   }
 
-  async deleteProduct(id: string) {
+  async deleteProduct(id: string, requestUser?: AdminRequestUser) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Product with id "${id}" not found`);
+    }
     await this.prisma.product.delete({ where: { id } });
     return { deleted: true };
   }
@@ -556,12 +638,16 @@ export class AdminService {
     productId: string,
     dto: AdminStockInDto,
     changedByUserId?: string,
+    requestUser?: AdminRequestUser,
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
     });
     if (!product)
       throw new NotFoundException(`Product with id "${productId}" not found`);
+    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Product with id "${productId}" not found`);
+    }
 
     const newStock = product.stock_count + dto.quantity;
     const costPrice =
@@ -592,12 +678,15 @@ export class AdminService {
     return this.prisma.product.findUnique({ where: { id: productId } });
   }
 
-  async getProductPriceHistory(productId: string) {
+  async getProductPriceHistory(productId: string, requestUser?: AdminRequestUser) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
     });
     if (!product)
       throw new NotFoundException(`Product with id "${productId}" not found`);
+    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Product with id "${productId}" not found`);
+    }
 
     const items = await this.prisma.productPriceHistory.findMany({
       where: { product_id: productId },
@@ -633,8 +722,9 @@ export class AdminService {
     },
     page = 1,
     limit = 20,
+    user?: AdminRequestUser,
   ) {
-    const where: Prisma.OrderWhereInput = {};
+    const where: Prisma.OrderWhereInput = { ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
 
     if (filters.status) {
       if (filters.status === 'pending') {
@@ -687,11 +777,14 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async updateOrderStatus(orderId: string, status: OrderStatus) {
+  async updateOrderStatus(orderId: string, status: OrderStatus, requestUser?: AdminRequestUser) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
     if (!order) {
+      throw new NotFoundException(`Order "${orderId}" not found`);
+    }
+    if (requestUser && !requestUser.is_super_admin && order.tenant_id !== requestUser.tenant_id) {
       throw new NotFoundException(`Order "${orderId}" not found`);
     }
     const updateData: { status: OrderStatus; completed_at?: Date } = {
@@ -707,7 +800,7 @@ export class AdminService {
     });
   }
 
-  async createOrder(dto: AdminCreateOrderDto) {
+  async createOrder(dto: AdminCreateOrderDto, user: AdminRequestUser) {
     const serviceIds = dto.service_ids ?? [];
     const products = dto.products ?? [];
     const manualProducts = dto.manual_products ?? [];
@@ -722,8 +815,9 @@ export class AdminService {
       );
     }
 
+    const tf = this.tenantFilter(user);
     const master = await this.prisma.user.findFirst({
-      where: { id: dto.master_id, role: Role.master, is_active: true },
+      where: { id: dto.master_id, role: Role.master, is_active: true, ...tf },
     });
     if (!master) {
       throw new BadRequestException('Usta topilmadi');
@@ -731,7 +825,7 @@ export class AdminService {
 
     if (dto.organization_id && dto.vehicle_id) {
       const vehicle = await this.prisma.vehicle.findFirst({
-        where: { id: dto.vehicle_id, org_id: dto.organization_id },
+        where: { id: dto.vehicle_id, org_id: dto.organization_id, ...tf },
       });
       if (!vehicle) {
         throw new BadRequestException(
@@ -749,13 +843,14 @@ export class AdminService {
     const [services, productRecords] = (await Promise.all([
       serviceIds.length > 0
         ? this.prisma.service.findMany({
-            where: { id: { in: serviceIds } },
+            where: { id: { in: serviceIds }, ...tf },
           })
         : [],
       products.length > 0
         ? this.prisma.product.findMany({
             where: {
               id: { in: products.map((p) => p.product_id) },
+              ...tf,
             },
           })
         : [],
@@ -850,6 +945,7 @@ export class AdminService {
         delivery_needed: dto.delivery_needed,
         status: OrderStatus.draft,
         total_amount: totalAmount,
+        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
       },
     });
 
@@ -875,16 +971,19 @@ export class AdminService {
     });
   }
 
-  async getOrderById(id: string) {
+  async getOrderById(id: string, requestUser?: AdminRequestUser) {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: orderInclude,
     });
     if (!order) throw new NotFoundException(`Order with id "${id}" not found`);
+    if (requestUser && !requestUser.is_super_admin && order.tenant_id !== requestUser.tenant_id) {
+      throw new NotFoundException(`Order with id "${id}" not found`);
+    }
     return order;
   }
 
-  async getVehicleByPlate(plateNumber: string) {
+  async getVehicleByPlate(plateNumber: string, user?: AdminRequestUser) {
     const normalized = plateNumber.trim().replace(/\s+/g, ' ').toUpperCase();
     if (!normalized) {
       throw new NotFoundException('Davlat raqami kiriting');
@@ -893,6 +992,7 @@ export class AdminService {
       where: {
         is_active: true,
         plate_number: { equals: normalized, mode: 'insensitive' },
+        ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
       },
       include: { organization: { select: { name: true } } },
     });
@@ -902,7 +1002,7 @@ export class AdminService {
     return vehicle;
   }
 
-  async getVehicleHistory(vehicleId: string, page = 1, limit = 20) {
+  async getVehicleHistory(vehicleId: string, page = 1, limit = 20, user?: AdminRequestUser) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
       include: { organization: { select: { name: true } } },
@@ -910,7 +1010,10 @@ export class AdminService {
     if (!vehicle) {
       throw new NotFoundException('Mashina topilmadi');
     }
-    const where = { vehicle_id: vehicleId };
+    if (user && !user.is_super_admin && vehicle.tenant_id !== user.tenant_id) {
+      throw new NotFoundException('Mashina topilmadi');
+    }
+    const where = { vehicle_id: vehicleId, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
     const [orders, total, aggregate, lastOrder] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -984,13 +1087,15 @@ export class AdminService {
     };
   }
 
-  async getAllVehicles(orgId?: string, search?: string) {
+  async getAllVehicles(orgId?: string, search?: string, user?: AdminRequestUser) {
     const where: {
       org_id?: string;
       is_active: boolean;
       OR?: Array<{ plate_number?: object; model?: object }>;
+      tenant_id?: string | null;
     } = {
       is_active: true,
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
     };
     if (orgId) where.org_id = orgId;
     if (search?.trim()) {
@@ -1014,14 +1119,12 @@ export class AdminService {
     search?: string;
     page?: number;
     limit?: number;
-  }) {
+  }, user?: AdminRequestUser) {
     const { from, to, status, search, page = 1, limit = 20 } = filters;
-    const where: {
-      organization_id: null;
-      created_at?: { gte?: Date; lte?: Date };
-      status?: OrderStatus;
-      OR?: Array<{ client_name?: object; client_phone?: object }>;
-    } = { organization_id: null };
+    const where: Prisma.OrderWhereInput = {
+      organization_id: null,
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+    };
 
     if (from || to) {
       where.created_at = {};
@@ -1118,36 +1221,33 @@ export class AdminService {
   async getClientOrders(
     clientPhone: string,
     filters?: { from?: string; to?: string; status?: string },
+    user?: AdminRequestUser,
   ) {
     console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
     const phoneDigits = clientPhone.replace(/\D/g, '');
-    const where: {
-      organization_id: null;
-      client_phone: { contains: string };
-      created_at?: { gte?: Date; lte?: Date };
-      status?: OrderStatus;
-    } = {
+    const where: Prisma.OrderWhereInput = {
       organization_id: null,
       client_phone: {
         contains: phoneDigits.length >= 7 ? phoneDigits : clientPhone,
       },
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
     };
 
     if (filters?.from || filters?.to) {
-      where.created_at = {};
+      (where as { created_at?: { gte?: Date; lte?: Date } }).created_at = {};
       if (filters.from) {
         const d = new Date(filters.from);
-        if (!Number.isNaN(d.getTime())) where.created_at.gte = d;
+        if (!Number.isNaN(d.getTime())) (where as { created_at: { gte?: Date } }).created_at.gte = d;
       }
       if (filters.to) {
         const d = new Date(filters.to);
         if (!Number.isNaN(d.getTime())) {
           d.setHours(23, 59, 59, 999);
-          where.created_at.lte = d;
+          (where as { created_at: { lte?: Date } }).created_at.lte = d;
         }
       }
     }
-    if (filters?.status) where.status = filters.status as OrderStatus;
+    if (filters?.status) (where as { status?: OrderStatus }).status = filters.status as OrderStatus;
 
     const orders = await this.prisma.order.findMany({
       where,
@@ -1194,25 +1294,24 @@ export class AdminService {
     car_number?: string;
     page?: number;
     limit?: number;
-  }) {
+  }, user?: AdminRequestUser) {
     const { phone, car_number, page = 1, limit = 20 } = query;
     if (!phone?.trim() && !car_number?.trim()) {
       throw new BadRequestException(
         'Telefon raqami yoki mashina raqami kiriting',
       );
     }
-    const where: {
-      client_phone?: { contains: string };
-      car_number?: { contains: string; mode: 'insensitive' };
-    } = {};
+    const where: Prisma.OrderWhereInput = {
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+    };
     if (phone?.trim()) {
       const normalizedPhone = phone.replace(/[\s\-+()]/g, '');
       if (normalizedPhone) {
-        where.client_phone = { contains: normalizedPhone };
+        (where as { client_phone?: { contains: string } }).client_phone = { contains: normalizedPhone };
       }
     }
     if (car_number?.trim()) {
-      where.car_number = {
+      (where as { car_number?: { contains: string; mode: 'insensitive' } }).car_number = {
         contains: car_number.trim(),
         mode: 'insensitive',
       };
@@ -1270,7 +1369,7 @@ export class AdminService {
     to: string;
     master_id?: string;
     org_id?: string;
-  }) {
+  }, user?: AdminRequestUser) {
     if (!filters.from?.trim() || !filters.to?.trim()) {
       throw new BadRequestException('from and to (ISO date) are required');
     }
@@ -1284,17 +1383,13 @@ export class AdminService {
     }
     dateTo.setHours(23, 59, 59, 999);
 
-    const where: {
-      status: OrderStatus;
-      completed_at: { gte: Date; lte: Date };
-      master_id?: string;
-      organization_id?: string;
-    } = {
+    const where: Prisma.OrderWhereInput = {
       status: OrderStatus.completed,
       completed_at: { gte: dateFrom, lte: dateTo },
+      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
     };
-    if (filters.master_id) where.master_id = filters.master_id;
-    if (filters.org_id) where.organization_id = filters.org_id;
+    if (filters.master_id) (where as { master_id?: string }).master_id = filters.master_id;
+    if (filters.org_id) (where as { organization_id?: string }).organization_id = filters.org_id;
 
     const completedOrders = await this.prisma.order.findMany({
       where,

@@ -3,6 +3,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+import { SubscriptionGuard } from '@/components/layout/SubscriptionGuard';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -33,9 +34,11 @@ export default function DashboardLayout({
         <div className="print:hidden flex h-full min-h-0">
           <Sidebar />
         </div>
-        <main className="min-w-0 flex-1 overflow-auto bg-[var(--bg)] p-4 md:p-6 print:bg-white print:p-0">
-          {children}
-        </main>
+        <SubscriptionGuard>
+          <main className="min-w-0 flex-1 overflow-auto bg-[var(--bg)] p-4 md:p-6 print:bg-white print:p-0">
+            {children}
+          </main>
+        </SubscriptionGuard>
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ export interface JwtPayload {
   sub: string;
   login: string;
   role: Role;
+  is_super_admin?: boolean;
+  tenant_id?: string | null;
 }
 
 export interface TokenResponse {
@@ -49,13 +51,16 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid login or password');
     }
-    if (user.role !== 'boss') {
-      throw new UnauthorizedException('ERP access is for boss only');
+    const erpAllowed = user.role === 'boss' || user.is_super_admin === true;
+    if (!erpAllowed) {
+      throw new UnauthorizedException('ERP access is for boss or super admin only');
     }
     const payload: JwtPayload = {
       sub: user.id,
       login: user.login,
       role: user.role as Role,
+      is_super_admin: user.is_super_admin ?? false,
+      tenant_id: user.tenant_id ?? null,
     };
     const expiresIn = 3600; // 1 hour
     const access_token = this.jwtService.sign(payload, { expiresIn });
@@ -76,13 +81,16 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub, is_active: true },
     });
-    if (!user || user.role !== 'boss') {
+    const erpAllowed = user && (user.role === 'boss' || user.is_super_admin === true);
+    if (!erpAllowed) {
       throw new UnauthorizedException('User not found or ERP access denied');
     }
     const jwtPayload: JwtPayload = {
       sub: user.id,
       login: user.login,
       role: user.role as Role,
+      is_super_admin: user.is_super_admin ?? false,
+      tenant_id: user.tenant_id ?? null,
     };
     const expiresIn = 3600;
     const access_token = this.jwtService.sign(jwtPayload, { expiresIn });
@@ -127,6 +135,8 @@ export class AuthService {
       sub: user.id,
       login: user.login,
       role: user.role as Role,
+      is_super_admin: user.is_super_admin ?? false,
+      tenant_id: user.tenant_id ?? null,
     };
     const expiresIn = '8h';
     const token = this.jwtService.sign(payload, { expiresIn });

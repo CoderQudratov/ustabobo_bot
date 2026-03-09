@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const TOKEN_COOKIE = 'erp_token';
 
-function decodePayload(token: string): { login?: string } | null {
+function decodePayload(token: string): {
+  login?: string;
+  is_super_admin?: boolean;
+  tenant_id?: string | null;
+} | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
@@ -16,8 +20,15 @@ function decodePayload(token: string): { login?: string } | null {
 export async function GET(request: NextRequest) {
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
   if (!token) {
-    return NextResponse.json({ login: null }, { status: 401 });
+    return NextResponse.json(
+      { login: null, is_super_admin: false, tenant_id: null },
+      { status: 401 },
+    );
   }
   const payload = decodePayload(token);
-  return NextResponse.json({ login: payload?.login ?? null });
+  return NextResponse.json({
+    login: payload?.login ?? null,
+    is_super_admin: payload?.is_super_admin ?? false,
+    tenant_id: payload?.tenant_id ?? null,
+  });
 }

@@ -3,6 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from '../../generated/prisma/client';
 import { startOfDay, endOfDay } from 'date-fns';
 
+export interface AdminDashboardRequestUser {
+  id: string;
+  is_super_admin?: boolean;
+  tenant_id?: string | null;
+}
+
 export interface WeeklyOrderItem {
   date: string;
   count: number;
@@ -34,12 +40,19 @@ export interface OrderStatusCountsResponse {
 export class AdminDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getWeeklyOrders(): Promise<WeeklyOrdersResponse> {
+  private tenantFilter(user: AdminDashboardRequestUser | undefined): { tenant_id?: string | null } {
+    if (!user) return {};
+    if (user.is_super_admin) return {};
+    return { tenant_id: user.tenant_id ?? null };
+  }
+
+  async getWeeklyOrders(user?: AdminDashboardRequestUser): Promise<WeeklyOrdersResponse> {
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
       return d;
     });
+    const tf = this.tenantFilter(user);
 
     const items: WeeklyOrderItem[] = await Promise.all(
       days.map(async (day) => {
@@ -48,6 +61,7 @@ export class AdminDashboardService {
         const count = await this.prisma.order.count({
           where: {
             created_at: { gte: start, lte: end },
+            ...tf,
           },
         });
         const dateStr = day.toISOString().slice(0, 10);
@@ -58,12 +72,13 @@ export class AdminDashboardService {
     return { items };
   }
 
-  async getWeeklyRevenue(): Promise<WeeklyRevenueResponse> {
+  async getWeeklyRevenue(user?: AdminDashboardRequestUser): Promise<WeeklyRevenueResponse> {
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
       return d;
     });
+    const tf = this.tenantFilter(user);
 
     const items: WeeklyRevenueItem[] = await Promise.all(
       days.map(async (day) => {
@@ -73,6 +88,7 @@ export class AdminDashboardService {
           where: {
             status: OrderStatus.completed,
             created_at: { gte: start, lte: end },
+            ...tf,
           },
           _sum: { total_amount: true },
         });
@@ -85,9 +101,11 @@ export class AdminDashboardService {
     return { items };
   }
 
-  async getOrderStatusCounts(): Promise<OrderStatusCountsResponse> {
+  async getOrderStatusCounts(user?: AdminDashboardRequestUser): Promise<OrderStatusCountsResponse> {
+    const tf = this.tenantFilter(user);
     const result = await this.prisma.order.groupBy({
       by: ['status'],
+      where: Object.keys(tf).length ? tf : undefined,
       _count: { status: true },
     });
 
