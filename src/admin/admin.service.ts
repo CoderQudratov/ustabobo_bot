@@ -155,12 +155,18 @@ export class AdminService {
     });
   }
 
-  async toggleUserActive(id: string) {
+  async toggleUserActive(id: string, requesterId?: string) {
     if (!this.isValidUuid(id)) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
+    if (requesterId && id === requesterId) {
+      throw new BadRequestException('O\'zingizni bloklashingiz mumkin emas');
+    }
+    if (user.role === Role.boss) {
+      throw new BadRequestException('Boss rolini bloklash mumkin emas');
+    }
     return this.prisma.user.update({
       where: { id },
       data: { is_active: !user.is_active },
@@ -326,13 +332,17 @@ export class AdminService {
 
   // ─── Products ──────────────────────────────────────────────────────────────
   async createProduct(dto: AdminCreateProductDto) {
+    const salePrice = dto.sale_price ?? dto.selling_price;
+    if (salePrice == null || salePrice <= 0) {
+      throw new BadRequestException('sale_price yoki selling_price musbat son bo\'lishi kerak');
+    }
     const product = await this.prisma.product.create({
       data: {
         name: dto.name.trim(),
         cost_price: dto.cost_price,
-        sale_price: dto.sale_price,
+        sale_price: salePrice,
         stock_count: dto.stock_count,
-        min_limit: dto.min_limit ?? 0,
+        min_limit: dto.min_limit ?? dto.min_stock ?? 0,
       },
     });
     await this.prisma.productPriceHistory.create({

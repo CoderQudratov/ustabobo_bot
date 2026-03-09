@@ -6,8 +6,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -16,6 +18,8 @@ import { AdminService } from './admin.service';
 import { AdminCreateUserDto } from './dto/create-user.dto';
 import { AdminUpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from './dto/pagination.dto';
+
+interface JwtUser { id: string; login: string; role: Role; fullname: string }
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -62,7 +66,10 @@ export class AdminUsersController {
   }
 
   @Patch(':id/toggle-active')
-  toggleActive(@Param('id') id: string) {
-    return this.adminService.toggleUserActive(id);
+  toggleActive(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    return this.adminService.toggleUserActive(id, req.user?.id);
   }
 }

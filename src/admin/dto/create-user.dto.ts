@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -53,6 +54,7 @@ export class AdminCreateUserDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(100)
   @Type(() => Number)
   commission?: number;
 
