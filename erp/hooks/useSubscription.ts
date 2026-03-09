@@ -18,7 +18,7 @@ export function useSubscription() {
   return useQuery({
     queryKey: ['tenant-status'],
     queryFn: () => apiGet<TenantStatus>('/admin/auth/tenant-status'),
-    enabled: !!user && !user.is_super_admin,
+    enabled: !!user,
     refetchInterval: 5 * 60 * 1000, // 5 daqiqada
     staleTime: 60 * 1000,
   });

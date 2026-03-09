@@ -24,16 +24,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Foydalanuvchi topilmadi');
     }
 
-    // Super admin uchun tenant tekshirish kerak emas
-    // Bloklangan / inactive tenant uchun ham JWT qaytaramiz — ERP da blok ekrani
-    // ko'rsatish uchun GET /admin/auth/tenant-status ishlatiladi
-    if (!user.is_super_admin && user.tenant_id) {
+    if (user.tenant_id) {
       const tenant = user.tenant;
       if (!tenant) {
         throw new UnauthorizedException('Tenant topilmadi');
       }
-      // tenant.is_blocked yoki !tenant.is_active bo'lsa ham request davom etadi,
-      // frontend tenant-status orqali blok ekranini ko'rsatadi
     }
 
     return {
@@ -42,7 +37,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       role: user.role,
       fullname: user.fullname,
       tg_id: user.tg_id,
-      is_super_admin: user.is_super_admin ?? false,
       tenant_id: user.tenant_id ?? null,
     };
   }

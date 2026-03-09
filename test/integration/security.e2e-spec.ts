@@ -52,30 +52,6 @@ describe('Security (E2E)', () => {
     });
   });
 
-  describe('Avtorizatsiya (Super Admin)', () => {
-    it('boss token bilan /admin/tenants 403 (faqat super admin)', async () => {
-      const res = await request(app.getHttpServer() as http.Server)
-        .get('/admin/tenants')
-        .set('Authorization', `Bearer ${bossToken}`)
-        .expect(403);
-      expect(res.body?.message || res.body?.error?.message || '').toMatch(/super admin|ruxsat|forbidden/i);
-    });
-
-    it('boss token bilan POST /admin/tenants 403', async () => {
-      await request(app.getHttpServer() as http.Server)
-        .post('/admin/tenants')
-        .set('Authorization', `Bearer ${bossToken}`)
-        .send({
-          name: 'Test',
-          plan_expires: new Date().toISOString(),
-          admin_name: 'Admin',
-          admin_login: 'adm1',
-          admin_password: 'password123',
-        })
-        .expect(403);
-    });
-  });
-
   describe('Validatsiya (forbidNonWhitelisted)', () => {
     it('login so‘rovida qo‘shimcha field 400', async () => {
       const res = await request(app.getHttpServer() as http.Server)

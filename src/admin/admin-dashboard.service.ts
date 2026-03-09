@@ -5,8 +5,6 @@ import { startOfDay, endOfDay } from 'date-fns';
 
 export interface AdminDashboardRequestUser {
   id: string;
-  is_super_admin?: boolean;
-  tenant_id?: string | null;
 }
 
 export interface WeeklyOrderItem {
@@ -40,10 +38,8 @@ export interface OrderStatusCountsResponse {
 export class AdminDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private tenantFilter(user: AdminDashboardRequestUser | undefined): { tenant_id?: string | null } {
-    if (!user) return {};
-    if (user.is_super_admin) return {};
-    return { tenant_id: user.tenant_id ?? null };
+  private tenantFilter(_user: AdminDashboardRequestUser | undefined): Record<string, never> {
+    return {};
   }
 
   async getWeeklyOrders(user?: AdminDashboardRequestUser): Promise<WeeklyOrdersResponse> {

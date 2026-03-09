@@ -20,7 +20,6 @@ interface JwtUser {
   id: string;
   login: string;
   role: string;
-  is_super_admin?: boolean;
   tenant_id?: string | null;
 }
 
@@ -51,10 +50,6 @@ export class AuthController {
   @Get('tenant-status')
   @UseGuards(JwtAuthGuard)
   async getTenantStatus(@Req() req: Request & { user: JwtUser }) {
-    if (req.user?.is_super_admin) {
-      return { is_blocked: false, days_left: null };
-    }
-
     const tenantId = req.user?.tenant_id;
     if (!tenantId) {
       return { is_blocked: true, days_left: 0 };

@@ -15,7 +15,7 @@ export function SubscriptionGuard({
   const { data: status } = useSubscription();
 
   // Super admin uchun tekshirish kerak emas
-  if (!user || user.is_super_admin) return <>{children}</>;
+  if (!user) return <>{children}</>;
 
   // Bloklangan → to'liq ekran
   if (status?.is_blocked) {

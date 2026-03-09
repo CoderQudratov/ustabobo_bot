@@ -4,7 +4,6 @@ const TOKEN_COOKIE = 'erp_token';
 
 function decodePayload(token: string): {
   login?: string;
-  is_super_admin?: boolean;
   tenant_id?: string | null;
 } | null {
   try {
@@ -21,14 +20,13 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
   if (!token) {
     return NextResponse.json(
-      { login: null, is_super_admin: false, tenant_id: null },
+      { login: null, tenant_id: null },
       { status: 401 },
     );
   }
   const payload = decodePayload(token);
   return NextResponse.json({
     login: payload?.login ?? null,
-    is_super_admin: payload?.is_super_admin ?? false,
     tenant_id: payload?.tenant_id ?? null,
   });
 }

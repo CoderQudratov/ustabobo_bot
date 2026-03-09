@@ -6,7 +6,6 @@ import { logout as doLogout } from '@/lib/auth';
 
 export interface AuthUser {
   login: string | null;
-  is_super_admin: boolean;
   tenant_id: string | null;
 }
 
@@ -52,7 +51,6 @@ export function useAuth() {
         if (data) {
           setUser({
             login: data.login ?? null,
-            is_super_admin: data.is_super_admin ?? false,
             tenant_id: data.tenant_id ?? null,
           });
         } else {

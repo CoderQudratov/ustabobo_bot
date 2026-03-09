@@ -11,9 +11,6 @@ import { AdminOrdersController } from './admin-orders.controller';
 import { AdminReportsController } from './admin-reports.controller';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminDashboardService } from './admin-dashboard.service';
-import { SuperAdminGuard } from './guards/super-admin.guard';
-import { AdminTenantsController } from './tenants/admin-tenants.controller';
-import { AdminTenantsService } from './tenants/admin-tenants.service';
 
 @Module({
   imports: [PrismaModule, ProductsModule],
@@ -26,14 +23,7 @@ import { AdminTenantsService } from './tenants/admin-tenants.service';
     AdminOrdersController,
     AdminReportsController,
     AdminDashboardController,
-    AdminTenantsController,
   ],
-  providers: [
-    AdminService,
-    AdminDashboardService,
-    SuperAdminGuard,
-    AdminTenantsService,
-  ],
-  exports: [SuperAdminGuard],
+  providers: [AdminService, AdminDashboardService],
 })
 export class AdminModule {}

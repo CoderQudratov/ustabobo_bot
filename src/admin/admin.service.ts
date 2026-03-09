@@ -46,8 +46,6 @@ export interface AdminRequestUser {
   role: Role;
   fullname: string;
   tg_id?: string | null;
-  is_super_admin?: boolean;
-  tenant_id?: string | null;
 }
 
 @Injectable()
@@ -57,10 +55,8 @@ export class AdminService {
     private readonly productsService: ProductsService,
   ) {}
 
-  /** Tenant izolyatsiyasi: super_admin da filter yo'q, aks holda tenant_id. */
-  private tenantFilter(user: AdminRequestUser): { tenant_id?: string | null } {
-    if (user?.is_super_admin) return {};
-    return { tenant_id: user?.tenant_id ?? null };
+  private tenantFilter(_user: AdminRequestUser): Record<string, never> {
+    return {};
   }
 
   // ─── Users ─────────────────────────────────────────────────────────────────
@@ -94,7 +90,7 @@ export class AdminService {
           role: dto.role,
           percent_rate,
           is_active: dto.is_active ?? true,
-          tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+          tenant_id: undefined,
         },
       });
     } catch (e) {
@@ -163,9 +159,6 @@ export class AdminService {
       },
     });
     if (!user) throw new NotFoundException(`User with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && user.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`User with id "${id}" not found`);
-    }
     const { tenant_id: _t, ...rest } = user;
     return rest;
   }
@@ -225,7 +218,7 @@ export class AdminService {
         phone: dto.phone,
         payment_type: dto.payment_type,
         balance_due: dto.balance_due ?? 0,
-        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+        tenant_id: undefined,
       },
     });
   }
@@ -251,9 +244,6 @@ export class AdminService {
     });
     if (!org)
       throw new NotFoundException(`Organization with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && org.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Organization with id "${id}" not found`);
-    }
     return org;
   }
 
@@ -279,9 +269,6 @@ export class AdminService {
         where: { id: orgId },
       });
       if (!org) throw new NotFoundException('Tashkilot topilmadi');
-      if (!user.is_super_admin && org.tenant_id !== user.tenant_id) {
-        throw new NotFoundException('Tashkilot topilmadi');
-      }
       return await this.prisma.vehicle.create({
         data: {
           org_id: orgId,
@@ -290,7 +277,7 @@ export class AdminService {
           ...(dto.year != null && { year: dto.year }),
           ...(dto.color?.trim() && { color: dto.color.trim() }),
           ...(dto.vin?.trim() && { vin: dto.vin.trim() }),
-          tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+          tenant_id: undefined,
         },
       });
     } catch (e) {
@@ -323,9 +310,6 @@ export class AdminService {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && vehicle.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Vehicle with id "${id}" not found`);
-    }
     return this.prisma.vehicle.update({
       where: { id },
       data: dto,
@@ -336,9 +320,6 @@ export class AdminService {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && vehicle.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Vehicle with id "${id}" not found`);
-    }
     return this.prisma.vehicle.update({
       where: { id },
       data: { is_active: !vehicle.is_active },
@@ -351,7 +332,7 @@ export class AdminService {
       data: {
         name: dto.name,
         price: dto.price,
-        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+        tenant_id: undefined,
       },
     });
   }
@@ -374,9 +355,6 @@ export class AdminService {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Service with id "${id}" not found`);
-    }
     return this.prisma.service.update({
       where: { id },
       data: dto,
@@ -387,9 +365,6 @@ export class AdminService {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Service with id "${id}" not found`);
-    }
     await this.prisma.service.update({
       where: { id },
       data: { is_active: false },
@@ -401,9 +376,6 @@ export class AdminService {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && service.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Service with id "${id}" not found`);
-    }
     return this.prisma.service.update({
       where: { id },
       data: { is_active: !service.is_active },
@@ -425,7 +397,7 @@ export class AdminService {
         sale_price: salePrice,
         stock_count: dto.stock_count,
         min_limit: dto.min_limit ?? dto.min_stock ?? 0,
-        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+        tenant_id: undefined,
       },
     });
     await this.prisma.productPriceHistory.create({
@@ -585,9 +557,6 @@ export class AdminService {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Product with id "${id}" not found`);
-    }
 
     const priceChanged =
       (dto.cost_price != null &&
@@ -618,9 +587,6 @@ export class AdminService {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Product with id "${id}" not found`);
-    }
     return this.prisma.product.update({
       where: { id },
       data: { is_active: !product.is_active },
@@ -631,9 +597,6 @@ export class AdminService {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Product with id "${id}" not found`);
-    }
     await this.prisma.product.delete({ where: { id } });
     return { deleted: true };
   }
@@ -649,9 +612,6 @@ export class AdminService {
     });
     if (!product)
       throw new NotFoundException(`Product with id "${productId}" not found`);
-    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Product with id "${productId}" not found`);
-    }
 
     const newStock = product.stock_count + dto.quantity;
     const costPrice =
@@ -688,9 +648,6 @@ export class AdminService {
     });
     if (!product)
       throw new NotFoundException(`Product with id "${productId}" not found`);
-    if (requestUser && !requestUser.is_super_admin && product.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Product with id "${productId}" not found`);
-    }
 
     const items = await this.prisma.productPriceHistory.findMany({
       where: { product_id: productId },
@@ -786,9 +743,6 @@ export class AdminService {
       where: { id: orderId },
     });
     if (!order) {
-      throw new NotFoundException(`Order "${orderId}" not found`);
-    }
-    if (requestUser && !requestUser.is_super_admin && order.tenant_id !== requestUser.tenant_id) {
       throw new NotFoundException(`Order "${orderId}" not found`);
     }
     const updateData: { status: OrderStatus; completed_at?: Date } = {
@@ -949,7 +903,7 @@ export class AdminService {
         delivery_needed: dto.delivery_needed,
         status: OrderStatus.draft,
         total_amount: totalAmount,
-        tenant_id: user.is_super_admin ? undefined : user.tenant_id ?? undefined,
+        tenant_id: undefined,
       },
     });
 
@@ -981,9 +935,6 @@ export class AdminService {
       include: orderInclude,
     });
     if (!order) throw new NotFoundException(`Order with id "${id}" not found`);
-    if (requestUser && !requestUser.is_super_admin && order.tenant_id !== requestUser.tenant_id) {
-      throw new NotFoundException(`Order with id "${id}" not found`);
-    }
     return order;
   }
 
@@ -1012,9 +963,6 @@ export class AdminService {
       include: { organization: { select: { name: true } } },
     });
     if (!vehicle) {
-      throw new NotFoundException('Mashina topilmadi');
-    }
-    if (user && !user.is_super_admin && vehicle.tenant_id !== user.tenant_id) {
       throw new NotFoundException('Mashina topilmadi');
     }
     const where = { vehicle_id: vehicleId, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
