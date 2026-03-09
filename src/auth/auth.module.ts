@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TelegramWebAppGuard } from './guards/telegram-webapp.guard';
+import { WebAppOrJwtGuard } from './guards/webapp-or-jwt.guard';
 import { TelegramInitDataGuard } from './guards/telegram-initdata.guard';
 import { MasterAuthGuard } from './guards/master-auth.guard';
 import { WebappController } from './webapp.controller';
@@ -28,6 +29,7 @@ import { TelegramModule } from '../telegram/telegram.module';
     JwtStrategy,
     JwtAuthGuard,
     TelegramWebAppGuard,
+    WebAppOrJwtGuard,
     TelegramInitDataGuard,
     MasterAuthGuard,
     WebappService,

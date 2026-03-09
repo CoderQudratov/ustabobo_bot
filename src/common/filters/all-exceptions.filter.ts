@@ -53,8 +53,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? ((msg[0] as string) ?? exception.message)
           : ((typeof msg === 'string' ? msg : exception.message) ??
             exception.message);
-        if (status === 401 && !message) {
-          message = 'Invalid Telegram init data signature';
+        if (status === 401) {
+          message = message || 'Tizimga kiring';
         }
         if (b.details && typeof b.details === 'object') {
           details = b.details as Record<string, unknown>;

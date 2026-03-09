@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -56,12 +57,21 @@ export class OrdersController {
   async getMyOrders(
     @Param('telegramId') telegramId: string,
     @Req() req: Request & { user: JwtUser },
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const user = await this.ordersService.findUserByTelegramId(telegramId);
     if (!user || user.id !== req.user.id) {
       throw new ForbiddenException('Access denied');
     }
-    return this.ordersService.getMyOrders(telegramId);
+    const pageNum = page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
+    const limitNum = limit != null ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20)) : 100;
+    return this.ordersService.getMyOrders(telegramId, {
+      status: status ?? undefined,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Get(':id')

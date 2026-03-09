@@ -1,11 +1,53 @@
 /**
  * Backend API client for AVTO-PRO WebApp (TZ §6).
- * Every request MUST send header "x-telegram-init-data" = Telegram.WebApp.initData.
- * Backend validates via HMAC; no initData -> do not call API, trigger onTelegramRequired.
+ * Auth: WebApp login token (8h) or x-telegram-init-data. Every request sends Authorization: Bearer when token present.
  */
 import { getInitDataOrNull, getStartParam } from "@/utils/telegram-env";
 
 const INIT_DATA_HEADER = 'x-telegram-init-data';
+const WEBAPP_TOKEN_KEY = 'webapp_token';
+const WEBAPP_USER_KEY = 'webapp_user';
+const WEBAPP_LOGIN_AT_KEY = 'webapp_login_at';
+const WEBAPP_TOKEN_TTL_MS = 8 * 60 * 60 * 1000;
+
+export function getWebappToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(WEBAPP_TOKEN_KEY);
+}
+
+export function getWebappUser(): { id: string; fullname: string; login: string; role: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(WEBAPP_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setWebappAuth(token: string, user: { id: string; fullname: string; login: string; role: string }): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(WEBAPP_TOKEN_KEY, token);
+  localStorage.setItem(WEBAPP_USER_KEY, JSON.stringify(user));
+  localStorage.setItem(WEBAPP_LOGIN_AT_KEY, String(Date.now()));
+}
+
+export function clearWebappAuth(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(WEBAPP_TOKEN_KEY);
+  localStorage.removeItem(WEBAPP_USER_KEY);
+  localStorage.removeItem(WEBAPP_LOGIN_AT_KEY);
+}
+
+export function isWebappTokenValid(): boolean {
+  if (typeof window === 'undefined') return false;
+  const token = localStorage.getItem(WEBAPP_TOKEN_KEY);
+  const loginAt = localStorage.getItem(WEBAPP_LOGIN_AT_KEY);
+  if (!token || !loginAt) return false;
+  const at = parseInt(loginAt, 10);
+  if (!Number.isFinite(at) || Date.now() - at > WEBAPP_TOKEN_TTL_MS) return false;
+  return true;
+}
 
 /** Custom error when initData is missing — do not call backend. */
 export const TELEGRAM_REQUIRED = "TELEGRAM_REQUIRED";
@@ -67,36 +109,60 @@ export function setTelegramRequiredHandler(handler: (() => void) | null) {
 }
 
 /**
- * Centralized fetch wrapper. Always sends x-telegram-init-data (backend expects lowercase).
- * If initData is empty we do NOT call backend: trigger onTelegramRequired and throw TELEGRAM_REQUIRED.
+ * Centralized fetch wrapper. Sends Authorization: Bearer when webapp token valid; optionally x-telegram-init-data.
+ * If no valid token and no initData, trigger onTelegramRequired and throw.
  */
 async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Response> {
+  const token = getWebappToken();
+  const validToken = token && isWebappTokenValid();
   const initData = getInitDataOrNull();
-  if (!initData?.trim()) {
+  if (!validToken && !initData?.trim()) {
     if (onTelegramRequired) onTelegramRequired();
     throw new Error(TELEGRAM_REQUIRED);
   }
   if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
     const startParam = getStartParam();
-    console.log("[WebApp] initData length:", initData.length, "start_param:", startParam ?? "(none)");
+    console.log("[WebApp] token:", !!validToken, "initData:", !!initData?.trim(), "start_param:", startParam ?? "(none)");
   }
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getApiUrl(pathOrUrl);
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  headers.set(INIT_DATA_HEADER, initData);
+  if (validToken && token) headers.set('Authorization', `Bearer ${token}`);
+  if (initData?.trim()) headers.set(INIT_DATA_HEADER, initData);
   const res = await fetch(url, {
     mode: 'cors',
     credentials: 'include',
     ...init,
     headers,
   });
-  if (res.status === 401 && onSessionExpired) {
-    onSessionExpired();
+  if (res.status === 401) {
+    clearWebappAuth();
+    if (onSessionExpired) onSessionExpired();
   }
   if (res.status === 403 && onPinRequired) {
     onPinRequired();
   }
   return res;
+}
+
+/** WebApp login (no initData required). Returns { token, user }. */
+export async function webappLoginApi(
+  login: string,
+  password: string,
+): Promise<{ token: string; user: { id: string; fullname: string; login: string; role: string } }> {
+  const url = getApiUrl('webapp/auth/login');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ login, password }),
+    mode: 'cors',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 /** Upload car photo (multipart). Returns { url } for the saved image. */
@@ -140,6 +206,83 @@ export interface WebAppInitResponse {
 
 export async function fetchWebAppInit(): Promise<WebAppInitResponse> {
   const res = await apiFetch('webapp/init', { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export type WebAppServiceItem = { id: string; name: string; price: number };
+export type WebAppProductItem = { id: string; name: string; sale_price: number; stock_count: number };
+
+/** GET webapp/services?search=&limit=5 or ?sortBy=usage&limit=3 */
+export async function fetchWebappServices(opts: {
+  search?: string;
+  limit?: number;
+  sortBy?: 'usage';
+}): Promise<WebAppServiceItem[]> {
+  const params = new URLSearchParams();
+  if (opts.search != null && opts.search !== '') params.set('search', opts.search);
+  params.set('limit', String(opts.limit ?? 5));
+  if (opts.sortBy === 'usage') params.set('sortBy', 'usage');
+  const res = await apiFetch(`webapp/services?${params.toString()}`, { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+/** GET webapp/products?search=&limit=5 or ?sortBy=usage&limit=3 */
+export async function fetchWebappProducts(opts: {
+  search?: string;
+  limit?: number;
+  sortBy?: 'usage';
+}): Promise<WebAppProductItem[]> {
+  const params = new URLSearchParams();
+  if (opts.search != null && opts.search !== '') params.set('search', opts.search);
+  params.set('limit', String(opts.limit ?? 5));
+  if (opts.sortBy === 'usage') params.set('sortBy', 'usage');
+  const res = await apiFetch(`webapp/products?${params.toString()}`, { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+export type WebAppVehicleItem = {
+  id: string;
+  org_id: string;
+  plate_number: string;
+  model: string;
+  year?: number;
+  color?: string;
+};
+
+/** GET webapp/organizations/:orgId/vehicles */
+export async function fetchWebappOrgVehicles(orgId: string): Promise<WebAppVehicleItem[]> {
+  const res = await apiFetch(`webapp/organizations/${encodeURIComponent(orgId)}/vehicles`, { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data?.items) ? data.items : [];
+}
+
+/** POST webapp/organizations/:orgId/vehicles — "Yangi mashina qo'sh" */
+export async function createWebappVehicle(
+  orgId: string,
+  dto: { plate_number: string; model: string; year?: number; color?: string },
+): Promise<WebAppVehicleItem> {
+  const res = await apiFetch(`webapp/organizations/${encodeURIComponent(orgId)}/vehicles`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(text || `HTTP ${res.status}`);
@@ -226,11 +369,36 @@ export interface MyOrder {
   lng?: number | null;
 }
 
-/** Fetches current user's orders. telegramId from Telegram.WebApp (sent in URL per backend). */
-export async function fetchMyOrders(telegramId: string | number): Promise<MyOrder[]> {
-  const res = await apiFetch(`orders/my/${encodeURIComponent(String(telegramId))}`, {
-    method: 'GET',
-  });
+export interface MyOrdersResponse {
+  items: MyOrder[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Fetches current user's orders. status=active|completed|cancelled|history, page, limit. */
+export async function fetchMyOrders(
+  telegramId: string | number,
+  opts?: { status?: string; page?: number; limit?: number },
+): Promise<MyOrdersResponse> {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set('status', opts.status);
+  if (opts?.page != null) params.set('page', String(opts.page));
+  if (opts?.limit != null) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  const url = `orders/my/${encodeURIComponent(String(telegramId))}${qs ? `?${qs}` : ''}`;
+  const res = await apiFetch(url, { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? { items: data, total: data.length, page: 1, limit: data.length } : data;
+}
+
+/** Single order by ID (for detail page). */
+export async function fetchOrder(orderId: string): Promise<MyOrder> {
+  const res = await apiFetch(`orders/${encodeURIComponent(orderId)}`, { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(text || `HTTP ${res.status}`);

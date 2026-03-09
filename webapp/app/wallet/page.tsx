@@ -1,21 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useTelegram } from "@/hooks/useTelegram";
 import { isTelegramWebApp } from "@/utils/telegram-env";
 import { TelegramRequired } from "@/components/TelegramRequired";
+import { PageHeader } from "@/components/PageHeader";
 import { fetchWallet, type WalletTransaction } from "@/utils/api";
-
-const screenStyle = {
-  backgroundColor: "var(--tg-theme-bg-color, #1a1a1a)",
-  color: "var(--tg-theme-text-color, #fff)",
-};
-
-const btnStyle = {
-  backgroundColor: "var(--tg-theme-button-color, #2481cc)",
-  color: "var(--tg-theme-button-text-color, #fff)",
-};
 
 function formatAmount(amount: number): string {
   return Number(amount).toLocaleString("uz-UZ") + " so'm";
@@ -80,55 +70,36 @@ export default function WalletPage() {
 
   if (telegramId == null && !loading) {
     return (
-      <div
-        className="min-h-screen p-6 flex flex-col items-center justify-center gap-4"
-        style={screenStyle}
-      >
-        <p className="text-sm opacity-80 text-center">
+      <div className="min-h-screen p-6 flex flex-col items-center justify-center gap-4 bg-[var(--bg)]">
+        <p className="text-sm text-[var(--text-2)] text-center">
           Bu sahifa Telegram bot orqali ochiladi. Kuryer menyudan &quot;Hamyon&quot; ni bosing.
         </p>
-        <Link
-          href="/"
-          className="rounded-xl px-4 py-2 text-sm font-medium"
-          style={btnStyle}
-        >
+        <a href="/" className="btn-primary max-w-xs">
           Bosh sahifa
-        </Link>
+        </a>
       </div>
     );
   }
 
   if (loading && transactions.length === 0 && error === null) {
     return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
-        style={screenStyle}
-      >
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 bg-[var(--bg)]">
         <div
-          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#2481cc)] border-t-transparent"
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent"
           aria-hidden
         />
-        <p className="text-sm opacity-90">Yuklanmoqda...</p>
+        <p className="text-sm text-[var(--text-2)]">Yuklanmoqda...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pb-24" style={screenStyle}>
-      <div className="sticky top-0 z-20 flex items-center gap-4 bg-[color:var(--tg-theme-bg-color,#1a1a1a)]/95 px-6 py-4 backdrop-blur">
-        <Link
-          href="/"
-          className="rounded-xl px-3 py-2 text-sm font-medium"
-          style={btnStyle}
-        >
-          ⬅️ Orqaga
-        </Link>
-        <h1 className="text-lg font-semibold">💰 Hamyon</h1>
-      </div>
+    <div className="min-h-screen bg-[var(--bg)]">
+      <PageHeader title="💰 Hamyon" backHref="/" />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 space-y-6">
         {error && (
-          <div className="rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+          <div className="rounded-xl border border-[var(--danger)]/50 bg-[var(--danger)]/10 px-4 py-2 text-sm text-[var(--danger)]">
             {error}
             <button
               type="button"
@@ -140,32 +111,29 @@ export default function WalletPage() {
           </div>
         )}
 
-        <div
-          className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center"
-          style={{ backgroundColor: "var(--tg-theme-secondary-bg-color, #2b2b2b)" }}
-        >
-          <p className="text-sm opacity-80 mb-1">Joriy balans</p>
-          <p className="text-2xl font-bold">{formatAmount(balance)}</p>
+        <div className="card-webapp p-6 text-center">
+          <p className="text-sm text-[var(--text-2)] mb-1">Joriy balans</p>
+          <p className="text-2xl font-bold text-[var(--text)]">{formatAmount(balance)}</p>
         </div>
 
         <div>
           <h2 className="text-base font-semibold mb-3">So‘nggi harakatlar</h2>
           {transactions.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 px-6 py-8 text-center text-sm opacity-80">
-              Hali harakatlar yo‘q
+            <div className="card-webapp px-6 py-8 text-center text-sm text-[var(--text-2)]">
+              Hali harakatlar yo&apos;q
             </div>
           ) : (
             <ul className="space-y-3">
               {transactions.map((t) => (
                 <li
                   key={t.id}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between gap-4"
+                  className="card-webapp px-4 py-3 flex items-center justify-between gap-4"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{transactionTypeLabel(t.type)}</p>
-                    <p className="text-xs opacity-70 font-mono">#{t.order_id.slice(0, 8)} · {formatDate(t.created_at)}</p>
+                    <p className="text-sm font-medium text-[var(--text)]">{transactionTypeLabel(t.type)}</p>
+                    <p className="text-xs text-[var(--text-2)] font-mono">#{t.order_id.slice(0, 8)} · {formatDate(t.created_at)}</p>
                   </div>
-                  <span className="text-sm font-semibold text-emerald-400 shrink-0">
+                  <span className="text-sm font-semibold text-[var(--success)] shrink-0">
                     +{formatAmount(t.amount)}
                   </span>
                 </li>

@@ -3,9 +3,11 @@ import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
 import { AuthScene } from './auth.scene';
 import { BotUpdate } from './bot.update';
+import { BotAuthMiddleware } from './bot-auth.middleware';
 import { BotNotifyService } from './bot-notify.service';
 import { BotWebhookSetupService } from './bot-webhook-setup.service';
 import { TelegramWebhookController } from './telegram-webhook.controller';
+import { DailyReportCronService } from './cron/daily-report.cron';
 import { PrismaModule } from '../prisma/prisma.module';
 import { OrdersModule } from '../orders/orders.module';
 
@@ -41,7 +43,14 @@ import { OrdersModule } from '../orders/orders.module';
     }),
   ],
   controllers: [TelegramWebhookController],
-  providers: [AuthScene, BotUpdate, BotNotifyService, BotWebhookSetupService],
+  providers: [
+    BotAuthMiddleware,
+    AuthScene,
+    BotUpdate,
+    BotNotifyService,
+    BotWebhookSetupService,
+    DailyReportCronService,
+  ],
   exports: [TelegrafModule, BotNotifyService],
 })
 export class BotModule {}

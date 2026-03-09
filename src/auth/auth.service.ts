@@ -117,6 +117,30 @@ export class AuthService {
     return user;
   }
 
+  /** WebApp: login with login/password. Returns JWT (8h) + user. Only is_active users. */
+  async webappLogin(login: string, password: string): Promise<{ token: string; user: { id: string; fullname: string; login: string; role: string } }> {
+    const user = await this.validateUser(login, password);
+    if (!user) {
+      throw new UnauthorizedException('Login yoki parol xato');
+    }
+    const payload: JwtPayload = {
+      sub: user.id,
+      login: user.login,
+      role: user.role as Role,
+    };
+    const expiresIn = '8h';
+    const token = this.jwtService.sign(payload, { expiresIn });
+    return {
+      token,
+      user: {
+        id: user.id,
+        fullname: user.fullname,
+        login: user.login,
+        role: user.role,
+      },
+    };
+  }
+
   /** WebApp: resolve user by Telegram ID (master, driver, or boss). Used by TelegramWebAppGuard for "My Orders" and driver-finish. */
   async getUserByTgId(tgId: number) {
     const user = await this.prisma.user.findFirst({

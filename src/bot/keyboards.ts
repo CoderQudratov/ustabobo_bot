@@ -45,38 +45,94 @@ function webAppUrl(path = ''): string {
   return `${base}${p}`;
 }
 
-/** Master menu: Yangi buyurtma + Mening buyurtmalarim (WebApp). */
+/** Master menu: Faol buyurtmalar, Tarix, Statistika, WebApp. */
 export function getMasterKeyboard() {
   return Markup.keyboard([
-    [Markup.button.webApp('➕ Yangi buyurtma', webAppUrl('/new-order'))],
-    [Markup.button.webApp('📦 Mening buyurtmalarim', webAppUrl('/my-orders'))],
-  ]).resize();
+    [{ text: '📋 Faol buyurtmalar' }],
+    [{ text: '📜 Buyurtmalar tarixi' }],
+    [{ text: '📊 Mening statistikam' }],
+    [Markup.button.webApp('🌐 WebApp', webAppUrl(''))],
+  ])
+    .resize()
+    .persistent();
 }
 
-/** Driver menu: Faol buyurtmalar, Tarix, Hamyon (WebApp). */
+/** Driver menu: Faol yetkazishlar, Yetkazish tarixi, WebApp. */
 export function getDriverKeyboard() {
   return Markup.keyboard([
-    [
-      Markup.button.webApp(
-        '📦 Faol buyurtmalar',
-        webAppUrl('/my-orders?role=driver&filter=active'),
+    [{ text: '🚗 Faol yetkazishlar' }],
+    [{ text: '📜 Yetkazish tarixi' }],
+    [Markup.button.webApp('🌐 WebApp', webAppUrl(''))],
+  ])
+    .resize()
+    .persistent();
+}
+
+const DRIVER_DELIVERED_PREFIX = 'driver_delivered_';
+
+/** Inline keyboard: [✅ Yetkazib bo'ldim] for driver to mark order delivered. */
+export function getDriverDeliveredInline(orderId: string) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Yetkazib bo\'ldim', `${DRIVER_DELIVERED_PREFIX}${orderId}`)],
+  ]);
+}
+
+export const DRIVER_DELIVERED_CB_REGEX = /^driver_delivered_(.+)$/;
+
+/** Inline keyboard: single button to refresh master's faol buyurtmalar list. */
+export function getMasterFaolRefreshInline() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('🔄 Yangilash', 'master_faol_refresh')],
+  ]);
+}
+
+const MASTER_TARIX_PREFIX = 'master_tarix_';
+
+/** Inline keyboard: pagination for master's buyurtmalar tarixi (skip in callback). */
+export function getMasterTarixPaginationInline(
+  skip: number,
+  hasPrev: boolean,
+  hasNext: boolean,
+) {
+  const row: ReturnType<typeof Markup.button.callback>[] = [];
+  if (hasPrev) {
+    row.push(
+      Markup.button.callback(
+        '⬅️ Oldingi 10',
+        `${MASTER_TARIX_PREFIX}${skip - 10}`,
       ),
-    ],
-    [
-      Markup.button.webApp(
-        '🕒 Tarix',
-        webAppUrl('/my-orders?role=driver&filter=history'),
+    );
+  }
+  if (hasNext) {
+    row.push(
+      Markup.button.callback(
+        'Keyingi 10 ➡️',
+        `${MASTER_TARIX_PREFIX}${skip + 10}`,
       ),
-    ],
-    [Markup.button.webApp('💰 Hamyon', webAppUrl('/wallet'))],
-  ]).resize();
+    );
+  }
+  return Markup.inlineKeyboard(row.length ? [row] : []);
+}
+
+export const MASTER_TARIX_CB_REGEX = /^master_tarix_(\d+)$/;
+
+/** Boss menu: Bugungi hisobot, Haftalik, Xodimlar, Qarzlar, Kam mahsulotlar. */
+export function getBossKeyboard() {
+  return Markup.keyboard([
+    [{ text: '📊 Bugungi hisobot' }],
+    [{ text: '📈 Haftalik hisobot' }],
+    [{ text: '👥 Xodimlar faolligi' }],
+    [{ text: '🏢 Tashkilot qarzlari' }],
+    [{ text: '📦 Kam qolgan mahsulotlar' }],
+  ])
+    .resize()
+    .persistent();
 }
 
 /** Bot menu by role. No tg_id/role in URLs — server identifies user from initData. */
 export function getMainMenuKeyboard(role?: string) {
-  if (role === 'driver') {
-    return getDriverKeyboard();
-  }
+  if (role === 'driver') return getDriverKeyboard();
+  if (role === 'boss') return getBossKeyboard();
   return getMasterKeyboard();
 }
 

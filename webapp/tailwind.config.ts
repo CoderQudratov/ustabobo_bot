@@ -11,6 +11,16 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        primary: "var(--primary)",
+        "primary-dark": "var(--primary-dark)",
+        surface: "var(--surface)",
+        border: "var(--border)",
+        success: "var(--success)",
+        danger: "var(--danger)",
+        warning: "var(--warning)",
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
     },
   },

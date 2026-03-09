@@ -268,11 +268,56 @@ export class OrdersService {
     return user ? { id: user.id, role: user.role } : null;
   }
 
-  /** Fetch orders for "My Orders" WebApp: master/boss by master_id, driver by driver_id. */
-  async getMyOrders(telegramId: string | number) {
+  /** Fetch orders for "My Orders" WebApp. status=active | completed | cancelled | history (completed+cancelled). */
+  async getMyOrders(
+    telegramId: string | number,
+    opts?: { status?: string; page?: number; limit?: number },
+  ) {
     const user = await this.findUserByTelegramId(telegramId);
-    if (!user) return [];
-    return this.getMyOrdersByUserId(user.id, user.role);
+    if (!user) return { items: [], total: 0, page: 1, limit: opts?.limit ?? 100 };
+    const page = opts?.page ?? 1;
+    const limit = opts?.limit ?? 100;
+    const baseWhere =
+      user.role === 'driver' ? { driver_id: user.id } : { master_id: user.id };
+    const statusFilter = this.statusFilterForMyOrders(opts?.status);
+    const where = statusFilter
+      ? { ...baseWhere, status: statusFilter }
+      : baseWhere;
+    const [items, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          master: { select: { id: true, fullname: true, login: true } },
+          driver: { select: { id: true, fullname: true } },
+          orderItems: {
+            include: {
+              product: true,
+              service: true,
+            },
+          },
+        },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  private statusFilterForMyOrders(
+    status?: string,
+  ): Prisma.EnumOrderStatusFilter | undefined {
+    if (!status || status === 'all') return undefined;
+    if (status === 'active') {
+      return { notIn: [OrderStatus.completed, OrderStatus.cancelled] };
+    }
+    if (status === 'completed') return { equals: OrderStatus.completed };
+    if (status === 'cancelled') return { equals: OrderStatus.cancelled };
+    if (status === 'history') {
+      return { in: [OrderStatus.completed, OrderStatus.cancelled] };
+    }
+    return undefined;
   }
 
   /** Fetch orders by DB user id (used when auth is via initData guard; no telegramId in URL). */

@@ -9,58 +9,48 @@ import { Action, Ctx, Command, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { Markup, Scenes } from 'telegraf';
 import {
-  getDriverOrderInlineButton,
+  getBossKeyboard,
+  getDriverDeliveredInline,
   getDriverKeyboard,
+  getDriverOrderInlineButton,
   getMainMenuKeyboard,
+  getMasterFaolRefreshInline,
   getMasterKeyboard,
-  getPinEntryKeyboard,
-  PIN_CALLBACK_PREFIX,
+  getMasterTarixPaginationInline,
+  DRIVER_DELIVERED_CB_REGEX,
+  MASTER_TARIX_CB_REGEX,
 } from './keyboards';
 import {
   logBotError,
   userMessageWithCode,
   BOT_ERROR_CODES,
 } from './bot-error.util';
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
-import { OrderStatus, Role } from '../../generated/prisma/client';
+import { subDays } from 'date-fns';
+import { OrderStatus } from '../../generated/prisma/client';
 import { User } from '../../generated/prisma/client';
 import { calculateOrderTotal } from '../orders/price-calculator';
-const PIN_MAX_FAIL = 3;
-const PIN_LOCK_MINUTES = 5;
 
-/** Session: PIN entry buffer and optional set-PIN mode (when user has no pin_code_hash yet). */
-interface SessionWithPin {
-  pinBuffer?: string;
-  setPinMode?: boolean;
-}
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-interface ContextWithSession extends Context {
-  session?: SessionWithPin;
-}
-
-function getSession(ctx: Context): SessionWithPin {
-  return (ctx as ContextWithSession).session ?? {};
-}
-
-function getPinBuffer(ctx: Context): string {
-  return getSession(ctx).pinBuffer ?? '';
-}
-
-function setPinBuffer(ctx: Context, value: string): void {
-  const s = getSession(ctx);
-  (ctx as ContextWithSession).session = { ...s, pinBuffer: value };
-}
-
-function setPinMode(ctx: Context, value: boolean): void {
-  const s = getSession(ctx);
-  (ctx as ContextWithSession).session = { ...s, setPinMode: value };
-}
-
-function isSetPinMode(ctx: Context): boolean {
-  return !!getSession(ctx).setPinMode;
-}
+const FAOL_STATUS_LABELS: Record<string, string> = {
+  waiting_confirmation: '⏳ Tasdiq kutmoqda',
+  confirmed: '✅ Tasdiqlandi',
+  in_progress: '🔧 Jarayonda',
+  working: '🔧 Jarayonda',
+  waiting_customer_confirmation: '👤 Mijoz kutmoqda',
+  delivered_by_driver: '🚗 Yetkazildi',
+  draft: '📝 Qoralama',
+  waiting_master_work_start: '⏳ Usta ishni boshlashi',
+  broadcasted: '📢 E\'lon qilindi',
+  accepted: '✅ Qabul qilindi',
+  received_by_driver: '📦 Kuryer oldi',
+  waiting_master_delivery_confirmation: '⏳ Yetkazilishi tasdiqlanadi',
+  received_by_master: '📦 Ustaga yetdi',
+  completed: '✅ Yakunlandi',
+  cancelled: '❌ Bekor qilindi',
+};
 
 @Update()
 @Injectable()
@@ -74,65 +64,632 @@ export class BotUpdate {
     return raw.replace(/\s+/g, ' ').trim();
   }
 
-  private isYangiBuyurtma(text: string): boolean {
-    const n = this.normalizeButtonText(text);
-    return (
-      n === '➕ Yangi buyurtma' ||
-      n.includes('Yangi buyurtma') ||
-      n === 'Yangi buyurtma'
-    );
+  private isMasterButton(text: string, label: string): boolean {
+    return this.normalizeButtonText(text) === this.normalizeButtonText(label);
   }
 
-  private isMeningBuyurtmalarim(text: string): boolean {
-    const n = this.normalizeButtonText(text);
-    return (
-      n === '📦 Mening buyurtmalarim' ||
-      n.includes('Mening buyurtmalarim') ||
-      n === 'Mening buyurtmalarim' ||
-      n === '📋 Buyurtmalarim' ||
-      n.includes('Buyurtmalarim')
-    );
+  private formatMoney(amount: number | null | undefined): string {
+    if (amount == null) return '0';
+    return Number(amount).toLocaleString('uz-UZ');
   }
 
-  /** Returns user if allowed to act (authenticated or no PIN); otherwise replies and returns null. */
-  private async requireAuth(ctx: Context): Promise<
-    | (User & {
-        pin_code_hash: string | null;
-        is_authenticated: boolean;
-        locked_until: Date | null;
-        pin_fail_count: number;
+  private formatDate(d: Date): string {
+    return d
+      .toLocaleDateString('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
       })
-    | null
-  > {
+      .replace(/\//g, '.');
+  }
+
+  /** Boss: bugungi hisobot (orders, revenue, active). */
+  private async sendBossTodayReport(ctx: Context): Promise<void> {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    const to = new Date();
+    to.setHours(23, 59, 59, 999);
+
+    const [orders, revenue, activeOrders] = await Promise.all([
+      this.prisma.order.count({
+        where: { created_at: { gte: from, lte: to } },
+      }),
+      this.prisma.order.aggregate({
+        where: {
+          created_at: { gte: from, lte: to },
+          status: OrderStatus.completed,
+        },
+        _sum: { total_amount: true },
+      }),
+      this.prisma.order.count({
+        where: {
+          status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+        },
+      }),
+    ]);
+
+    const totalAmount = revenue._sum?.total_amount ?? null;
+    const text =
+      '📊 Bugungi hisobot\n' +
+      `📅 ${this.formatDate(new Date())}\n` +
+      '─────────────────\n' +
+      `📦 Jami buyurtma: ${orders} ta\n` +
+      `⚡ Faol buyurtma: ${activeOrders} ta\n` +
+      `💰 Daromad: ${this.formatMoney(Number(totalAmount))} so'm\n` +
+      '─────────────────';
+
+    await ctx.reply(text, getBossKeyboard()).catch(() => {});
+  }
+
+  /** Boss: haftalik hisobot (7 kun, eng faol usta). */
+  private async sendBossWeekReport(ctx: Context): Promise<void> {
+    const now = new Date();
+    const from = subDays(now, 7);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(now.getTime());
+
+    const [orders, completed, cancelled, revenue, topMasters] = await Promise.all([
+      this.prisma.order.count({
+        where: { created_at: { gte: from, lte: to } },
+      }),
+      this.prisma.order.count({
+        where: {
+          created_at: { gte: from, lte: to },
+          status: OrderStatus.completed,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          created_at: { gte: from, lte: to },
+          status: OrderStatus.cancelled,
+        },
+      }),
+      this.prisma.order.aggregate({
+        where: {
+          created_at: { gte: from, lte: to },
+          status: OrderStatus.completed,
+        },
+        _sum: { total_amount: true },
+      }),
+      this.prisma.order.groupBy({
+        by: ['master_id'],
+        where: {
+          created_at: { gte: from, lte: to },
+          status: OrderStatus.completed,
+        },
+        _count: { id: true },
+      }),
+    ]);
+
+    const totalAmount = revenue._sum?.total_amount ?? null;
+    const fromStr = this.formatDate(from).slice(0, 5);
+    const toStr = this.formatDate(to).slice(0, 5);
+    const sorted = [...topMasters].sort((a, b) => b._count.id - a._count.id);
+    let engFaol = '—';
+    if (sorted.length > 0) {
+      const master = await this.prisma.user.findUnique({
+        where: { id: sorted[0].master_id },
+        select: { fullname: true },
+      });
+      engFaol = master
+        ? `${master.fullname} (${sorted[0]._count.id} ta buyurtma)`
+        : '—';
+    }
+
+    const text =
+      '📈 Haftalik hisobot\n' +
+      `📅 ${fromStr} — ${toStr}\n` +
+      '─────────────────\n' +
+      `📦 Jami buyurtma: ${orders} ta\n` +
+      `✅ Tugallangan: ${completed} ta\n` +
+      `❌ Bekor: ${cancelled} ta\n` +
+      `💰 Jami daromad: ${this.formatMoney(Number(totalAmount))} so'm\n` +
+      `👤 Eng faol usta: ${engFaol}\n` +
+      '─────────────────';
+
+    await ctx.reply(text, getBossKeyboard()).catch(() => {});
+  }
+
+  /** Boss: xodimlar faolligi (oxirgi 7 kun). */
+  private async sendBossStaffReport(ctx: Context): Promise<void> {
+    const weekAgo = subDays(new Date(), 7);
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['master', 'driver'] },
+        is_active: true,
+      },
+      include: {
+        ordersAsMaster: {
+          where: { created_at: { gte: weekAgo } },
+          select: { id: true },
+        },
+        ordersAsDriver: {
+          where: { created_at: { gte: weekAgo } },
+          select: { id: true },
+        },
+      },
+    });
+
+    const rows = users
+      .map((u) => {
+        const count =
+          u.role === 'master'
+            ? u.ordersAsMaster.length
+            : u.ordersAsDriver.length;
+        const icon = u.role === 'master' ? '👷' : '🚗';
+        const label =
+          u.role === 'master'
+            ? `${count} ta buyurtma`
+            : `${count} ta yetkazish`;
+        return { fullname: u.fullname, icon, label, count };
+      })
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    const lines = rows.map(
+      (r, i) => `${i + 1}. ${r.icon} ${r.fullname} — ${r.label}`,
+    );
+    const text =
+      '👥 Xodimlar (oxirgi 7 kun)\n' +
+      '─────────────────\n' +
+      (lines.length ? lines.join('\n') : 'Hozircha ma\'lumot yo\'q.') +
+      '\n─────────────────';
+
+    await ctx.reply(text, getBossKeyboard()).catch(() => {});
+  }
+
+  /** Boss: tashkilot qarzlari. */
+  private async sendBossDebtsReport(ctx: Context): Promise<void> {
+    const orgs = await this.prisma.organization.findMany({
+      where: { balance_due: { gt: 0 } },
+      orderBy: { balance_due: 'desc' },
+    });
+
+    const lines = orgs.map(
+      (o, i) =>
+        `${i + 1}. ${o.name} — ${this.formatMoney(Number(o.balance_due))} so'm ⚠️`,
+    );
+    const text =
+      '🏢 Qarzdor tashkilotlar\n' +
+      '─────────────────\n' +
+      (lines.length ? lines.join('\n') : 'Qarzdor tashkilot yo\'q.') +
+      '\n─────────────────';
+
+    await ctx.reply(text, getBossKeyboard()).catch(() => {});
+  }
+
+  /** Boss: kam qolgan mahsulotlar (stock_count <= min_limit). */
+  private async sendBossLowstockReport(ctx: Context): Promise<void> {
+    const products = await this.prisma.product.findMany({
+      where: { is_active: true },
+    });
+    const low = products.filter((p) => p.stock_count <= p.min_limit);
+
+    const lines = low.map((p) => {
+      const icon = p.stock_count === 0 ? '❗' : '⚠️';
+      return `${icon} ${p.name} — ${p.stock_count} ta qoldi (min: ${p.min_limit})`;
+    });
+    const text =
+      '📦 Kam qolgan mahsulotlar\n' +
+      '─────────────────\n' +
+      (lines.length ? lines.join('\n') : 'Barcha mahsulotlar yetarli.') +
+      '\n─────────────────';
+
+    await ctx.reply(text, getBossKeyboard()).catch(() => {});
+  }
+
+  /** Build and send master's statistics message. */
+  private async sendMasterStats(ctx: Context, user: User): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekStart = subDays(today, 7);
+
+    const [todayOrders, weekOrders, allOrders] = await Promise.all([
+      this.prisma.order.count({
+        where: {
+          master_id: user.id,
+          created_at: { gte: today },
+          status: OrderStatus.completed,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          master_id: user.id,
+          created_at: { gte: weekStart },
+          status: OrderStatus.completed,
+        },
+      }),
+      this.prisma.order.aggregate({
+        where: { master_id: user.id, status: OrderStatus.completed },
+        _count: true,
+        _sum: { total_amount: true },
+      }),
+    ]);
+
+    const totalAmount = allOrders._sum?.total_amount ?? null;
+    const text =
+      '📊 Sizning statistikangiz\n\n' +
+      `📅 Bugun: ${todayOrders} ta buyurtma\n` +
+      `📆 Bu hafta: ${weekOrders} ta buyurtma\n` +
+      `🏆 Jami: ${allOrders._count} ta buyurtma\n` +
+      `💰 Jami daromad: ${this.formatMoney(Number(totalAmount))} so'm\n` +
+      `📈 Foiz stavka: ${Number(user.percent_rate)}%\n` +
+      `💵 Balans: ${this.formatMoney(Number(user.balance))} so'm`;
+
+    await ctx.reply(text, getMasterKeyboard()).catch(() => {});
+  }
+
+  /** Format one driver order for Faol yetkazishlar (lat/lng if present). */
+  private formatDriverOrderCard(order: {
+    id: string;
+    client_name: string;
+    client_phone: string;
+    lat: { toString(): string } | null;
+    lng: { toString(): string } | null;
+    total_amount: { toString(): string } | number;
+  }): string {
+    const idShort = order.id.replace(/-/g, '').slice(-8);
+    const total = Number(order.total_amount).toLocaleString('uz-UZ');
+    const manzil =
+      order.lat != null && order.lng != null
+        ? `${Number(order.lat).toFixed(5)}, ${Number(order.lng).toFixed(5)}`
+        : '—';
+    return (
+      `🚗 Buyurtma #${idShort}\n` +
+      `👤 Mijoz: ${order.client_name} — ${order.client_phone}\n` +
+      `📍 Manzil: ${manzil}\n` +
+      `💰 Summa: ${total} so'm`
+    );
+  }
+
+  /** Send driver's faol yetkazishlar list (each order with [✅ Yetkazib bo'ldim]). */
+  private async sendDriverFaolList(ctx: Context, user: User): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        driver_id: user.id,
+        status: {
+          in: [
+            OrderStatus.accepted,
+            OrderStatus.received_by_driver,
+            OrderStatus.delivered_by_driver,
+          ],
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (orders.length === 0) {
+      await ctx
+        .reply("📭 Hozircha faol yetkazish yo'q.", getDriverKeyboard())
+        .catch(() => {});
+      return;
+    }
+
+    for (const order of orders) {
+      const text = this.formatDriverOrderCard(order);
+      await ctx
+        .reply(text, getDriverDeliveredInline(order.id))
+        .catch(() => {});
+    }
+  }
+
+  private formatOrderStatus(status: string): string {
+    return FAOL_STATUS_LABELS[status] ?? `📌 ${status}`;
+  }
+
+  private formatOrderCard(order: {
+    id: string;
+    client_name: string;
+    client_phone: string;
+    car_number: string;
+    total_amount: { toString(): string } | number;
+    status: string;
+    created_at: Date;
+  }): string {
+    const W = 25;
+    const line = (s: string) =>
+      '│ ' + s.replace(/\n/g, ' ').slice(0, W).padEnd(W) + ' │';
+    const idShort = order.id.replace(/-/g, '').slice(-8);
+    const total = Number(order.total_amount).toLocaleString('uz-UZ');
+    const date = new Date(order.created_at);
+    const dateStr = date
+      .toLocaleString('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      .replace(/\//g, '.');
+    const statusLabel = this.formatOrderStatus(order.status);
+    return (
+      '┌─────────────────────────┐\n' +
+      line(`🔧 Buyurtma #${idShort}`) + '\n' +
+      line(`👤 ${order.client_name} — ${order.client_phone}`) + '\n' +
+      line(`🚗 ${order.car_number}`) + '\n' +
+      line(`💰 ${total} so'm`) + '\n' +
+      line(`📌 ${statusLabel}`) + '\n' +
+      line(`🕐 ${dateStr}`) + '\n' +
+      '└─────────────────────────┘'
+    );
+  }
+
+  /** Build and send (or edit) master's faol buyurtmalar list. */
+  private async sendMasterFaolList(
+    ctx: Context,
+    user: User,
+    edit?: { chatId: number; messageId: number },
+  ): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        master_id: user.id,
+        status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 10,
+      include: {
+        orderItems: {
+          include: { service: true, product: true },
+        },
+      },
+    });
+
+    const keyboard = getMasterFaolRefreshInline();
+    const text = orders.length
+      ? orders.map((o) => this.formatOrderCard(o)).join('\n\n')
+      : "📭 Hozircha faol buyurtma yo'q.";
+
+    if (edit) {
+      await ctx.telegram
+        .editMessageText(
+          edit.chatId,
+          edit.messageId,
+          undefined,
+          text,
+          keyboard,
+        )
+        .catch(() => {});
+    } else {
+      await ctx.reply(text, keyboard).catch(() => {});
+    }
+  }
+
+  private formatTarixOrderLine(
+    order: {
+      id: string;
+      client_name: string;
+      car_number: string;
+      total_amount: { toString(): string } | number;
+      status: string;
+      created_at: Date;
+    },
+    index: number,
+  ): string {
+    const icon = order.status === 'completed' ? '✅' : '❌';
+    const idShort = order.id.replace(/-/g, '').slice(-8);
+    const total = Number(order.total_amount).toLocaleString('uz-UZ');
+    const date = new Date(order.created_at);
+    const dateStr = date
+      .toLocaleDateString('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+      })
+      .replace(/\//g, '.');
+    return (
+      `${index}. ${icon} #${idShort} — ${order.client_name}\n` +
+      `     🚗 ${order.car_number} | 💰 ${total} so'm\n` +
+      `     📅 ${dateStr}`
+    );
+  }
+
+  /** Build and send (or edit) master's buyurtmalar tarixi list with pagination. */
+  private async sendMasterTarixList(
+    ctx: Context,
+    user: User,
+    skip: number,
+    edit?: { chatId: number; messageId: number },
+  ): Promise<void> {
+    const TAKE = 10;
+    const orders = await this.prisma.order.findMany({
+      where: {
+        master_id: user.id,
+        status: { in: [OrderStatus.completed, OrderStatus.cancelled] },
+      },
+      orderBy: { created_at: 'desc' },
+      take: TAKE + 1,
+      skip,
+    });
+    const hasNext = orders.length > TAKE;
+    const list = orders.slice(0, TAKE);
+
+    const lines = list.map((o, i) =>
+      this.formatTarixOrderLine(o, skip + i + 1),
+    );
+    const text =
+      '📜 So\'nggi 10 ta buyurtma:\n\n' +
+      (lines.length ? lines.join('\n\n') : '📭 Buyurtma yo\'q.');
+
+    const keyboard = getMasterTarixPaginationInline(skip, skip > 0, hasNext);
+
+    if (edit) {
+      await ctx.telegram
+        .editMessageText(
+          edit.chatId,
+          edit.messageId,
+          undefined,
+          text,
+          keyboard,
+        )
+        .catch(() => {});
+    } else {
+      await ctx.reply(text, keyboard).catch(() => {});
+    }
+  }
+
+  /** Returns user if session valid (tg_id, is_active, last_authenticated_at within 8h); otherwise replies and returns null. */
+  private async requireAuth(ctx: Context): Promise<User | null> {
     const tgId = ctx.from?.id?.toString();
     if (!tgId) return null;
     const user = await this.prisma.user.findFirst({
       where: { tg_id: tgId, is_active: true },
     });
     if (!user) return null;
-    const hasPin =
-      user.pin_code_hash != null && user.pin_code_hash.trim() !== '';
-    if (hasPin && !user.is_authenticated) {
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        const mins = Math.ceil(
-          (new Date(user.locked_until).getTime() - Date.now()) / 60_000,
-        );
-        await ctx
-          .reply(
-            `🔒 PIN bloklangan. ${mins} daqiqa keyin qayta urinib ko‘ring.`,
-          )
-          .catch(() => {});
-        return null;
-      }
-      await ctx.reply('🔐 Avval PIN kiriting (/start).').catch(() => {});
+    const at = user.last_authenticated_at;
+    if (!at || Date.now() - new Date(at).getTime() > SESSION_TTL_MS) {
+      await ctx.reply('Avval kirish (/start).').catch(() => {});
       return null;
     }
-    return user as User & {
-      pin_code_hash: string | null;
-      is_authenticated: boolean;
-      locked_until: Date | null;
-      pin_fail_count: number;
-    };
+    return user;
+  }
+
+  @Action(DRIVER_DELIVERED_CB_REGEX)
+  async onDriverDelivered(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
+        return;
+      }
+      if (user.role !== 'driver') {
+        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(DRIVER_DELIVERED_CB_REGEX);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto\'g\'ri buyurtma.').catch(() => {});
+        return;
+      }
+      await this.prisma.order.updateMany({
+        where: { id: orderId, driver_id: user.id },
+        data: { status: OrderStatus.delivered_by_driver },
+      });
+      await ctx.answerCbQuery('✅ Yetkazilindi!').catch(() => {});
+      if (
+        ctx.callbackQuery?.message &&
+        'message_id' in ctx.callbackQuery.message
+      ) {
+        await ctx.editMessageText('✅ Yetkazilindi.').catch(() => {});
+      }
+    } catch (err) {
+      logBotError(BOT_ERROR_CODES.TEXT, err, ctx);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Action(MASTER_TARIX_CB_REGEX)
+  async onMasterTarixPage(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
+        return;
+      }
+      if (user.role !== 'master') {
+        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(MASTER_TARIX_CB_REGEX);
+      const skip = match ? parseInt(match[1], 10) : 0;
+      const msg = ctx.callbackQuery?.message;
+      const chatId = ctx.chat?.id;
+      const messageId = msg && 'message_id' in msg ? msg.message_id : undefined;
+      if (chatId == null || messageId == null) {
+        await ctx.answerCbQuery('Xatolik.').catch(() => {});
+        return;
+      }
+      await ctx.answerCbQuery('Yuklanmoqda…').catch(() => {});
+      await this.sendMasterTarixList(ctx, user, skip, { chatId, messageId });
+    } catch (err) {
+      logBotError(BOT_ERROR_CODES.TEXT, err, ctx);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Action('master_faol_refresh')
+  async onMasterFaolRefresh(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
+        return;
+      }
+      if (user.role !== 'master') {
+        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        return;
+      }
+      const msg = ctx.callbackQuery?.message;
+      const chatId = ctx.chat?.id;
+      const messageId = msg && 'message_id' in msg ? msg.message_id : undefined;
+      if (chatId == null || messageId == null) {
+        await ctx.answerCbQuery('Xatolik.').catch(() => {});
+        return;
+      }
+      await ctx.answerCbQuery('Yangilanmoqda…').catch(() => {});
+      await this.sendMasterFaolList(ctx, user, { chatId, messageId });
+    } catch (err) {
+      logBotError(BOT_ERROR_CODES.TEXT, err, ctx);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @Command('today')
+  async onBossToday(@Ctx() ctx: Context): Promise<void> {
+    const user = await this.requireAuth(ctx);
+    if (!user) return;
+    if (user.role !== 'boss') {
+      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      return;
+    }
+    await this.sendBossTodayReport(ctx);
+  }
+
+  @Command('week')
+  async onBossWeek(@Ctx() ctx: Context): Promise<void> {
+    const user = await this.requireAuth(ctx);
+    if (!user) return;
+    if (user.role !== 'boss') {
+      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      return;
+    }
+    await this.sendBossWeekReport(ctx);
+  }
+
+  @Command('staff')
+  async onBossStaff(@Ctx() ctx: Context): Promise<void> {
+    const user = await this.requireAuth(ctx);
+    if (!user) return;
+    if (user.role !== 'boss') {
+      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      return;
+    }
+    await this.sendBossStaffReport(ctx);
+  }
+
+  @Command('debts')
+  async onBossDebts(@Ctx() ctx: Context): Promise<void> {
+    const user = await this.requireAuth(ctx);
+    if (!user) return;
+    if (user.role !== 'boss') {
+      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      return;
+    }
+    await this.sendBossDebtsReport(ctx);
+  }
+
+  @Command('lowstock')
+  async onBossLowstock(@Ctx() ctx: Context): Promise<void> {
+    const user = await this.requireAuth(ctx);
+    if (!user) return;
+    if (user.role !== 'boss') {
+      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      return;
+    }
+    await this.sendBossLowstockReport(ctx);
   }
 
   @Command('check')
@@ -154,142 +711,11 @@ export class BotUpdate {
       return;
     }
     const msg = [
-      `is_authenticated: ${user.is_authenticated}`,
+      `last_authenticated_at: ${user.last_authenticated_at ? user.last_authenticated_at.toISOString() : 'null'}`,
       `pin_fail_count: ${user.pin_fail_count}`,
       `locked_until: ${user.locked_until ? user.locked_until.toISOString() : 'null'}`,
     ].join('\n');
     await ctx.reply(msg).catch(() => {});
-  }
-
-  @Action(new RegExp(`^${PIN_CALLBACK_PREFIX}`))
-  async onPinAction(@Ctx() ctx: Context): Promise<void> {
-    const tgId = ctx.from?.id?.toString();
-    if (!tgId) {
-      await ctx.answerCbQuery('Xatolik.').catch(() => {});
-      return;
-    }
-    const cb = ctx.callbackQuery as { data?: string } | undefined;
-    const data = cb?.data ?? '';
-    if (data === 'pin_clear') {
-      setPinBuffer(ctx, '');
-      await ctx.answerCbQuery('Tozalandi.').catch(() => {});
-      const msg = isSetPinMode(ctx)
-        ? "🔐 PIN o'rnating (kamida 4 raqam):"
-        : '🔐 PIN kiriting:';
-      await ctx.editMessageText(msg, getPinEntryKeyboard()).catch(() => {});
-      return;
-    }
-    if (data === 'pin_ok') {
-      const buf = getPinBuffer(ctx);
-      const user = await this.prisma.user.findFirst({
-        where: { tg_id: tgId, is_active: true },
-      });
-      if (!user) {
-        await ctx.answerCbQuery('Foydalanuvchi topilmadi.').catch(() => {});
-        return;
-      }
-      // Set-PIN mode: user had no pin_code_hash, now saving first PIN (min 4 digits)
-      if (isSetPinMode(ctx)) {
-        setPinMode(ctx, false);
-        setPinBuffer(ctx, '');
-        if (buf.length < 4) {
-          await ctx
-            .answerCbQuery('Kamida 4 raqam kiriting.', { show_alert: true })
-            .catch(() => {});
-          await ctx
-            .editMessageText(
-              "🔐 PIN o'rnating (kamida 4 raqam):",
-              getPinEntryKeyboard(),
-            )
-            .catch(() => {});
-          return;
-        }
-        const pinCodeHash = await bcrypt.hash(buf, 10);
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            pin_code_hash: pinCodeHash,
-            is_authenticated: true,
-            pin_fail_count: 0,
-          },
-        });
-        await ctx.answerCbQuery('PIN saqlandi!').catch(() => {});
-        await ctx.editMessageText('Asosiy menyu').catch(() => {});
-        await ctx
-          .reply('Menyu', getMainMenuKeyboard(user.role))
-          .catch(() => {});
-        return;
-      }
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        await ctx.answerCbQuery('PIN bloklangan. Kuting.').catch(() => {});
-        return;
-      }
-      const pinMatch =
-        user.pin_code_hash && (await bcrypt.compare(buf, user.pin_code_hash));
-      if (pinMatch) {
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { is_authenticated: true, pin_fail_count: 0 },
-        });
-        setPinBuffer(ctx, '');
-        await ctx.answerCbQuery('Tasdiqlandi!').catch(() => {});
-        await ctx.editMessageText('Asosiy menyu').catch(() => {});
-        await ctx
-          .reply('Menyu', getMainMenuKeyboard(user.role))
-          .catch(() => {});
-        return;
-      }
-      const failCount = (user.pin_fail_count ?? 0) + 1;
-      const lockUntil =
-        failCount >= PIN_MAX_FAIL
-          ? new Date(Date.now() + PIN_LOCK_MINUTES * 60 * 1000)
-          : null;
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { pin_fail_count: failCount, locked_until: lockUntil },
-      });
-      setPinBuffer(ctx, '');
-      if (lockUntil) {
-        await ctx
-          .answerCbQuery(
-            `PIN noto'g'ri. ${PIN_MAX_FAIL} marta urinish — ${PIN_LOCK_MINUTES} daqiqa blok.`,
-            { show_alert: true },
-          )
-          .catch(() => {});
-        await ctx
-          .editMessageText(
-            `🔒 Bloklandi. ${PIN_LOCK_MINUTES} daqiqa keyin /start bosing.`,
-          )
-          .catch(() => {});
-      } else {
-        const left = PIN_MAX_FAIL - failCount;
-        await ctx
-          .answerCbQuery(`Noto'g'ri. Qolgan urinish: ${left}`, {
-            show_alert: true,
-          })
-          .catch(() => {});
-        await ctx
-          .editMessageText(
-            `🔐 PIN kiriting (qolgan: ${left}):`,
-            getPinEntryKeyboard(),
-          )
-          .catch(() => {});
-      }
-      return;
-    }
-    if (data.startsWith('pin_d_')) {
-      const digit = data.slice(6);
-      const buf = getPinBuffer(ctx) + digit;
-      setPinBuffer(ctx, buf);
-      await ctx.answerCbQuery('.').catch(() => {});
-      const prefix = isSetPinMode(ctx) ? "🔐 PIN o'rnating: " : '🔐 PIN: ';
-      await ctx
-        .editMessageText(
-          `${prefix}${'•'.repeat(buf.length)}`,
-          getPinEntryKeyboard(),
-        )
-        .catch(() => {});
-    }
   }
 
   @Start()
@@ -361,45 +787,42 @@ export class BotUpdate {
         where: { tg_id: tgId, is_active: true },
       });
       if (user) {
-        // Hard logout on every /start: require re-PIN (TZ Phase 3)
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { is_authenticated: false },
-        });
-        setPinBuffer(ctx, '');
-        if (user.pin_code_hash != null && user.pin_code_hash.trim() !== '') {
-          const locked =
-            user.locked_until && new Date(user.locked_until) > new Date();
-          if (locked) {
-            const mins = Math.ceil(
-              (new Date(user.locked_until!).getTime() - Date.now()) / 60_000,
-            );
+        const at = user.last_authenticated_at;
+        const sessionValid =
+          at && Date.now() - new Date(at).getTime() <= SESSION_TTL_MS;
+        if (sessionValid) {
+          if (user.role === 'master') {
             await ctx
               .reply(
-                `🔒 PIN bloklangan. ${mins} daqiqa keyin qayta urinib ko‘ring.`,
+                `✅ Xush kelibsiz, ${user.fullname}!\n👷 Usta panel`,
+                getMasterKeyboard(),
               )
               .catch(() => {});
-            return;
+          } else if (user.role === 'driver') {
+            await ctx
+              .reply(
+                `✅ Xush kelibsiz, ${user.fullname}!\n🚗 Haydovchi panel`,
+                getDriverKeyboard(),
+              )
+              .catch(() => {});
+          } else if (user.role === 'boss') {
+            await ctx
+              .reply(
+                `✅ Xush kelibsiz, ${user.fullname}!\n👑 Boss panel`,
+                getBossKeyboard(),
+              )
+              .catch(() => {});
+          } else {
+            await ctx
+              .reply('Menyu', getMainMenuKeyboard(user.role))
+              .catch(() => {});
           }
-          await ctx
-            .reply('🔐 PIN kiriting:', getPinEntryKeyboard())
-            .catch(() => {});
           return;
         }
-        // No PIN set: force PIN setup flow (security — user must set PIN before menu)
-        setPinMode(ctx, true);
-        await ctx
-          .reply("🔐 PIN o'rnating (kamida 4 raqam):", getPinEntryKeyboard())
-          .catch(() => {});
-        return;
       }
 
-      // New user: enter auth scene (login/password). Stage is registered by nestjs-telegraf.
+      // Not found or session expired: ask login (auth scene)
       if (sceneCtx.scene) {
-        console.log('[Bot] /start – entering auth scene', {
-          chatId: ctx.chat?.id,
-          userId: tgId,
-        });
         await sceneCtx.scene.enter('auth');
       } else {
         console.error('[Bot]', BOT_ERROR_CODES.START, {
@@ -431,62 +854,89 @@ export class BotUpdate {
       const tgId = ctx.from?.id?.toString();
       if (!tgId) return;
 
-      // Hidden developer commands: switch role (do not set is_authenticated)
-      if (text === '/be_driver' || text === '/be_master') {
-        const devAdminId = process.env.DEV_ADMIN_TG_ID?.trim();
-        // Silently ignore for ALL users if DEV_ADMIN_TG_ID is not set or doesn't match
-        if (!devAdminId || tgId !== devAdminId) return;
-
-        const user = await this.requireAuth(ctx);
-        if (!user) return;
-        const newRole = text === '/be_driver' ? Role.driver : Role.master;
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { role: newRole },
-        });
-        const roleLabel = newRole === Role.driver ? 'DRIVER' : 'MASTER';
-        const keyboard =
-          newRole === Role.driver ? getDriverKeyboard() : getMasterKeyboard();
-        await ctx
-          .reply(`Sizning rolingiz ${roleLabel} ga o'zgartirildi.`, keyboard)
-          .catch(() => {});
-        return;
-      }
-
       const user = await this.requireAuth(ctx);
       if (!user) return;
 
-      // Main menu buttons (when user types instead of pressing WebApp button): show same keyboard.
-      if (this.isYangiBuyurtma(text)) {
-        const draft = await this.prisma.order.findFirst({
-          where: { master_id: user.id, status: OrderStatus.draft },
-          orderBy: { created_at: 'desc' },
-        });
-        if (draft) {
-          await ctx
-            .reply(
-              'Sizda allaqachon qoralama buyurtma bor. Davom etasizmi yoki yangi yaratasizmi? Quyidagi tugmani bosing:',
-              getMainMenuKeyboard(user.role),
-            )
-            .catch(() => {});
-        } else {
-          await ctx
-            .reply(
-              'Yangi buyurtma yaratish uchun quyidagi tugmani bosing:',
-              getMainMenuKeyboard(user.role),
-            )
-            .catch(() => {});
+      // Master menu buttons (PROMPT 3–5: placeholders for Faol/Tarix/Statistika; WebApp opens via button)
+      if (user.role === 'master') {
+        if (this.isMasterButton(text, '📋 Faol buyurtmalar')) {
+          await this.sendMasterFaolList(ctx, user);
+          return;
         }
-        return;
+        if (this.isMasterButton(text, '📜 Buyurtmalar tarixi')) {
+          await this.sendMasterTarixList(ctx, user, 0);
+          return;
+        }
+        if (this.isMasterButton(text, '📊 Mening statistikam')) {
+          await this.sendMasterStats(ctx, user);
+          return;
+        }
+        if (this.isMasterButton(text, '🌐 WebApp')) {
+          await ctx
+            .reply(
+              'WebApp ni ochish uchun quyidagi 🌐 WebApp tugmasini bosing.',
+              getMasterKeyboard(),
+            )
+            .catch(() => {});
+          return;
+        }
       }
-      if (this.isMeningBuyurtmalarim(text)) {
-        await ctx
-          .reply(
-            'Buyurtmalar ro‘yxati uchun quyidagi tugmani bosing:',
-            getMainMenuKeyboard(user.role),
-          )
-          .catch(() => {});
-        return;
+
+      // Driver menu buttons
+      if (user.role === 'driver') {
+        if (
+          this.normalizeButtonText(text) === '🚗 Faol yetkazishlar' ||
+          this.normalizeButtonText(text) === 'Faol yetkazishlar'
+        ) {
+          await this.sendDriverFaolList(ctx, user);
+          return;
+        }
+        if (
+          this.normalizeButtonText(text) === '📜 Yetkazish tarixi' ||
+          this.normalizeButtonText(text) === 'Yetkazish tarixi'
+        ) {
+          await ctx
+            .reply('📜 Yetkazish tarixi (tez orada).', getDriverKeyboard())
+            .catch(() => {});
+          return;
+        }
+        if (
+          this.normalizeButtonText(text) === '🌐 WebApp' ||
+          this.normalizeButtonText(text) === 'WebApp'
+        ) {
+          await ctx
+            .reply(
+              'WebApp ni ochish uchun quyidagi 🌐 WebApp tugmasini bosing.',
+              getDriverKeyboard(),
+            )
+            .catch(() => {});
+          return;
+        }
+      }
+
+      // Boss menu buttons
+      if (user.role === 'boss') {
+        const n = this.normalizeButtonText(text);
+        if (n === '📊 Bugungi hisobot' || n === 'Bugungi hisobot') {
+          await this.sendBossTodayReport(ctx);
+          return;
+        }
+        if (n === '📈 Haftalik hisobot' || n === 'Haftalik hisobot') {
+          await this.sendBossWeekReport(ctx);
+          return;
+        }
+        if (n === '👥 Xodimlar faolligi' || n === 'Xodimlar faolligi') {
+          await this.sendBossStaffReport(ctx);
+          return;
+        }
+        if (n === '🏢 Tashkilot qarzlari' || n === 'Tashkilot qarzlari') {
+          await this.sendBossDebtsReport(ctx);
+          return;
+        }
+        if (n === '📦 Kam qolgan mahsulotlar' || n === 'Kam qolgan mahsulotlar') {
+          await this.sendBossLowstockReport(ctx);
+          return;
+        }
       }
 
       if (text === '📍 Lokatsiya yuborish') {
@@ -605,7 +1055,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -656,7 +1106,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -699,7 +1149,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -767,7 +1217,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -818,7 +1268,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -863,7 +1313,7 @@ export class BotUpdate {
     try {
       const user = await this.requireAuth(ctx);
       if (!user) {
-        await ctx.answerCbQuery('Avval PIN kiriting (/start).').catch(() => {});
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;

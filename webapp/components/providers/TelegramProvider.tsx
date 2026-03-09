@@ -2,7 +2,7 @@
 
 import { createContext, useEffect, useMemo, useState } from "react";
 import type { TelegramWebAppUser } from "@/types/telegram";
-import { setSessionExpiredHandler, setPinRequiredHandler, setTelegramRequiredHandler } from "@/utils/api";
+import { setSessionExpiredHandler, setPinRequiredHandler, setTelegramRequiredHandler, clearWebappAuth } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TelegramRequired } from "@/components/TelegramRequired";
 
@@ -113,7 +113,11 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setSessionExpiredHandler(() => setSessionExpired(true));
+    setSessionExpiredHandler(() => {
+      clearWebappAuth();
+      setSessionExpired(true);
+      window.location.href = "/";
+    });
     setPinRequiredHandler(() => setPinRequired(true));
     setTelegramRequiredHandler(() => setTelegramRequired(true));
     return () => {

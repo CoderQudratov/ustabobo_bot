@@ -1,16 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Telegram Mini App theme (core.telegram.org/bots/webapps#theme-params) */
+/* Design tokens — mobile-first WebApp */
 :root {
-  --tg-bg: var(--tg-theme-bg-color, #1a1a1a);
-  --tg-text: var(--tg-theme-text-color, #fff);
-  --tg-hint: var(--tg-theme-hint-color, #999);
-  --tg-link: var(--tg-theme-link-color, #2481cc);
-  --tg-button: var(--tg-theme-button-color, #2481cc);
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-2: #64748b;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  /* Telegram overrides when in WebApp (optional) */
+  --tg-bg: var(--tg-theme-bg-color, var(--bg));
+  --tg-text: var(--tg-theme-text-color, var(--text));
+  --tg-hint: var(--tg-theme-hint-color, var(--text-2));
+  --tg-link: var(--tg-theme-link-color, var(--primary));
+  --tg-button: var(--tg-theme-button-color, var(--primary));
   --tg-button-text: var(--tg-theme-button-text-color, #fff);
-  --tg-secondary-bg: var(--tg-theme-secondary-bg-color, #2b2b2b);
+  --tg-secondary-bg: var(--tg-theme-secondary-bg-color, var(--surface));
   --background: var(--tg-bg);
   --foreground: var(--tg-text);
 }
@@ -18,12 +32,83 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Bottom nav safe area */
+.webapp-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@layer components {
+  .input-webapp {
+    @apply w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-base text-[var(--text)];
+    font-size: 16px; /* prevent zoom on iOS */
+    @apply outline-none transition-shadow duration-150;
+  }
+  .input-webapp::placeholder {
+    color: var(--text-2);
+  }
+  .input-webapp:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  .input-webapp:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply w-full rounded-[10px] h-12 font-semibold text-white flex items-center justify-center transition active:scale-[0.98];
+    background-color: var(--primary);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-dark);
+  }
+  .btn-primary:disabled {
+    @apply opacity-70 cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply w-full rounded-[10px] h-12 font-semibold flex items-center justify-center border transition active:scale-[0.98];
+    border-color: var(--border);
+    color: var(--text);
+    background: transparent;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    @apply bg-black/5;
+  }
+
+  .card-webapp {
+    @apply rounded-xl p-4 transition-shadow;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .card-webapp:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    rgba(255, 255, 255, 0.5) 50%,
+    var(--border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
