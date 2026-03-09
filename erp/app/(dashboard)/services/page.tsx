@@ -45,7 +45,7 @@ export default function ServicesPage() {
   });
 
   const items = data?.items ?? [];
-  const total = data?.total ?? 0;
+
 
   const handleCloseDialog = () => {
     setOpen(false);
