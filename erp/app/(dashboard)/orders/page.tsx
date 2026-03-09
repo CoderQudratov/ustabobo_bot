@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import type { OrdersListRes, Order } from '@/lib/types';
@@ -20,13 +21,20 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function OrdersPage() {
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [masterId, setMasterId] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    const orgId = searchParams.get('organization_id') ?? '';
+    setOrganizationId(orgId);
+  }, [searchParams]);
 
   const params = new URLSearchParams();
   params.set('page', String(page));
@@ -35,9 +43,10 @@ export default function OrdersPage() {
   if (from) params.set('from', from);
   if (to) params.set('to', to);
   if (masterId) params.set('master_id', masterId);
+  if (organizationId) params.set('organization_id', organizationId);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['orders', page, limit, status, from, to, masterId],
+    queryKey: ['orders', page, limit, status, from, to, masterId, organizationId],
     queryFn: () => apiGet<OrdersListRes>(`/admin/orders?${params}`),
   });
 
