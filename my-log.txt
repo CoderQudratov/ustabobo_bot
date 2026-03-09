@@ -1,0 +1,49 @@
+=== API tests started at 2026-03-09T11:16:42+05:00 ===
+
+━━━ 1. POST /admin/auth/login ━━━
+Response: {"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NzI2NDU4Ny1iZWJlLTQzM2UtYjkzNy04OTgzMmY1ZDNjODQiLCJsb2dpbiI6ImFkbWluIiwicm9sZSI6ImJvc3MiLCJpYXQiOjE3NzMwMzcwMDMsImV4cCI6MTc3MzA0MDYwM30.769UibcLN90_j3VPUvp2D-qYv9v6pRcBKPyi0QzPf8s","refresh_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NzI2NDU4Ny1iZWJlLTQzM2UtYjkzNy04OTgzMmY1ZDNjODQiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MzAzNzAwMywiZXhwIjoxNzczNjQxODAzfQ.Q25ci7NmWzUW1LOXk3QrwYrf8z0z8Bhn7dk4-CrmYXs","expires_in":3600}
+Status: HTTP_CODE:200
+Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1N...
+
+━━━ 2. GET /admin/organizations ━━━
+{"items":[{"id":"0f60ca33-3228-42f4-b28e-1aca2ddb200d","name":"Uzum","contact_person":"uzum uz","phone":"931764610","payment_type":"corporate_debt","balance_due":"0","is_active":true},{"id":"5bc8fd03-557a-4c7c-82d0-3c2ad97d58c9","name":"uzumbek","contact_person":"99123456788","phone":"sss","payment_type":"corporate_debt","balance_due":"0","is_active":true}],"total":2,"page":1,"limit":5}
+HTTP_CODE:200
+First org_id: 0f60ca33-3228-42f4-b28e-1aca2ddb200d
+
+━━━ 3. POST /admin/organizations/:orgId/vehicles ━━━
+{"id":"cf89d2e8-e791-4500-a911-66a7ab8ee7e7","org_id":"0f60ca33-3228-42f4-b28e-1aca2ddb200d","plate_number":"01A123BB","model":"Nexia","is_active":true}
+HTTP_CODE:201
+━━━ 4. GET /admin/services ━━━
+{"items":[{"id":"c75a13d9-42f8-43dd-9376-5d2e00ca61a5","name":"Moy almashtirish","price":"55000","is_active":true},{"id":"8daf9a0a-e4de-43ce-a9b8-6cef78aee463","name":"Test xizmat","price":"25000","is_active":true},{"id":"b855d8eb-bafa-4123-a355-5d81f7d3b268","name":"Test xizmat","price":"25000","is_active":true}],"total":3,"page":1,"limit":5}
+HTTP_CODE:200
+━━━ 5. POST /admin/services ━━━
+{"id":"15be3976-a837-451c-a8f1-a273b256ed0e","name":"Test xizmat","price":"25000","is_active":true}
+HTTP_CODE:201
+━━━ 6. GET /admin/users ━━━
+{"items":[{"id":"57264587-bebe-433e-b937-89832f5d3c84","fullname":"Doston Admin","phone":"+998900000001","login":"admin","role":"boss","percent_rate":"0","is_active":true,"tg_id":null},{"id":"520cef36-9ac6-4caa-a1fd-76a39e012df7","fullname":"taxi","phone":"+99831764610","login":"taxi","role":"driver","percent_rate":"0","is_active":true,"tg_id":"6037258430"},{"id":"e4c274a5-81e2-433a-bd47-3ea1573f5439","fullname":"Test Usta","phone":"971112233","login":"testusta","role":"master","percent_rate":"15","is_active":true,"tg_id":null},{"id":"7637320c-e3d8-4200-90d3-f0b9b6e0bc5a","fullname":"ustabek","phone":"932303030","login":"ustabek","role":"master","percent_rate":"0","is_active":false,"tg_id":null},{"id":"047cb73d-b91d-4acb-9b37-a10bd1d671fa","fullname":"Usta Bobo","phone":"+998900000002","login":"usta1","role":"master","percent_rate":"10","is_active":true,"tg_id":"8501558045"}],"total":5,"page":1,"limit":5}
+HTTP_CODE:200
+━━━ 7. POST /admin/users (name, commission) ━━━
+{"message":"User with this phone already exists","error":"Conflict","statusCode":409}
+HTTP_CODE:409
+━━━ 8. GET /admin/products ━━━
+{"items":[{"id":"56e9318c-ca2a-404e-9054-0681e989fadd","name":"fara","cost_price":"40000","sale_price":"60000","stock_count":15,"min_limit":3,"is_active":true,"created_at":"2026-03-04T16:28:40.510Z","is_low_stock":false},{"id":"0a5d832f-673f-43fb-a314-5c21a5284375","name":"Test mahsulot","cost_price":"1000","sale_price":"1200","stock_count":50,"min_limit":5,"is_active":true,"created_at":"2026-03-09T06:15:21.801Z","is_low_stock":false},{"id":"87294644-1fd7-4e6f-a2f7-df1b2c8aefdb","name":"Test mahsulot","cost_price":"1000","sale_price":"1200","stock_count":50,"min_limit":5,"is_active":true,"created_at":"2026-03-09T06:16:38.349Z","is_low_stock":false}],"total":3,"page":1,"limit":5}
+HTTP_CODE:200
+━━━ 9. POST /admin/products ━━━
+{"id":"c11cec36-61b1-4082-8b9f-9b24eab97252","name":"Test mahsulot","cost_price":"1000","sale_price":"1200","stock_count":50,"min_limit":5,"is_active":true,"created_at":"2026-03-09T06:16:49.147Z"}
+HTTP_CODE:201
+━━━ 10. GET /admin/clients/individuals/orders?phone=931764610 ━━━
+{"client":{"client_phone":"931764610","client_name":"Messjbek","total_orders":3,"total_spent":300000},"orders":[{"id":"e7c5ae99-3c4b-4d1b-b775-058b41ae4484","created_at":"2026-03-09T04:28:54.631Z","completed_at":"2026-03-09T04:29:11.718Z","status":"completed","total_amount":60000,"car_number":"AA12345AA","car_model":"Tiko","service_name":"—"},{"id":"963b6460-5168-4082-a6cc-c37c825d61cf","created_at":"2026-03-04T16:47:17.728Z","completed_at":"2026-03-09T05:54:18.238Z","status":"completed","total_amount":240000,"car_number":"AA123AA","car_model":null,"service_name":"—"},{"id":"d455f93f-85d9-43e6-89f3-4afe2498aed3","created_at":"2026-03-04T13:17:24.965Z","completed_at":null,"status":"waiting_customer_confirmation","total_amount":123464,"car_number":"AA123AA","car_model":null,"service_name":"—"}]}
+HTTP_CODE:200
+━━━ 11. GET /admin/reports (default dates) ━━━
+{"period":{"from":"2026-03-09T00:00:00.000Z","to":"2026-03-09T23:59:59.999Z"},"daily_revenue":[{"date":"2026-03-09","revenue":300000}],"summary":{"total_orders":2,"total_revenue":300000,"total_master_fees":0,"total_driver_fees":0,"boss_profit":300000},"master_breakdown":[{"master_id":"047cb73d-b91d-4acb-9b37-a10bd1d671fa","fullname":"Usta Bobo","orders_count":2,"total_revenue":300000,"master_fee":0}],"driver_breakdown":[],"organization_debts":[],"top_services":[]}
+HTTP_CODE:200
+━━━ 12. GET /admin/vehicles/by-plate/01A123BB ━━━
+{"id":"be32d244-d888-40f1-88e5-f8c2fd421317","org_id":"0f60ca33-3228-42f4-b28e-1aca2ddb200d","plate_number":"01A123BB","model":"Nexia","is_active":true,"organization":{"name":"Uzum"}}
+HTTP_CODE:200
+━━━ 13. PATCH /admin/services/:id ━━━
+{"id":"c75a13d9-42f8-43dd-9376-5d2e00ca61a5","name":"Moy almashtirish","price":"55000","is_active":true}
+HTTP_CODE:200
+━━━ 14. PATCH /admin/users/:id/toggle-active ━━━
+{"id":"7637320c-e3d8-4200-90d3-f0b9b6e0bc5a","fullname":"ustabek","phone":"932303030","username":null,"login":"ustabek","password_hash":"$2b$10$WQPsYKo3WcYV2DwKCZXTReZzjanzY1LQnqGC0uuVyRBzPX5O7Wzy2","role":"master","tg_id":null,"percent_rate":"0","balance":"0","is_active":true,"pin_code_hash":null,"is_authenticated":false,"locked_until":null,"pin_fail_count":0}
+HTTP_CODE:200
+=== API tests finished at 2026-03-09T11:16:52+05:00 ===

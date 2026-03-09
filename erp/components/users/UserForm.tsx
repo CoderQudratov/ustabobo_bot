@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPost, apiPatch } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import {
   Dialog,
   DialogContent,
@@ -66,18 +67,38 @@ export function UserForm({
   });
 
   const createMu = useMutation({
-    mutationFn: (d: CreateForm) => apiPost('/admin/users', { ...d, percent_rate: d.percent_rate ?? 0, is_active: d.is_active ?? true }),
+    mutationFn: (d: CreateForm) =>
+      apiPost('/admin/users', {
+        fullname: d.fullname,
+        name: d.fullname,
+        phone: d.phone,
+        login: d.login,
+        password: d.password!,
+        role: d.role,
+        percent_rate: d.percent_rate ?? 0,
+        commission: d.percent_rate ?? 0,
+        is_active: d.is_active ?? true,
+      }),
     onSuccess,
-    onError: (e: Error) => form.setError('root', { message: e.message }),
+    onError: (e) => form.setError('root', { message: getErrorMessage(e) }),
   });
   const updateMu = useMutation({
     mutationFn: (d: Partial<CreateForm> & { password?: string }) => {
-      const payload: Record<string, unknown> = { fullname: d.fullname, phone: d.phone, login: d.login, role: d.role, percent_rate: d.percent_rate, is_active: d.is_active };
+      const payload: Record<string, unknown> = {
+        fullname: d.fullname,
+        name: d.fullname,
+        phone: d.phone,
+        login: d.login,
+        role: d.role,
+        percent_rate: d.percent_rate,
+        commission: d.percent_rate,
+        is_active: d.is_active,
+      };
       if (d.password && d.password.length >= 6) payload.password = d.password;
       return apiPatch(`/admin/users/${user!.id}`, payload);
     },
     onSuccess,
-    onError: (e: Error) => form.setError('root', { message: e.message }),
+    onError: (e) => form.setError('root', { message: getErrorMessage(e) }),
   });
 
   const onSubmit = (data: CreateForm & { password?: string }) => {

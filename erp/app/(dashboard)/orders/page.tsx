@@ -4,7 +4,9 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import type { OrdersListRes, Order, OrderStatus } from '@/lib/types';
+import { toast } from 'sonner';
 import { OrderTable } from '@/components/orders/OrderTable';
 import { OrderDetail } from '@/components/orders/OrderDetail';
 import { NewOrderDialog } from '@/components/orders/NewOrderDialog';
@@ -87,7 +89,8 @@ function Content() {
       }
       return { prev };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
+      toast.error(getErrorMessage(err));
       if (ctx?.prev) {
         queryClient.setQueryData(
           ['orders', page, limit, status, from, to, masterId, orgId, search],

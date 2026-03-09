@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPatch } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +51,7 @@ export function StockInDialog({
         ...(d.note?.trim() && { note: d.note.trim() }),
       }),
     onSuccess,
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   return (

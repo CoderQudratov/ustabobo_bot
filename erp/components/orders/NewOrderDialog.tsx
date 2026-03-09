@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiGet, apiPost } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import {
   Dialog,
   DialogContent,
@@ -120,6 +121,7 @@ export function NewOrderDialog({
       onSuccess();
       form.reset();
     },
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const serviceList = services?.items ?? [];

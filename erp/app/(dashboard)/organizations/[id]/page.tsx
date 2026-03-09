@@ -455,10 +455,14 @@ function AddVehicleDialog({
   const mutation = useMutation({
     mutationFn: (d: z.infer<typeof vehicleSchema>) =>
       apiPost(`/admin/organizations/${orgId}/vehicles`, {
-        plate_number: d.plate_number,
-        model: d.model,
+        plate_number: d.plate_number.trim(),
+        model: d.model.trim(),
+        ...(d.year ? { year: Number(d.year) } : {}),
+        ...(d.color?.trim() ? { color: d.color.trim() } : {}),
+        ...(d.vin?.trim() ? { vin: d.vin.trim() } : {}),
       }),
     onSuccess,
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -538,6 +542,7 @@ function EditOrgDialog({
     mutationFn: (d: z.infer<typeof editOrgSchema>) =>
       apiPatch(`/admin/organizations/${org.id}`, d),
     onSuccess,
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
@@ -630,6 +635,7 @@ function PaymentDialog({
         balance_due: Math.max(0, currentDebt - amount),
       }),
     onSuccess,
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>

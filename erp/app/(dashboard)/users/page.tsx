@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,6 +101,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('O‘zgartirildi');
     },
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   return (

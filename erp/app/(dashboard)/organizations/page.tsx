@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiDelete } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,6 +65,7 @@ export default function OrganizationsPage() {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       toast.success('O‘chirildi');
     },
+    onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
