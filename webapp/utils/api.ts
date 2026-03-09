@@ -135,7 +135,9 @@ async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Resp
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : getApiUrl(pathOrUrl);
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
-  if (validToken && token) headers.set('Authorization', `Bearer ${token}`);
+  // Telegram orqali ochilganda faqat initData yuboramiz — JWT yuborilmasa 403 chiqmasligi uchun
+  const useInitDataOnly = !!initData?.trim();
+  if (validToken && token && !useInitDataOnly) headers.set('Authorization', `Bearer ${token}`);
   if (initData?.trim()) headers.set(INIT_DATA_HEADER, initData);
   const res = await fetch(url, {
     mode: 'cors',

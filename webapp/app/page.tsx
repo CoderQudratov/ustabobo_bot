@@ -14,7 +14,9 @@ export default function HomeHub() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     setChecked(true);
-    setAuthenticated(isWebappTokenValid());
+    const hasToken = isWebappTokenValid();
+    const fromTelegram = isTelegramWebApp();
+    setAuthenticated(fromTelegram || hasToken);
   }, []);
 
   if (!checked) {
@@ -29,12 +31,12 @@ export default function HomeHub() {
     );
   }
 
-  if (!authenticated) {
-    return <LoginScreen onSuccess={() => setAuthenticated(true)} />;
-  }
-
   if (!isTelegramWebApp()) {
     return <TelegramRequired />;
+  }
+
+  if (!authenticated) {
+    return <LoginScreen onSuccess={() => setAuthenticated(true)} />;
   }
 
   return (
