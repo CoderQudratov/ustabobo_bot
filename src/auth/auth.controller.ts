@@ -50,6 +50,11 @@ export class AuthController {
   @Get('tenant-status')
   @UseGuards(JwtAuthGuard)
   async getTenantStatus(@Req() req: Request & { user: JwtUser }) {
+    // admin / admin123 (seed) uchun abonent bloki ko‘rsatilmasin
+    if (req.user?.login === 'admin') {
+      return { is_blocked: false, days_left: null };
+    }
+
     const tenantId = req.user?.tenant_id;
     if (!tenantId) {
       return { is_blocked: true, days_left: 0 };
