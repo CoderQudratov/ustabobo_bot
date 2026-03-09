@@ -212,6 +212,27 @@ export interface WebAppInitResponse {
   vehicles: { id: string; org_id: string; plate_number: string; model: string | null }[];
 }
 
+/**
+ * Dastur boshida foydalanuvchi ruxsatini tekshirish.
+ * 401/403 da global handler chaqirilmaydi — faqat { ok, status } qaytariladi.
+ */
+export async function checkWebAppAuth(): Promise<{ ok: true } | { ok: false; status: number }> {
+  const initData = getInitDataOrNull();
+  if (!initData?.trim()) return { ok: false, status: 401 };
+  const url = getApiUrl('webapp/init');
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      [INIT_DATA_HEADER]: initData,
+    },
+    mode: 'cors',
+    credentials: 'include',
+  });
+  if (res.ok) return { ok: true };
+  return { ok: false, status: res.status };
+}
+
 export async function fetchWebAppInit(): Promise<WebAppInitResponse> {
   const res = await apiFetch('webapp/init', { method: 'GET' });
   if (!res.ok) {

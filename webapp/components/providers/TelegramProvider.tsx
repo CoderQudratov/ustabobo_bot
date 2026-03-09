@@ -2,9 +2,10 @@
 
 import { createContext, useEffect, useMemo, useState } from "react";
 import type { TelegramWebAppUser } from "@/types/telegram";
-import { setSessionExpiredHandler, setTelegramRequiredHandler, clearWebappAuth } from "@/utils/api";
+import { setSessionExpiredHandler, setTelegramRequiredHandler, clearWebappAuth, checkWebAppAuth } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TelegramRequired } from "@/components/TelegramRequired";
+import { BotLoginRequired } from "@/components/BotLoginRequired";
 
 const SDK_WAIT_MS = 1800;
 const INIT_DATA_RETRY_MS = 400;
@@ -47,6 +48,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [hasInitData, setHasInitData] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [telegramRequired, setTelegramRequired] = useState(false);
+  const [authCheck, setAuthCheck] = useState<'idle' | 'loading' | 'ok' | 'denied'>('idle');
 
   const isTelegram = hasTelegramEnv && hasInitData;
   const isTestMode = hasTelegramEnv && !user;
@@ -124,6 +126,27 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isTelegram || !hasInitData) return;
+    let cancelled = false;
+    setAuthCheck('loading');
+    checkWebAppAuth()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          setAuthCheck('ok');
+        } else if (result.status === 401 || result.status === 403) {
+          setAuthCheck('denied');
+        } else {
+          setAuthCheck('denied');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuthCheck('denied');
+      });
+    return () => { cancelled = true; };
+  }, [isTelegram, hasInitData]);
+
   const value = useMemo<TelegramContextValue>(
     () => ({ isReady, isTelegram, isTestMode, user, initData }),
     [isReady, isTelegram, isTestMode, user, initData]
@@ -147,6 +170,25 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   if (!isTelegram || telegramRequired) {
     const variant = hasTelegramEnv && !hasInitData ? "expired" : "outside";
     return <TelegramRequired variant={variant} />;
+  }
+
+  if (authCheck === 'loading' || (isTelegram && authCheck === 'idle')) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
+        style={{ ...screenBg, ...screenFg }}
+      >
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#2481cc)] border-t-transparent"
+          aria-hidden
+        />
+        <p className="text-sm opacity-90">{authCheck === 'loading' ? 'Tekshirilmoqda...' : 'Yuklanmoqda...'}</p>
+      </div>
+    );
+  }
+
+  if (authCheck === 'denied') {
+    return <BotLoginRequired />;
   }
 
   return (
