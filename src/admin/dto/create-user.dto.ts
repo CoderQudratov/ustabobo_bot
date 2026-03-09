@@ -14,16 +14,10 @@ import { Type } from 'class-transformer';
 import { Role } from '../../../generated/prisma/client';
 
 export class AdminCreateUserDto {
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(255)
-  fullname?: string;
-
-  /** Frontend ba'zan "name" yuboradi — ikkalasidan biri kerak */
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  name?: string;
+  fullname: string;
 
   @IsString()
   @IsNotEmpty()
@@ -41,7 +35,7 @@ export class AdminCreateUserDto {
   @MinLength(6, { message: 'Password must be at least 6 characters' })
   password: string;
 
-  @IsIn([Role.master, Role.driver])
+  @IsIn([Role.boss, Role.master, Role.driver])
   role: Role;
 
   @IsOptional()

@@ -4,10 +4,12 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Role } from '../../../generated/prisma/client';
 
 export class AdminUpdateUserDto {
@@ -33,13 +35,21 @@ export class AdminUpdateUserDto {
   password?: string;
 
   @IsOptional()
-  @IsIn([Role.master, Role.driver])
+  @IsIn([Role.boss, Role.master, Role.driver])
   role?: Role;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   percent_rate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  commission?: number;
 
   @IsOptional()
   @IsBoolean()

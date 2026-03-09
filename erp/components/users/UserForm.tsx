@@ -70,12 +70,11 @@ export function UserForm({
     mutationFn: (d: CreateForm) =>
       apiPost('/admin/users', {
         fullname: d.fullname,
-        name: d.fullname,
         phone: d.phone,
         login: d.login,
         password: d.password!,
+        role: d.role,
         percent_rate: d.percent_rate ?? 0,
-        commission: d.percent_rate ?? 0,
         is_active: d.is_active ?? true,
       }),
     onSuccess,
@@ -85,11 +84,10 @@ export function UserForm({
     mutationFn: (d: Partial<CreateForm> & { password?: string }) => {
       const payload: Record<string, unknown> = {
         fullname: d.fullname,
-        name: d.fullname,
         phone: d.phone,
         login: d.login,
+        role: d.role,
         percent_rate: d.percent_rate,
-        commission: d.percent_rate,
         is_active: d.is_active,
       };
       if (d.password && d.password.length >= 6) payload.password = d.password;
@@ -141,9 +139,9 @@ export function UserForm({
             <Select value={form.watch('role')} onValueChange={(v) => form.setValue('role', v as 'boss' | 'master' | 'driver')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="boss">Boss</SelectItem>
                 <SelectItem value="master">Usta</SelectItem>
                 <SelectItem value="driver">Haydovchi</SelectItem>
+                <SelectItem value="boss">Boss</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -51,9 +51,9 @@ export class AdminService {
   async createUser(dto: AdminCreateUserDto) {
     console.log('[createUser] dto:', JSON.stringify(dto));
     try {
-      const fullname = (dto.fullname ?? dto.name)?.trim();
+      const fullname = dto.fullname?.trim();
       if (!fullname) {
-        throw new BadRequestException('fullname yoki name kiritilishi shart');
+        throw new BadRequestException('fullname kiritilishi shart');
       }
       const existingPhone = await this.prisma.user.findUnique({
         where: { phone: dto.phone },
@@ -147,14 +147,21 @@ export class AdminService {
 
   async updateUser(id: string, dto: AdminUpdateUserDto) {
     await this.getUserById(id);
-    const data: Record<string, unknown> = { ...dto };
-    if (dto.password) {
+    const percent_rate = dto.percent_rate ?? dto.commission ?? undefined;
+    const data: Prisma.UserUpdateInput = {
+      ...(dto.fullname !== undefined && { fullname: dto.fullname }),
+      ...(dto.phone !== undefined && { phone: dto.phone }),
+      ...(dto.login !== undefined && { login: dto.login }),
+      ...(dto.role !== undefined && { role: dto.role }),
+      ...(percent_rate !== undefined && { percent_rate }),
+      ...(dto.is_active !== undefined && { is_active: dto.is_active }),
+    };
+    if (dto.password && dto.password.length >= 6) {
       data.password_hash = await bcrypt.hash(dto.password, 10);
-      delete (data as { password?: string }).password;
     }
     return this.prisma.user.update({
       where: { id },
-      data: data as Prisma.UserUpdateInput,
+      data,
     });
   }
 
