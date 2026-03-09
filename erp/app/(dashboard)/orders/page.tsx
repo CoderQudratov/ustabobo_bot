@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { OrderTable } from '@/components/orders/OrderTable';
 import { OrderDetail } from '@/components/orders/OrderDetail';
 import { NewOrderDialog } from '@/components/orders/NewOrderDialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronDown, Search } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'Barchasi' },
@@ -106,6 +107,29 @@ function Content() {
 
   const masterOptions = masters?.items ?? [];
   const total = data?.total ?? 0;
+  const items = data?.items ?? [];
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const activeFiltersCount = [status, masterId, from, to, search.trim()].filter(Boolean).length;
+  const clearFilters = () => {
+    setStatus('');
+    setMasterId('');
+    setFrom('');
+    setTo('');
+    setSearch('');
+    setPage(1);
+  };
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
+  const pageNumbers = (() => {
+    const p: number[] = [];
+    const show = 3;
+    let start = Math.max(1, page - 1);
+    let end = Math.min(totalPages, start + show - 1);
+    if (end - start + 1 < show) start = Math.max(1, end - show + 1);
+    for (let i = start; i <= end; i++) p.push(i);
+    return p;
+  })();
 
   const invalidateOrders = () => {
     queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -113,85 +137,120 @@ function Content() {
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Buyurtmalar</h1>
-          <span className="rounded-full bg-muted px-3 py-0.5 text-sm font-medium">
-            {total} ta
-          </span>
+      {/* PAGE HEADER */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-heading text-[28px] font-bold text-text-primary">
+            Buyurtmalar
+          </h1>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Jami {total} ta buyurtma
+          </p>
         </div>
-        <Button onClick={() => setNewOrderOpen(true)}>
+        <Button
+          onClick={() => setNewOrderOpen(true)}
+          className="bg-primary hover:bg-primary-hover text-primary-foreground shrink-0"
+        >
           <Plus className="mr-2 h-4 w-4" />
           Yangi buyurtma
         </Button>
       </div>
 
-      {/* FILTER PANELI */}
+      {/* COLLAPSIBLE FILTERS */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filtrlar</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          <div className="space-y-2">
-            <Label>Holat</Label>
-            <Select value={status || 'all'} onValueChange={(v) => setStatus(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Barchasi" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-surface-2/50"
+        >
+          <span className="flex items-center gap-2 font-medium text-text-primary">
+            Filtrlar
+            {activeFiltersCount > 0 && (
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={cn('h-5 w-5 text-text-muted transition-transform', filtersOpen && 'rotate-180')}
+          />
+        </button>
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-200 ease-in-out',
+            filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          )}
+        >
+          <div className="overflow-hidden">
+            <CardContent className="flex flex-wrap gap-4 border-t border-border pt-4">
+              <div className="space-y-2">
+                <Label>Holat</Label>
+                <Select value={status || 'all'} onValueChange={(v) => setStatus(v === 'all' ? '' : v)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Barchasi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Usta</Label>
+                <Select value={masterId || 'all'} onValueChange={(v) => setMasterId(v === 'all' ? '' : v)}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Barchasi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    {masterOptions.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.fullname}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Dan</Label>
+                <Input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Gacha</Label>
+                <Input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Qidiruv</Label>
+                <Input
+                  placeholder="Mijoz ismi yoki buyurtma raqami"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-64"
+                />
+              </div>
+              {activeFiltersCount > 0 && (
+                <div className="flex items-end">
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    Filterni tozalash
+                  </Button>
+                </div>
+              )}
+            </CardContent>
           </div>
-          <div className="space-y-2">
-            <Label>Usta</Label>
-            <Select value={masterId || 'all'} onValueChange={(v) => setMasterId(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Barchasi" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                {masterOptions.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.fullname}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Dan</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-40"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Gacha</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-40"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Qidiruv</Label>
-            <Input
-              placeholder="Mijoz ismi yoki buyurtma raqami"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-64"
-            />
-          </div>
-        </CardContent>
+        </div>
       </Card>
 
       {/* JADVAL */}
@@ -201,36 +260,63 @@ function Content() {
             <div className="p-4">
               <Skeleton className="h-64 w-full" />
             </div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 text-text-muted">
+                <Search className="h-8 w-8" />
+              </div>
+              <p className="font-semibold text-text-primary">Ma&apos;lumot topilmadi</p>
+              <p className="text-sm text-text-muted">Filtrlarni o&apos;zgartiring yoki yangi buyurtma qo&apos;shing</p>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Filterni tozalash
+              </Button>
+            </div>
           ) : (
             <>
               <OrderTable
-                orders={data?.items ?? []}
+                orders={items}
                 onRowClick={(o) => setSelectedOrder(o)}
                 onStatusChange={(order, newStatus) =>
                   statusMutation.mutate({ id: order.id, status: newStatus })
                 }
                 isUpdating={(id) => statusMutation.isPending && statusMutation.variables?.id === id}
               />
-              <div className="flex items-center justify-between border-t px-4 py-2">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+                <span className="text-sm text-text-muted">
                   Jami: {total} ta
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => p - 1)}
+                    className="disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Oldingi
+                    ← Oldingi
                   </Button>
+                  {pageNumbers.map((n) => (
+                    <Button
+                      key={n}
+                      variant={n === page ? 'default' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        'min-w-[2rem]',
+                        n === page && 'bg-primary text-primary-foreground hover:bg-primary-hover'
+                      )}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </Button>
+                  ))}
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    disabled={!data || page * limit >= data.total}
+                    disabled={!data || page >= totalPages}
                     onClick={() => setPage((p) => p + 1)}
+                    className="disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Keyingi
+                    Keyingi →
                   </Button>
                 </div>
               </div>

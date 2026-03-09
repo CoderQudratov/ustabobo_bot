@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { Crown, Wrench, Car, Pencil, Ban, UserSearch, Plus, ChevronDown, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { UserForm } from '@/components/users/UserForm';
 import { UserStatsCard } from '@/components/users/UserStatsCard';
 import type { User, UsersListRes } from '@/lib/types';
@@ -46,19 +48,49 @@ function roleLabel(r: string): string {
 }
 
 function RoleBadge({ role }: { role: string }) {
-  const style =
-    role === 'boss'
-      ? 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400 dark:border-amber-500/50'
-      : role === 'master'
-        ? 'bg-blue-500/15 text-blue-700 border-blue-500/40 dark:text-blue-400 dark:border-blue-500/50'
-        : role === 'driver'
-          ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-400 dark:border-emerald-500/50'
-          : '';
-  return (
-    <Badge variant="outline" className={style || undefined}>
-      {roleLabel(role)}
-    </Badge>
-  );
+  if (role === 'boss') {
+    return (
+      <Badge variant="outline" className="gap-1 bg-purple-500/15 text-purple-400 border-purple-500/30">
+        <Crown className="h-4 w-4" />
+        {roleLabel(role)}
+      </Badge>
+    );
+  }
+  if (role === 'master') {
+    return (
+      <Badge variant="outline" className="gap-1 bg-blue-500/15 text-blue-400 border-blue-500/30">
+        <Wrench className="h-4 w-4" />
+        {roleLabel(role)}
+      </Badge>
+    );
+  }
+  if (role === 'driver') {
+    return (
+      <Badge variant="outline" className="gap-1 bg-cyan-500/15 text-cyan-400 border-cyan-500/30">
+        <Car className="h-4 w-4" />
+        {roleLabel(role)}
+      </Badge>
+    );
+  }
+  return <Badge variant="outline">{roleLabel(role)}</Badge>;
+}
+
+const AVATAR_COLORS = [
+  'bg-teal-500/20 text-teal-400',
+  'bg-violet-500/20 text-violet-400',
+  'bg-amber-500/20 text-amber-400',
+  'bg-rose-500/20 text-rose-400',
+  'bg-cyan-500/20 text-cyan-400',
+];
+function avatarColor(str: string): string {
+  let n = 0;
+  for (let i = 0; i < str.length; i++) n += str.charCodeAt(i);
+  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+}
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (name.slice(0, 2) || '—').toUpperCase();
 }
 
 export default function UsersPage() {
@@ -66,6 +98,7 @@ export default function UsersPage() {
   const [role, setRole] = useState('');
   const [isActive, setIsActive] = useState<string>('');
   const [searchInput, setSearchInput] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const queryClient = useQueryClient();
@@ -104,62 +137,139 @@ export default function UsersPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const total = data?.total ?? 0;
+  const activeFiltersCount = [role, isActive].filter(Boolean).length + (searchInput.trim() ? 1 : 0);
+  const clearFilters = () => {
+    setRole('');
+    setIsActive('');
+    setSearchInput('');
+    setPage(1);
+  };
+  const limit = 20;
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
+  const pageNumbers = (() => {
+    const p: number[] = [];
+    const show = 3;
+    let start = Math.max(1, page - 1);
+    let end = Math.min(totalPages, start + show - 1);
+    if (end - start + 1 < show) start = Math.max(1, end - show + 1);
+    for (let i = start; i <= end; i++) p.push(i);
+    return p;
+  })();
+
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Xodimlar</h1>
-        <Button onClick={() => setAddOpen(true)}>Yangi xodim</Button>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-heading text-[28px] font-bold text-text-primary">
+            Xodimlar
+          </h1>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Jami {total} ta xodim
+          </p>
+        </div>
+        <Button
+          onClick={() => setAddOpen(true)}
+          className="bg-primary hover:bg-primary-hover text-primary-foreground shrink-0"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Yangi xodim
+        </Button>
       </div>
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-4 pt-6">
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Rol</span>
-            <Select
-              value={role || 'all'}
-              onValueChange={(v) => setRole(v === 'all' ? '' : v)}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="boss">Boss</SelectItem>
-                <SelectItem value="master">Usta</SelectItem>
-                <SelectItem value="driver">Haydovchi</SelectItem>
-              </SelectContent>
-            </Select>
+
+      <Card>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-surface-2/50"
+        >
+          <span className="flex items-center gap-2 font-medium text-text-primary">
+            Filtrlar
+            {activeFiltersCount > 0 && (
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            className={cn('h-5 w-5 text-text-muted transition-transform', filtersOpen && 'rotate-180')}
+          />
+        </button>
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-200 ease-in-out',
+            filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          )}
+        >
+          <div className="overflow-hidden">
+            <CardContent className="flex flex-wrap items-end gap-4 border-t border-border pt-4">
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Rol</span>
+                <Select
+                  value={role || 'all'}
+                  onValueChange={(v) => setRole(v === 'all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    <SelectItem value="boss">Boss</SelectItem>
+                    <SelectItem value="master">Usta</SelectItem>
+                    <SelectItem value="driver">Haydovchi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Aktiv</span>
+                <Select
+                  value={isActive || 'all'}
+                  onValueChange={(v) => setIsActive(v === 'all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barchasi</SelectItem>
+                    <SelectItem value="true">Ha</SelectItem>
+                    <SelectItem value="false">Yo‘q</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <span className="text-sm font-medium">Qidiruv (ism, telefon)</span>
+                <Input
+                  placeholder="Qidirish..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="w-48"
+                />
+              </div>
+              {activeFiltersCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Filterni tozalash
+                </Button>
+              )}
+            </CardContent>
           </div>
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Aktiv</span>
-            <Select
-              value={isActive || 'all'}
-              onValueChange={(v) => setIsActive(v === 'all' ? '' : v)}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="true">Ha</SelectItem>
-                <SelectItem value="false">Yo‘q</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Qidiruv (ism, telefon)</span>
-            <Input
-              placeholder="Qidirish..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-48"
-            />
-          </div>
-        </CardContent>
+        </div>
       </Card>
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <Skeleton className="h-64 w-full" />
+          ) : filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 text-text-muted">
+                <Users className="h-8 w-8" />
+              </div>
+              <p className="font-semibold text-text-primary">Ma&apos;lumot topilmadi</p>
+              <p className="text-sm text-text-muted">Filtrlarni o&apos;zgartiring</p>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Filterni tozalash
+              </Button>
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -192,17 +302,37 @@ export default function UsersPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredItems.map((u) => (
-                        <tr key={u.id} className="border-b">
-                          <td className="p-3">
+                      filteredItems.map((u, idx) => (
+                        <tr
+                          key={u.id}
+                          className={cn(
+                            'h-14 border-b border-border transition-colors hover:bg-surface-2',
+                            idx % 2 === 1 && 'bg-surface-2/60'
+                          )}
+                        >
+                          <td className="p-3 font-mono text-muted-foreground">
                             {u.tg_id ?? '—'}
                           </td>
-                          <td className="p-3 font-medium">{u.fullname}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={cn(
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                  avatarColor(u.fullname || '')
+                                )}
+                              >
+                                {initials(u.fullname || '—')}
+                              </div>
+                              <span className="font-medium">{u.fullname}</span>
+                            </div>
+                          </td>
                           <td className="p-3">
                             <RoleBadge role={u.role} />
                           </td>
-                          <td className="p-3">{u.phone}</td>
-                          <td className="p-3">
+                          <td className="p-3 font-mono text-sm tracking-wide text-muted-foreground">
+                            {u.phone}
+                          </td>
+                          <td className="p-3 text-muted-foreground">
                             {u.created_at
                               ? new Date(u.created_at).toLocaleDateString(
                                   'uz-UZ'
@@ -222,27 +352,33 @@ export default function UsersPage() {
                             )}
                           </td>
                           <td className="p-3 text-right">
-                            <div className="flex flex-wrap justify-end gap-1">
-                              <UserStatsCard user={u} trigger="Batafsil" />
+                            <div className="flex items-center justify-end gap-1">
+                              <UserStatsCard
+                                user={u}
+                                trigger={
+                                  <span className="flex items-center gap-1.5 text-blue-500" title="Batafsil">
+                                    <UserSearch className="h-4 w-4" />
+                                  </span>
+                                }
+                              />
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
+                                className="h-8 w-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                                title="Tahrirlash"
                                 onClick={() => setEditUser(u)}
                               >
-                                Tahrirlash
+                                <Pencil className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
+                                className="h-8 w-8 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+                                title={u.is_active ? 'Bloklash' : 'Faollashtirish'}
                                 onClick={() => toggleMutation.mutate(u.id)}
                                 disabled={toggleMutation.isPending}
-                                className={
-                                  !u.is_active
-                                    ? 'text-emerald-600 hover:text-emerald-700'
-                                    : 'text-destructive hover:text-destructive'
-                                }
                               >
-                                {u.is_active ? 'Bloklash' : 'Faollashtirish'}
+                                <Ban className="h-4 w-4" />
                               </Button>
                             </div>
                           </td>
@@ -252,27 +388,43 @@ export default function UsersPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2">
-                <span className="text-muted-foreground">
-                  Jami: {data?.total ?? 0}
-                  {debouncedSearch && ` (filtr: ${filteredItems.length})`}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+                <span className="text-sm text-text-muted">
+                  Jami: {total}
+                  {debouncedSearch && ` (qidiruv: ${filteredItems.length})`}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => p - 1)}
+                    className="disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Oldingi
+                    ← Oldingi
                   </Button>
+                  {pageNumbers.map((n) => (
+                    <Button
+                      key={n}
+                      variant={n === page ? 'default' : 'ghost'}
+                      size="sm"
+                      className={cn(
+                        'min-w-[2rem]',
+                        n === page && 'bg-primary text-primary-foreground hover:bg-primary-hover'
+                      )}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </Button>
+                  ))}
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    disabled={!data || page * 20 >= data.total}
+                    disabled={!data || page >= totalPages}
                     onClick={() => setPage((p) => p + 1)}
+                    className="disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Keyingi
+                    Keyingi →
                   </Button>
                 </div>
               </div>

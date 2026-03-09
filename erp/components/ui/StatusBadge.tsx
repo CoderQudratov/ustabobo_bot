@@ -62,6 +62,13 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const ACTIVE_STATUSES = new Set<string>([
+  'working', 'accepted', 'received_by_master', 'broadcasted',
+  'waiting_confirmation', 'waiting_customer_confirmation',
+  'waiting_master_delivery_confirmation', 'waiting_master_work_start',
+  'received_by_driver', 'delivered_by_driver',
+]);
+
 export function StatusBadge({
   status,
   className,
@@ -74,14 +81,22 @@ export function StatusBadge({
       label: orderStatusLabel(status as OrderStatus),
       className: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
     };
+  const isActive = ACTIVE_STATUSES.has(status);
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
         config.className,
         className
       )}
     >
+      <span
+        className={cn(
+          'h-1.5 w-1.5 shrink-0 rounded-full',
+          isActive && 'animate-pulse'
+        )}
+        style={{ backgroundColor: 'currentColor' }}
+      />
       {config.label}
     </span>
   );

@@ -12,7 +12,7 @@ import {
   Package,
   BarChart3,
   Car,
-  UserCircle,
+  UserSearch,
   LogOut,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -44,7 +44,7 @@ const MENU_GROUPS = [
     title: 'TAHLIL',
     items: [
       { href: '/reports', label: 'Hisobotlar', icon: BarChart3 },
-      { href: '/client-history', label: 'Mijoz tarixi', icon: UserCircle },
+      { href: '/client-history', label: 'Mijoz tarixi', icon: UserSearch },
       { href: '/vehicle-history', label: 'Mashina tarixi', icon: Car },
     ],
   },
@@ -74,7 +74,7 @@ function NavLinks({ onLinkClick }: { onLinkClick?: () => void }) {
                       : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary border-l-[3px] border-l-transparent'
                   )}
                 >
-                  <Icon className="h-5 w-5 shrink-0" />
+                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-primary' : 'text-text-muted')} />
                   {label}
                 </Link>
               );

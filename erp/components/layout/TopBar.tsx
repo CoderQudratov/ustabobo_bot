@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
-import { LogOut, Bell, Moon } from 'lucide-react';
+import { LogOut, Bell, Moon, Sun } from 'lucide-react';
 import { logout } from '@/lib/auth';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -26,6 +27,7 @@ function getPageTitle(pathname: string): string {
 
 export function TopBar() {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
   const [login, setLogin] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,9 +61,10 @@ export function TopBar() {
           variant="ghost"
           size="icon"
           className="text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-          aria-label="Tema"
+          aria-label={(theme ?? 'dark') === 'dark' ? "Kun rejimiga o'tish" : "Tun rejimiga o'tish"}
+          onClick={() => setTheme((theme ?? 'dark') === 'dark' ? 'light' : 'dark')}
         >
-          <Moon className="h-5 w-5" />
+          {(theme ?? 'dark') === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>
         <div className="ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 font-mono text-xs font-semibold text-primary">
           {initials}

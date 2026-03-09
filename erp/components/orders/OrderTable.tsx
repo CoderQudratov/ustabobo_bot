@@ -17,10 +17,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { Order, OrderStatus } from '@/lib/types';
 import { orderStatusLabel } from '@/lib/types';
 import { Eye, Pencil } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const ALL_STATUSES: OrderStatus[] = [
   'draft',
@@ -38,15 +39,28 @@ const ALL_STATUSES: OrderStatus[] = [
   'cancelled',
 ];
 
-function statusVariant(s: OrderStatus): 'default' | 'secondary' | 'destructive' {
-  if (s === 'completed') return 'default';
-  if (s === 'cancelled') return 'destructive';
-  return 'secondary';
-}
-
 function getServiceName(order: Order): string {
   const svc = order.orderItems?.find((i) => i.service?.name);
   return svc?.service?.name ?? '—';
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (name.slice(0, 2) || '—').toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  'bg-teal-500/20 text-teal-400',
+  'bg-violet-500/20 text-violet-400',
+  'bg-amber-500/20 text-amber-400',
+  'bg-rose-500/20 text-rose-400',
+  'bg-cyan-500/20 text-cyan-400',
+];
+function avatarColor(str: string): string {
+  let n = 0;
+  for (let i = 0; i < str.length; i++) n += str.charCodeAt(i);
+  return AVATAR_COLORS[n % AVATAR_COLORS.length];
 }
 
 export function OrderTable({
@@ -76,19 +90,32 @@ export function OrderTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.map((o) => (
+        {orders.map((o, idx) => (
           <TableRow
             key={o.id}
-            className="cursor-pointer hover:bg-muted/50"
+            className={cn(
+              'h-14 cursor-pointer border-b border-border transition-colors hover:bg-surface-2',
+              idx % 2 === 1 && 'bg-surface-2/60'
+            )}
             onClick={() => onRowClick(o)}
           >
             <TableCell className="font-mono text-muted-foreground">
               {o.id.slice(0, 8)}
             </TableCell>
             <TableCell>
-              <div>
-                <div className="font-medium">{o.client_name}</div>
-                <div className="text-xs text-muted-foreground">{o.client_phone}</div>
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                    avatarColor(o.client_name || '')
+                  )}
+                >
+                  {initials(o.client_name || '—')}
+                </div>
+                <div>
+                  <div className="font-medium text-text-primary">{o.client_name}</div>
+                  <div className="font-mono text-xs tracking-wide text-muted-foreground">{o.client_phone}</div>
+                </div>
               </div>
             </TableCell>
             <TableCell>
@@ -101,7 +128,7 @@ export function OrderTable({
             </TableCell>
             <TableCell>{getServiceName(o)}</TableCell>
             <TableCell>{o.master?.fullname ?? '—'}</TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-right font-bold text-success tabular-nums">
               {Number(o.total_amount).toLocaleString('uz-UZ')} so&apos;m
             </TableCell>
             <TableCell onClick={(e) => e.stopPropagation()}>
@@ -111,11 +138,9 @@ export function OrderTable({
                   onValueChange={(v) => onStatusChange(o, v as OrderStatus)}
                   disabled={isUpdating?.(o.id)}
                 >
-                  <SelectTrigger className="h-8 w-36 border-0 bg-transparent shadow-none hover:bg-muted/50">
+                  <SelectTrigger className="h-8 w-36 border-0 bg-transparent shadow-none hover:bg-surface-2">
                     <SelectValue>
-                      <Badge variant={statusVariant(o.status)}>
-                        {orderStatusLabel(o.status)}
-                      </Badge>
+                      <StatusBadge status={o.status} />
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -127,9 +152,7 @@ export function OrderTable({
                   </SelectContent>
                 </Select>
               ) : (
-                <Badge variant={statusVariant(o.status)}>
-                  {orderStatusLabel(o.status)}
-                </Badge>
+                <StatusBadge status={o.status} />
               )}
             </TableCell>
             <TableCell className="text-muted-foreground">
@@ -139,7 +162,8 @@ export function OrderTable({
               <div className="flex gap-1">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
+                  className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400"
                   onClick={() => onRowClick(o)}
                   title="Ko'rish"
                 >
@@ -147,7 +171,8 @@ export function OrderTable({
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon"
+                  className="h-8 w-8 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
                   onClick={() => onRowClick(o)}
                   title="Tahrirlash"
                 >
