@@ -50,31 +50,37 @@ export class AdminService {
 
   // ─── Users ─────────────────────────────────────────────────────────────────
   async createUser(dto: AdminCreateUserDto) {
-    const existingPhone = await this.prisma.user.findUnique({
-      where: { phone: dto.phone },
-    });
-    if (existingPhone) {
-      throw new ConflictException('User with this phone already exists');
+    console.log('[createUser] dto:', JSON.stringify(dto));
+    try {
+      const existingPhone = await this.prisma.user.findUnique({
+        where: { phone: dto.phone },
+      });
+      if (existingPhone) {
+        throw new ConflictException('User with this phone already exists');
+      }
+      const existingLogin = await this.prisma.user.findUnique({
+        where: { login: dto.login },
+      });
+      if (existingLogin) {
+        throw new ConflictException('User with this login already exists');
+      }
+      const password_hash = await bcrypt.hash(dto.password, 10);
+      const percent_rate = dto.percent_rate ?? 0;
+      return await this.prisma.user.create({
+        data: {
+          fullname: dto.fullname,
+          phone: dto.phone,
+          login: dto.login,
+          password_hash,
+          role: dto.role,
+          percent_rate,
+          is_active: dto.is_active ?? true,
+        },
+      });
+    } catch (e) {
+      console.error('[createUser] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
+      throw e;
     }
-    const existingLogin = await this.prisma.user.findUnique({
-      where: { login: dto.login },
-    });
-    if (existingLogin) {
-      throw new ConflictException('User with this login already exists');
-    }
-    const password_hash = await bcrypt.hash(dto.password, 10);
-    const percent_rate = dto.percent_rate ?? 0;
-    return this.prisma.user.create({
-      data: {
-        fullname: dto.fullname,
-        phone: dto.phone,
-        login: dto.login,
-        password_hash,
-        role: dto.role,
-        percent_rate,
-        is_active: dto.is_active ?? true,
-      },
-    });
   }
 
   async getUsers(
@@ -207,20 +213,27 @@ export class AdminService {
 
   // ─── Vehicles ───────────────────────────────────────────────────────────────
   async createVehicle(orgId: string, dto: AdminCreateVehicleDto) {
-    if (!this.isValidUuid(orgId)) {
-      throw new NotFoundException('Tashkilot topilmadi');
+    console.log('[createVehicle] orgId:', orgId);
+    console.log('[createVehicle] dto:', JSON.stringify(dto));
+    try {
+      if (!this.isValidUuid(orgId)) {
+        throw new NotFoundException('Tashkilot topilmadi');
+      }
+      const org = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+      });
+      if (!org) throw new NotFoundException('Tashkilot topilmadi');
+      return await this.prisma.vehicle.create({
+        data: {
+          org_id: orgId,
+          plate_number: dto.plate_number.trim(),
+          model: dto.model.trim(),
+        },
+      });
+    } catch (e) {
+      console.error('[createVehicle] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
+      throw e;
     }
-    const org = await this.prisma.organization.findUnique({
-      where: { id: orgId },
-    });
-    if (!org) throw new NotFoundException('Tashkilot topilmadi');
-    return this.prisma.vehicle.create({
-      data: {
-        org_id: orgId,
-        plate_number: dto.plate_number.trim(),
-        model: dto.model.trim(),
-      },
-    });
   }
 
   async getVehiclesByOrg(orgId: string, page = 1, limit = 50) {
@@ -1047,6 +1060,7 @@ export class AdminService {
   }
 
   async getClientOrders(clientPhone: string, filters?: { from?: string; to?: string; status?: string }) {
+    console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
     const phoneDigits = clientPhone.replace(/\D/g, '');
     const where: {
       organization_id: null;

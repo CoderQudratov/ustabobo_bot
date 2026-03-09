@@ -2,13 +2,14 @@ import 'dotenv/config';
 import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { validateEnv, getSafeStartupConfig } from './config/env';
 import { AppModule } from './app.module';
 import { config } from './config/configuration';
 import { PrismaService } from './prisma/prisma.service';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 // Fail fast if BOT_TOKEN missing or placeholder (avoids "Invalid Telegram init data signature")
 validateEnv();
@@ -36,7 +37,8 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalFilters(new HttpExceptionFilter());
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
   app.use('/uploads', express.static(UPLOADS_DIR));
   const webappOrigin = process.env.WEBAPP_URL?.trim().replace(/\/+$/, '');
   const corsOrigins: string[] = [

@@ -59,18 +59,24 @@ export class AdminReportsController {
   }
 
   @Get('clients/individuals/orders')
-  getClientOrders(
+  async getClientOrders(
     @Query('phone') phone?: string | string[],
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
+    console.log('[getClientOrders] phone (raw):', phone);
     const phoneStr = Array.isArray(phone) ? phone[0] : phone;
     const normalized = typeof phoneStr === 'string' ? phoneStr.trim() : '';
     if (!normalized) {
       throw new BadRequestException('phone parametri kiritilishi shart');
     }
-    return this.adminService.getClientOrders(normalized, { from, to, status });
+    try {
+      return await this.adminService.getClientOrders(normalized, { from, to, status });
+    } catch (e) {
+      console.error('[getClientOrders] ERROR:', e instanceof Error ? e.message : e);
+      throw e;
+    }
   }
 
   @Get('clients/history')
