@@ -52,6 +52,10 @@ export class AdminService {
   async createUser(dto: AdminCreateUserDto) {
     console.log('[createUser] dto:', JSON.stringify(dto));
     try {
+      const fullname = (dto.fullname ?? dto.name)?.trim();
+      if (!fullname) {
+        throw new BadRequestException('fullname yoki name kiritilishi shart');
+      }
       const existingPhone = await this.prisma.user.findUnique({
         where: { phone: dto.phone },
       });
@@ -65,10 +69,10 @@ export class AdminService {
         throw new ConflictException('User with this login already exists');
       }
       const password_hash = await bcrypt.hash(dto.password, 10);
-      const percent_rate = dto.percent_rate ?? 0;
+      const percent_rate = dto.percent_rate ?? dto.commission ?? 0;
       return await this.prisma.user.create({
         data: {
-          fullname: dto.fullname,
+          fullname,
           phone: dto.phone,
           login: dto.login,
           password_hash,

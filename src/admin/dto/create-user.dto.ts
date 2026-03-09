@@ -9,13 +9,20 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Role } from '../../../generated/prisma/client';
 
 export class AdminCreateUserDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  fullname: string;
+  fullname?: string;
+
+  /** Frontend ba'zan "name" yuboradi — ikkalasidan biri kerak */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  name?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -39,7 +46,15 @@ export class AdminCreateUserDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   percent_rate?: number;
+
+  /** Frontend ba'zan "commission" yuboradi */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  commission?: number;
 
   @IsOptional()
   @IsBoolean()
