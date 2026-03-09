@@ -21,13 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { User } from '@/lib/types';
 
 const createSchema = z.object({
   fullname: z.string().min(1, 'Ism kiriting'),
   phone: z.string().min(1, 'Telefon kiriting'),
   login: z.string().min(3, 'Login kamida 3 belgi'),
   password: z.string().min(6, 'Parol kamida 6 belgi'),
-  role: z.enum(['master', 'driver']),
+  role: z.enum(['boss', 'master', 'driver']),
   percent_rate: z.number().min(0).optional(),
   is_active: z.boolean().optional(),
 });
@@ -35,8 +36,6 @@ const createSchema = z.object({
 const editSchema = createSchema.extend({ password: z.string().optional() });
 
 type CreateForm = z.infer<typeof createSchema>;
-
-type User = { id: string; fullname: string; phone: string; login: string; role: string; percent_rate: string; is_active: boolean };
 
 export function UserForm({
   mode,
@@ -59,7 +58,7 @@ export function UserForm({
             phone: user.phone,
             login: user.login,
             password: '',
-            role: user.role as 'master' | 'driver',
+            role: user.role as 'boss' | 'master' | 'driver',
             percent_rate: Number(user.percent_rate) || 0,
             is_active: user.is_active,
           }
@@ -120,9 +119,10 @@ export function UserForm({
           </div>
           <div>
             <Label>Rol</Label>
-            <Select value={form.watch('role')} onValueChange={(v) => form.setValue('role', v as 'master' | 'driver')}>
+            <Select value={form.watch('role')} onValueChange={(v) => form.setValue('role', v as 'boss' | 'master' | 'driver')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="boss">Boss</SelectItem>
                 <SelectItem value="master">Usta</SelectItem>
                 <SelectItem value="driver">Haydovchi</SelectItem>
               </SelectContent>

@@ -76,3 +76,28 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 export function orderStatusLabel(s: OrderStatus): string {
   return STATUS_LABELS[s] ?? s;
 }
+
+// ─── Users (ERP admin) ───────────────────────────────────────────────────────
+
+export type UserRole = 'boss' | 'master' | 'driver';
+
+export interface User {
+  id: string;
+  fullname: string;
+  phone: string;
+  login: string;
+  username: string | null;
+  role: UserRole;
+  percent_rate: string;
+  balance: string | null;
+  is_active: boolean;
+  tg_id: string | null;
+  created_at?: string | null;
+}
+
+export interface UsersListRes {
+  items: User[];
+  total: number;
+  page: number;
+  limit: number;
+}
