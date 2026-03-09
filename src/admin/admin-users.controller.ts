@@ -19,7 +19,12 @@ import { AdminCreateUserDto } from './dto/create-user.dto';
 import { AdminUpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from './dto/pagination.dto';
 
-interface JwtUser { id: string; login: string; role: Role; fullname: string }
+interface JwtUser {
+  id: string;
+  login: string;
+  role: Role;
+  fullname: string;
+}
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -35,7 +35,10 @@ export class AppController {
       return { status: 'ok', redis: pong };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      throw new ServiceUnavailableException({ status: 'error', redis: message });
+      throw new ServiceUnavailableException({
+        status: 'error',
+        redis: message,
+      });
     }
   }
 }

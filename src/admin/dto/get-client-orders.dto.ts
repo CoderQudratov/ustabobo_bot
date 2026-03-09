@@ -10,10 +10,18 @@ import { Transform } from 'class-transformer';
 export class GetClientOrdersQueryDto {
   @IsString()
   @IsNotEmpty({ message: 'phone parametri kiritilishi shart' })
-  @Transform(({ value }) => {
+  @Transform(({ value }: { value: unknown }) => {
     if (value == null) return '';
-    const s = Array.isArray(value) ? value[0] : value;
-    return String(s ?? '').trim().replace(/\D/g, '');
+    const s: unknown = Array.isArray(value) ? value[0] : value;
+    const str =
+      typeof s === 'string'
+        ? s
+        : s === null || s === undefined || typeof s === 'object'
+          ? ''
+          : typeof s === 'number' || typeof s === 'boolean'
+            ? String(s)
+            : '';
+    return (typeof str === 'string' ? str : '').trim().replace(/\D/g, '');
   })
   @Length(7, 20, {
     message: 'Telefon raqami kamida 7 ta raqamdan iborat bo‘lishi kerak',

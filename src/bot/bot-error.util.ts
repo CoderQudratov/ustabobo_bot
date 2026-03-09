@@ -14,20 +14,25 @@ export const BOT_ERROR_CODES = {
   AUTH_SCENE: 'ERR_BOT_010',
 } as const;
 
+interface ContextWithScene extends Context {
+  scene?: unknown;
+}
+
 function getContextInfo(ctx: Context): Record<string, unknown> {
   const from = ctx.from;
   const chatId = ctx.chat?.id;
-  const update = (ctx as any).update;
+  const update = ctx.update as { message?: unknown; callback_query?: unknown };
   const updateType = update?.message
     ? 'message'
     : update?.callback_query
       ? 'callback_query'
       : 'unknown';
+  const hasScene = !!(ctx as ContextWithScene).scene;
   return {
     chatId,
     userId: from?.id,
     updateType,
-    hasScene: !!(ctx as any).scene,
+    hasScene,
   };
 }
 

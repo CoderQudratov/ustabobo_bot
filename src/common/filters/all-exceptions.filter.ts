@@ -50,8 +50,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
         const msg = b.message;
         message = Array.isArray(msg)
-          ? (msg[0] as string) ?? exception.message
-          : (typeof msg === 'string' ? msg : exception.message) ?? exception.message;
+          ? ((msg[0] as string) ?? exception.message)
+          : ((typeof msg === 'string' ? msg : exception.message) ??
+            exception.message);
         if (status === 401 && !message) {
           message = 'Invalid Telegram init data signature';
         }
@@ -61,7 +62,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
           details = { validationErrors: b.message };
         }
       } else {
-        message = (typeof body === 'string' ? body : exception.message) ?? 'Internal error';
+        message =
+          (typeof body === 'string' ? body : exception.message) ??
+          'Internal error';
       }
     } else {
       message =

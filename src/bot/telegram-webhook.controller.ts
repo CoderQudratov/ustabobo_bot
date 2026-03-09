@@ -1,6 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf } from 'telegraf';
+import type { Update } from '@telegraf/types';
 import { Public } from '../common/decorators/public.decorator';
 
 /**
@@ -16,7 +17,7 @@ export class TelegramWebhookController {
   ) {}
 
   @Post('webhook')
-  async webhook(@Body() body: Record<string, unknown>): Promise<void> {
-    await this.bot.handleUpdate(body as any);
+  async webhook(@Body() body: Update): Promise<void> {
+    await this.bot.handleUpdate(body);
   }
 }

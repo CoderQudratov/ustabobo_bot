@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -41,7 +48,10 @@ export class AdminReportsController {
     @Query('limit') limit?: string,
   ) {
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20));
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(String(limit), 10) || 20),
+    );
     return this.adminService.getIndividualClients({
       from,
       to,
@@ -59,11 +69,28 @@ export class AdminReportsController {
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    console.log('[getClientOrders] Validated phone:', phone, '| from:', from, 'to:', to, 'status:', status);
+    console.log(
+      '[getClientOrders] Validated phone:',
+      phone,
+      '| from:',
+      from,
+      'to:',
+      to,
+      'status:',
+      status,
+    );
     try {
-      return await this.adminService.getClientOrders(phone, { from, to, status });
+      return await this.adminService.getClientOrders(phone, {
+        from,
+        to,
+        status,
+      });
     } catch (e) {
-      console.error('[getClientOrders] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
+      console.error(
+        '[getClientOrders] ERROR:',
+        e instanceof Error ? e.message : e,
+        e instanceof Error ? e.stack : '',
+      );
       throw e;
     }
   }
@@ -99,7 +126,7 @@ export class AdminReportsController {
     const fromDate = from?.trim()
       ? new Date(from)
       : new Date(now.getFullYear(), now.getMonth(), 1);
-    let toDate = to?.trim() ? new Date(to) : new Date(now);
+    const toDate = to?.trim() ? new Date(to) : new Date(now);
     toDate.setHours(23, 59, 59, 999);
 
     if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {

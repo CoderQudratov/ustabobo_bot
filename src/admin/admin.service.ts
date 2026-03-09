@@ -11,7 +11,6 @@ import {
   OrderStatus,
   OrderItemType,
   Role,
-  PaymentType,
 } from '../../generated/prisma/client';
 import type { Prisma } from '../../generated/prisma/client';
 import { AdminCreateUserDto } from './dto/create-user.dto';
@@ -26,7 +25,7 @@ import { AdminCreateProductDto } from './dto/create-product.dto';
 import { AdminUpdateProductDto } from './dto/update-product.dto';
 import { AdminStockInDto } from './dto/stock-in.dto';
 import { AdminCreateOrderDto } from './dto/create-order.dto';
-import { calculateOrderTotal, DELIVERY_FEE } from '../orders/price-calculator';
+import { calculateOrderTotal } from '../orders/price-calculator';
 
 const orderInclude = {
   master: { select: { id: true, fullname: true, phone: true, username: true } },
@@ -82,7 +81,11 @@ export class AdminService {
         },
       });
     } catch (e) {
-      console.error('[createUser] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
+      console.error(
+        '[createUser] ERROR:',
+        e instanceof Error ? e.message : e,
+        e instanceof Error ? e.stack : '',
+      );
       throw e;
     }
   }
@@ -151,7 +154,7 @@ export class AdminService {
     }
     return this.prisma.user.update({
       where: { id },
-      data: data as any,
+      data: data as Prisma.UserUpdateInput,
     });
   }
 
@@ -162,7 +165,7 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     if (requesterId && id === requesterId) {
-      throw new BadRequestException('O\'zingizni bloklashingiz mumkin emas');
+      throw new BadRequestException("O'zingizni bloklashingiz mumkin emas");
     }
     if (user.role === Role.boss) {
       throw new BadRequestException('Boss rolini bloklash mumkin emas');
@@ -175,7 +178,9 @@ export class AdminService {
 
   /** Prisma UUID fields throw 500 on invalid format; validate before querying. */
   private isValidUuid(s: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      s,
+    );
   }
 
   // ─── Organizations ─────────────────────────────────────────────────────────
@@ -244,7 +249,11 @@ export class AdminService {
         },
       });
     } catch (e) {
-      console.error('[createVehicle] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
+      console.error(
+        '[createVehicle] ERROR:',
+        e instanceof Error ? e.message : e,
+        e instanceof Error ? e.stack : '',
+      );
       throw e;
     }
   }
@@ -337,7 +346,9 @@ export class AdminService {
   async createProduct(dto: AdminCreateProductDto) {
     const salePrice = dto.sale_price ?? dto.selling_price;
     if (salePrice == null || salePrice <= 0) {
-      throw new BadRequestException('sale_price yoki selling_price musbat son bo\'lishi kerak');
+      throw new BadRequestException(
+        "sale_price yoki selling_price musbat son bo'lishi kerak",
+      );
     }
     const product = await this.prisma.product.create({
       data: {
@@ -362,7 +373,10 @@ export class AdminService {
   async getProducts(
     page = 1,
     limit = 50,
-    opts?: { sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count'; sortOrder?: 'asc' | 'desc' },
+    opts?: {
+      sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count';
+      sortOrder?: 'asc' | 'desc';
+    },
   ) {
     const orderBy =
       opts?.sortBy === 'cost_price'
@@ -407,44 +421,49 @@ export class AdminService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [todayOrders, todayRevenue, activeOrders, lowStockResult, recentOrders] =
-      await Promise.all([
-        this.prisma.order.count({
-          where: { created_at: { gte: today, lt: tomorrow } },
-        }),
-        this.prisma.order.aggregate({
-          where: {
-            status: OrderStatus.completed,
-            completed_at: { gte: today, lt: tomorrow },
-          },
-          _sum: { total_amount: true },
-        }),
-        this.prisma.order.count({
-          where: {
-            status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
-          },
-        }),
-        this.prisma.$queryRaw<[{ count: number }]>`
+    const [
+      todayOrders,
+      todayRevenue,
+      activeOrders,
+      lowStockResult,
+      recentOrders,
+    ] = await Promise.all([
+      this.prisma.order.count({
+        where: { created_at: { gte: today, lt: tomorrow } },
+      }),
+      this.prisma.order.aggregate({
+        where: {
+          status: OrderStatus.completed,
+          completed_at: { gte: today, lt: tomorrow },
+        },
+        _sum: { total_amount: true },
+      }),
+      this.prisma.order.count({
+        where: {
+          status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+        },
+      }),
+      this.prisma.$queryRaw<[{ count: number }]>`
           SELECT COUNT(*)::int as count FROM "Product" WHERE stock_count <= min_limit
         `,
-        this.prisma.order.findMany({
-          take: 5,
-          orderBy: { created_at: 'desc' },
-          select: {
-            id: true,
-            client_name: true,
-            total_amount: true,
-            status: true,
-            created_at: true,
-            orderItems: {
-              select: {
-                item_name: true,
-                service: { select: { name: true } },
-              },
+      this.prisma.order.findMany({
+        take: 5,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          client_name: true,
+          total_amount: true,
+          status: true,
+          created_at: true,
+          orderItems: {
+            select: {
+              item_name: true,
+              service: { select: { name: true } },
             },
           },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
     const recent = recentOrders.map((o) => {
       const withService = o.orderItems.find(
@@ -484,8 +503,10 @@ export class AdminService {
       throw new NotFoundException(`Product with id "${id}" not found`);
 
     const priceChanged =
-      (dto.cost_price != null && Number(dto.cost_price) !== Number(product.cost_price)) ||
-      (dto.sale_price != null && Number(dto.sale_price) !== Number(product.sale_price));
+      (dto.cost_price != null &&
+        Number(dto.cost_price) !== Number(product.cost_price)) ||
+      (dto.sale_price != null &&
+        Number(dto.sale_price) !== Number(product.sale_price));
 
     const updated = await this.prisma.product.update({
       where: { id },
@@ -537,7 +558,9 @@ export class AdminService {
 
     const newStock = product.stock_count + dto.quantity;
     const costPrice =
-      dto.price_per_unit != null ? dto.price_per_unit : Number(product.cost_price);
+      dto.price_per_unit != null
+        ? dto.price_per_unit
+        : Number(product.cost_price);
     const salePrice = Number(product.sale_price);
 
     await this.prisma.$transaction([
@@ -688,7 +711,7 @@ export class AdminService {
       manualProducts.length === 0
     ) {
       throw new BadRequestException(
-        'Kamida bitta xizmat, mahsulot yoki qo\'lda kiritilgan mahsulot kerak',
+        "Kamida bitta xizmat, mahsulot yoki qo'lda kiritilgan mahsulot kerak",
       );
     }
 
@@ -714,7 +737,9 @@ export class AdminService {
       );
     }
 
-    const [services, productRecords] = await Promise.all([
+    type ServiceRow = { id: string; price: unknown };
+    type ProductRow = { id: string; sale_price: unknown };
+    const [services, productRecords] = (await Promise.all([
       serviceIds.length > 0
         ? this.prisma.service.findMany({
             where: { id: { in: serviceIds } },
@@ -727,19 +752,23 @@ export class AdminService {
             },
           })
         : [],
-    ]);
+    ])) as [ServiceRow[], ProductRow[]];
 
     if (services.length !== serviceIds.length) {
       const foundIds = new Set(services.map((s) => s.id));
       const missing = serviceIds.filter((id) => !foundIds.has(id));
-      throw new BadRequestException(`Xizmatlar topilmadi: ${missing.join(', ')}`);
+      throw new BadRequestException(
+        `Xizmatlar topilmadi: ${missing.join(', ')}`,
+      );
     }
     const requiredProductIds = [...new Set(products.map((p) => p.product_id))];
     if (productRecords.length !== requiredProductIds.length) {
       const foundIds = new Set(productRecords.map((p) => p.id));
       const missing = requiredProductIds.filter((id) => !foundIds.has(id));
       if (missing.length) {
-        throw new BadRequestException(`Mahsulotlar topilmadi: ${missing.join(', ')}`);
+        throw new BadRequestException(
+          `Mahsulotlar topilmadi: ${missing.join(', ')}`,
+        );
       }
     }
 
@@ -797,7 +826,10 @@ export class AdminService {
       price_at_time: d.price_at_time,
       quantity: d.quantity,
     }));
-    const totalAmount = calculateOrderTotal(orderItemsForTotal, dto.delivery_needed);
+    const totalAmount = calculateOrderTotal(
+      orderItemsForTotal,
+      dto.delivery_needed,
+    );
 
     const order = await this.prisma.order.create({
       data: {
@@ -1076,7 +1108,10 @@ export class AdminService {
     };
   }
 
-  async getClientOrders(clientPhone: string, filters?: { from?: string; to?: string; status?: string }) {
+  async getClientOrders(
+    clientPhone: string,
+    filters?: { from?: string; to?: string; status?: string },
+  ) {
     console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
     const phoneDigits = clientPhone.replace(/\D/g, '');
     const where: {
@@ -1086,7 +1121,9 @@ export class AdminService {
       status?: OrderStatus;
     } = {
       organization_id: null,
-      client_phone: { contains: phoneDigits.length >= 7 ? phoneDigits : clientPhone },
+      client_phone: {
+        contains: phoneDigits.length >= 7 ? phoneDigits : clientPhone,
+      },
     };
 
     if (filters?.from || filters?.to) {
@@ -1136,8 +1173,11 @@ export class AdminService {
         car_number: o.car_number,
         car_model: o.car_model,
         service_name:
-          (o.orderItems.find((i) => (i as { service?: { name: string } }).service) as { service: { name: string } } | undefined)
-            ?.service?.name ?? '—',
+          (
+            o.orderItems.find(
+              (i) => (i as { service?: { name: string } }).service,
+            ) as { service: { name: string } } | undefined
+          )?.service?.name ?? '—',
       })),
     };
   }

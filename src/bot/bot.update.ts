@@ -36,8 +36,12 @@ interface SessionWithPin {
   setPinMode?: boolean;
 }
 
+interface ContextWithSession extends Context {
+  session?: SessionWithPin;
+}
+
 function getSession(ctx: Context): SessionWithPin {
-  return ((ctx as any).session ?? {}) as SessionWithPin;
+  return (ctx as ContextWithSession).session ?? {};
 }
 
 function getPinBuffer(ctx: Context): string {
@@ -46,12 +50,12 @@ function getPinBuffer(ctx: Context): string {
 
 function setPinBuffer(ctx: Context, value: string): void {
   const s = getSession(ctx);
-  (ctx as any).session = { ...s, pinBuffer: value };
+  (ctx as ContextWithSession).session = { ...s, pinBuffer: value };
 }
 
 function setPinMode(ctx: Context, value: boolean): void {
   const s = getSession(ctx);
-  (ctx as any).session = { ...s, setPinMode: value };
+  (ctx as ContextWithSession).session = { ...s, setPinMode: value };
 }
 
 function isSetPinMode(ctx: Context): boolean {
@@ -298,7 +302,7 @@ export class BotUpdate {
       }
 
       // Deep link: /start conf_UUID (customer confirmation, TZ §§10–11)
-      const payload = (ctx as any).startPayload as string | undefined;
+      const payload = (ctx as Context & { startPayload?: string }).startPayload;
       if (payload && payload.startsWith('conf_')) {
         const token = payload.slice('conf_'.length);
         if (!token) {

@@ -66,7 +66,9 @@ export class AuthService {
     return { access_token, refresh_token, expires_in: expiresIn };
   }
 
-  async refresh(refreshToken: string): Promise<Omit<TokenResponse, 'refresh_token'>> {
+  async refresh(
+    refreshToken: string,
+  ): Promise<Omit<TokenResponse, 'refresh_token'>> {
     const payload = this.jwtService.verify<RefreshPayload>(refreshToken);
     if (payload?.type !== 'refresh' || !payload.sub) {
       throw new UnauthorizedException('Invalid refresh token');

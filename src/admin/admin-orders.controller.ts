@@ -52,10 +52,7 @@ export class AdminOrdersController {
   }
 
   @Patch(':id/status')
-  updateStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateOrderStatusDto,
-  ) {
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
     return this.adminService.updateOrderStatus(id, dto.status);
   }
 }

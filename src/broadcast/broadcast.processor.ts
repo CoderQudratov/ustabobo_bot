@@ -20,7 +20,7 @@ export class BroadcastProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<{ orderId: string }>, _token?: string): Promise<void> {
+  async process(job: Job<{ orderId: string }>): Promise<void> {
     if (job.name !== BROADCAST_JOB_NAME || !job.data?.orderId) {
       return;
     }
@@ -67,9 +67,8 @@ export class BroadcastProcessor extends WorkerHost {
         if (lat != null && lng != null) {
           await this.bot.telegram.sendLocation(tgId, lat, lng);
         }
-      } catch (err) {
+      } catch {
         // Driver may have blocked the bot or left – do not crash the job
-        // Optionally log: console.warn(`Failed to send broadcast to driver ${driver.id}:`, err);
       }
     }
   }

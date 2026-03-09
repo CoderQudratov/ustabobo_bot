@@ -1,5 +1,4 @@
 import { IsOptional, IsString, IsUUID } from 'class-validator';
-import { Type } from 'class-transformer';
 import { PaginationDto } from './pagination.dto';
 
 export class AdminOrdersQueryDto extends PaginationDto {

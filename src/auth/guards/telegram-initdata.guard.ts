@@ -35,7 +35,7 @@ export class TelegramInitDataGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     if (request.method === 'OPTIONS') return true;
-    if ((context.getType() as string) === 'telegraf') return true;
+    if (String(context.getType()) === 'telegraf') return true;
 
     const raw =
       typeof request.headers[INIT_DATA_HEADER] === 'string'

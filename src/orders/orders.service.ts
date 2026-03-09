@@ -60,7 +60,9 @@ export class OrdersService {
       );
     }
 
-    const [services, productRecords] = await Promise.all([
+    type ServiceRow = { id: string; price: unknown };
+    type ProductRow = { id: string; sale_price: unknown };
+    const [services, productRecords] = (await Promise.all([
       serviceIds.length > 0
         ? this.prisma.service.findMany({
             where: { id: { in: serviceIds } },
@@ -73,7 +75,7 @@ export class OrdersService {
             },
           })
         : [],
-    ]);
+    ])) as [ServiceRow[], ProductRow[]];
 
     if (services.length !== serviceIds.length) {
       const foundIds = new Set(services.map((s) => s.id));
@@ -430,7 +432,7 @@ export class OrdersService {
     ]);
 
     if (order.delivery_needed && newStatus === OrderStatus.broadcasted) {
-      this.broadcastProducer.broadcastOrder(orderId);
+      void this.broadcastProducer.broadcastOrder(orderId);
     }
     if (
       !order.delivery_needed &&

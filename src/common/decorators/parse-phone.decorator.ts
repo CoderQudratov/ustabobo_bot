@@ -7,7 +7,9 @@ import { PhoneValidationPipe } from '../pipes/phone-validation.pipe';
  */
 export const ParsePhone = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): unknown => {
-    const request = ctx.switchToHttp().getRequest<{ query: Record<string, unknown> }>();
+    const request = ctx
+      .switchToHttp()
+      .getRequest<{ query: Record<string, unknown> }>();
     const raw = request.query?.['phone'];
     const pipe = new PhoneValidationPipe();
     return pipe.transform(raw);

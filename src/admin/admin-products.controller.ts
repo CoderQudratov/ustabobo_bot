@@ -50,7 +50,8 @@ export class AdminProductsController {
   list(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('sortBy') sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count',
+    @Query('sortBy')
+    sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count',
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
     const p = page != null ? Number(page) : 1;

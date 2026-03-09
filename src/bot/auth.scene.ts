@@ -71,7 +71,7 @@ export class AuthScene {
   /** Step 0: receive login, save to state, ask for password, move to step 1 */
   @WizardStep(0)
   @On('text')
-  async stepLogin(@Ctx() ctx: AuthWizardContext): Promise<string | void> {
+  stepLogin(@Ctx() ctx: AuthWizardContext): string | void {
     if (!ctx.wizard) return 'Login kiriting:';
     const text =
       ctx.message && 'text' in ctx.message

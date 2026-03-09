@@ -2,8 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { PaymentType } from '../../generated/prisma/client';
-
 @Injectable()
 export class OrganizationsService {
   constructor(private readonly prisma: PrismaService) {}

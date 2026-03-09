@@ -79,7 +79,6 @@ export class OrdersController {
   async cancelOrder(
     @Param('id') id: string,
     @Req() req: Request & { user: JwtUser },
-    @Body() body: { telegramId?: string },
   ) {
     return this.ordersService.cancelOrder(id, req.user.id);
   }
