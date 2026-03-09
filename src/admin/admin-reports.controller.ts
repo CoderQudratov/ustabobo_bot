@@ -60,15 +60,15 @@ export class AdminReportsController {
 
   @Get('clients/individuals/orders')
   getClientOrders(
-    @Query('phone') phone: string,
+    @Query('phone') phone?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    if (!phone?.trim()) {
-      throw new BadRequestException('phone is required');
+    if (!phone || phone.trim() === '') {
+      throw new BadRequestException('phone parametri kiritilishi shart');
     }
-    return this.adminService.getClientOrders(phone, { from, to, status });
+    return this.adminService.getClientOrders(phone.trim(), { from, to, status });
   }
 
   @Get('clients/history')
@@ -93,14 +93,27 @@ export class AdminReportsController {
 
   @Get('reports')
   getReports(
-    @Query('from') from: string,
-    @Query('to') to: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
     @Query('master_id') master_id?: string,
     @Query('org_id') org_id?: string,
   ) {
-    if (!from?.trim() || !to?.trim()) {
-      throw new BadRequestException('from and to (ISO date) are required');
+    const now = new Date();
+    const fromDate = from?.trim()
+      ? new Date(from)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    let toDate = to?.trim() ? new Date(to) : new Date(now);
+    toDate.setHours(23, 59, 59, 999);
+
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new BadRequestException("from va to sanalar noto'g'ri formatda");
     }
-    return this.adminService.getReports({ from, to, master_id, org_id });
+
+    return this.adminService.getReports({
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+      master_id,
+      org_id,
+    });
   }
 }

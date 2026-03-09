@@ -110,6 +110,9 @@ export class AdminService {
   }
 
   async getUserById(id: string) {
+    if (!this.isValidUuid(id)) {
+      throw new NotFoundException('Foydalanuvchi topilmadi');
+    }
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -143,12 +146,20 @@ export class AdminService {
   }
 
   async toggleUserActive(id: string) {
+    if (!this.isValidUuid(id)) {
+      throw new NotFoundException('Foydalanuvchi topilmadi');
+    }
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException(`User with id "${id}" not found`);
+    if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     return this.prisma.user.update({
       where: { id },
       data: { is_active: !user.is_active },
     });
+  }
+
+  /** Prisma UUID fields throw 500 on invalid format; validate before querying. */
+  private isValidUuid(s: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   }
 
   // ─── Organizations ─────────────────────────────────────────────────────────
@@ -624,7 +635,7 @@ export class AdminService {
     const updateData: { status: OrderStatus; completed_at?: Date } = {
       status,
     };
-    if (status === 'completed') {
+    if (status === OrderStatus.completed) {
       updateData.completed_at = new Date();
     }
     return this.prisma.order.update({

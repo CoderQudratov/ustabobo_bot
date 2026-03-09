@@ -10,6 +10,7 @@ import { AdminProductsController } from './admin-products.controller';
 import { AdminOrdersController } from './admin-orders.controller';
 import { AdminReportsController } from './admin-reports.controller';
 import { AdminDashboardController } from './admin-dashboard.controller';
+import { AdminDashboardService } from './admin-dashboard.service';
 
 @Module({
   imports: [PrismaModule, ProductsModule],
@@ -23,6 +24,6 @@ import { AdminDashboardController } from './admin-dashboard.controller';
     AdminReportsController,
     AdminDashboardController,
   ],
-  providers: [AdminService],
+  providers: [AdminService, AdminDashboardService],
 })
 export class AdminModule {}

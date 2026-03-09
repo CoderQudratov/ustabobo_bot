@@ -33,13 +33,14 @@ export function useClientHistory(filters: ClientHistoryFilters) {
   });
 }
 
-export function useClientDetail(clientPhone: string | null) {
+export function useClientDetail(clientId?: string | null) {
   return useQuery({
-    queryKey: ['client', 'orders', clientPhone],
+    queryKey: ['client-detail', clientId],
     queryFn: () =>
       apiGet<ClientDetailRes>(
-        `/admin/clients/individuals/orders?phone=${encodeURIComponent(clientPhone!)}`
+        `/admin/clients/individuals/orders?phone=${encodeURIComponent(clientId!)}`
       ),
-    enabled: !!clientPhone,
+    enabled: !!clientId?.trim(),
+    staleTime: 30_000,
   });
 }

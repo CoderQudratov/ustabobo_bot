@@ -15,6 +15,7 @@ import { Role } from '../../generated/prisma/client';
 import { AdminService } from './admin.service';
 import { AdminOrdersQueryDto } from './dto/orders-query.dto';
 import { AdminCreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Controller('admin/orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -53,8 +54,8 @@ export class AdminOrdersController {
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() dto: UpdateOrderStatusDto,
   ) {
-    return this.adminService.updateOrderStatus(id, body.status as any);
+    return this.adminService.updateOrderStatus(id, dto.status);
   }
 }

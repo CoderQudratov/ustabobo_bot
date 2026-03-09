@@ -68,9 +68,10 @@ export default function ReportsPage() {
   const [queryFrom, setQueryFrom] = useState(defaultFrom);
   const [queryTo, setQueryTo] = useState(defaultTo);
 
-  const params = new URLSearchParams();
-  params.set('from', queryFrom);
-  params.set('to', queryTo);
+  const params = new URLSearchParams({
+    from: new Date(queryFrom + 'T00:00:00').toISOString(),
+    to: new Date(queryTo + 'T23:59:59').toISOString(),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['reports', queryFrom, queryTo],
@@ -497,7 +498,7 @@ export default function ReportsPage() {
         </>
       ) : (
         <p className="text-muted-foreground">
-          Sana oralig‘ini tanlang va &quot;Hisobot olish&quot; tugmasini bosing.
+          Ma’lumot yo‘q. Sana oralig‘ini o‘zgartirib &quot;Hisobot olish&quot; ni bosing.
         </p>
       )}
     </div>

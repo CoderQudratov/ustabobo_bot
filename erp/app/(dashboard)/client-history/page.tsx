@@ -239,7 +239,7 @@ function ClientDetailDialog({
   clientPhone: string;
   onClose: () => void;
 }) {
-  const { data, isLoading } = useClientDetail(clientPhone);
+  const { data, isLoading, isError } = useClientDetail(clientPhone);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -249,6 +249,10 @@ function ClientDetailDialog({
         </DialogHeader>
         {isLoading ? (
           <Skeleton className="h-48 w-full" />
+        ) : isError ? (
+          <p className="py-4 text-center text-destructive">
+            Ma’lumot yuklab bo‘lmadi. Qayta urinib ko‘ring.
+          </p>
         ) : data ? (
           <div className="space-y-4">
             <div className="grid gap-2 text-sm">
@@ -274,58 +278,59 @@ function ClientDetailDialog({
 
             <div>
               <h4 className="mb-2 font-medium">Buyurtmalar</h4>
-              <div className="overflow-x-auto rounded border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="p-2 text-left font-medium">Sana</th>
-                      <th className="p-2 text-left font-medium">Xizmat</th>
-                      <th className="p-2 text-left font-medium">Mashina</th>
-                      <th className="p-2 text-right font-medium">Summa</th>
-                      <th className="p-2 text-left font-medium">Holat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.orders.map((o) => (
-                      <tr key={o.id} className="border-b">
-                        <td className="p-2">
-                          {format(
-                            new Date(o.created_at),
-                            'dd.MM.yyyy HH:mm'
-                          )}
-                        </td>
-                        <td className="p-2">{o.service_name}</td>
-                        <td className="p-2">
-                          {o.car_number}
-                          {o.car_model ? ` (${o.car_model})` : ''}
-                        </td>
-                        <td className="p-2 text-right">
-                          {formatSom(o.total_amount)}
-                        </td>
-                        <td className="p-2">
-                          <Badge
-                            variant={
-                              o.status === 'completed' ? 'default' : 'secondary'
-                            }
-                          >
-                            {orderStatusLabel(o.status as OrderStatus)}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {data.orders.length === 0 && (
+              {!data.orders?.length ? (
                 <p className="p-4 text-center text-muted-foreground">
-                  Buyurtmalar yo‘q
+                  Bu mijoz uchun buyurtmalar topilmadi
                 </p>
+              ) : (
+                <div className="overflow-x-auto rounded border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="p-2 text-left font-medium">Sana</th>
+                        <th className="p-2 text-left font-medium">Xizmat</th>
+                        <th className="p-2 text-left font-medium">Mashina</th>
+                        <th className="p-2 text-right font-medium">Summa</th>
+                        <th className="p-2 text-left font-medium">Holat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.orders.map((o) => (
+                        <tr key={o.id} className="border-b">
+                          <td className="p-2">
+                            {format(
+                              new Date(o.created_at),
+                              'dd.MM.yyyy HH:mm'
+                            )}
+                          </td>
+                          <td className="p-2">{o.service_name}</td>
+                          <td className="p-2">
+                            {o.car_number}
+                            {o.car_model ? ` (${o.car_model})` : ''}
+                          </td>
+                          <td className="p-2 text-right">
+                            {formatSom(o.total_amount)}
+                          </td>
+                          <td className="p-2">
+                            <Badge
+                              variant={
+                                o.status === 'completed'
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                            >
+                              {orderStatusLabel(o.status as OrderStatus)}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
-        ) : (
-          <p className="text-muted-foreground">Ma’lumot yuklanmadi</p>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   );
