@@ -16,6 +16,7 @@ async function doRefresh(request: NextRequest): Promise<string | null> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
+    duplex: 'half', // ✅ QUSHILDI
   });
 
   if (!res.ok) return null;
@@ -43,6 +44,7 @@ async function proxy(
   };
   if (['POST', 'PATCH', 'PUT'].includes(request.method) && request.body) {
     init.body = request.body;
+    init.duplex = 'half'; // ✅ BU LINIYA QUSHILDI!
   }
 
   const res = await fetch(backendUrl, init);
