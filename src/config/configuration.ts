@@ -55,6 +55,7 @@ export function getRedisUrl(): string | undefined {
 
 let redisEvictionWarnedOnce = false;
 function warnRedisEvictionOnce(): void {
+  if (process.env.NODE_ENV === 'test') return;
   if (!redisEvictionWarnedOnce) {
     redisEvictionWarnedOnce = true;
     console.warn(

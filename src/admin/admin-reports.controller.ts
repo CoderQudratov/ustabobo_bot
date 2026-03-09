@@ -69,16 +69,18 @@ export class AdminReportsController {
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    console.log(
-      '[getClientOrders] Validated phone:',
-      phone,
-      '| from:',
-      from,
-      'to:',
-      to,
-      'status:',
-      status,
-    );
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(
+        '[getClientOrders] Validated phone:',
+        phone,
+        '| from:',
+        from,
+        'to:',
+        to,
+        'status:',
+        status,
+      );
+    }
     try {
       return await this.adminService.getClientOrders(phone, {
         from,
@@ -86,11 +88,13 @@ export class AdminReportsController {
         status,
       });
     } catch (e) {
-      console.error(
-        '[getClientOrders] ERROR:',
-        e instanceof Error ? e.message : e,
-        e instanceof Error ? e.stack : '',
-      );
+      if (process.env.NODE_ENV !== 'test') {
+        console.error(
+          '[getClientOrders] ERROR:',
+          e instanceof Error ? e.message : e,
+          e instanceof Error ? e.stack : '',
+        );
+      }
       throw e;
     }
   }

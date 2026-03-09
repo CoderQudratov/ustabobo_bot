@@ -77,11 +77,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
-    console.error(
-      `[AllExceptionsFilter] ${code} requestId=${requestId} status=${status}`,
-      message,
-    );
-    if (stack && process.env.NODE_ENV !== 'production') {
+    const isTest = process.env.NODE_ENV === 'test';
+    if (!isTest || status >= 500) {
+      console.error(
+        `[AllExceptionsFilter] ${code} requestId=${requestId} status=${status}`,
+        message,
+      );
+    }
+    if (stack && process.env.NODE_ENV !== 'production' && !isTest) {
       console.error('[AllExceptionsFilter] stack:', stack);
     }
 

@@ -267,8 +267,10 @@ export class AdminService {
 
   // ─── Vehicles ───────────────────────────────────────────────────────────────
   async createVehicle(orgId: string, dto: AdminCreateVehicleDto, user: AdminRequestUser) {
-    console.log('[createVehicle] orgId:', orgId);
-    console.log('[createVehicle] dto:', JSON.stringify(dto));
+    if (process.env.NODE_ENV !== 'test') {
+      console.log('[createVehicle] orgId:', orgId);
+      console.log('[createVehicle] dto:', JSON.stringify(dto));
+    }
     try {
       if (!this.isValidUuid(orgId)) {
         throw new NotFoundException('Tashkilot topilmadi');
@@ -292,11 +294,13 @@ export class AdminService {
         },
       });
     } catch (e) {
-      console.error(
-        '[createVehicle] ERROR:',
-        e instanceof Error ? e.message : e,
-        e instanceof Error ? e.stack : '',
-      );
+      if (process.env.NODE_ENV !== 'test') {
+        console.error(
+          '[createVehicle] ERROR:',
+          e instanceof Error ? e.message : e,
+          e instanceof Error ? e.stack : '',
+        );
+      }
       throw e;
     }
   }
@@ -1223,7 +1227,9 @@ export class AdminService {
     filters?: { from?: string; to?: string; status?: string },
     user?: AdminRequestUser,
   ) {
-    console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
+    if (process.env.NODE_ENV !== 'test') {
+      console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
+    }
     const phoneDigits = clientPhone.replace(/\D/g, '');
     const where: Prisma.OrderWhereInput = {
       organization_id: null,
