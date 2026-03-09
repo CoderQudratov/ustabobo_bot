@@ -8,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class AdminCreateProductDto {
   @IsString()
@@ -17,17 +18,22 @@ export class AdminCreateProductDto {
 
   @IsNumber()
   @IsPositive()
+  @Type(() => Number)
   cost_price: number;
 
   @IsNumber()
   @IsPositive()
+  @Type(() => Number)
   sale_price: number;
 
   @IsInt()
   @Min(0)
+  @Type(() => Number)
   stock_count: number;
 
+  @IsOptional()
   @IsInt()
   @Min(0)
-  min_limit: number;
+  @Type(() => Number)
+  min_limit?: number;
 }

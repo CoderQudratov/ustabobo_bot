@@ -207,16 +207,18 @@ export class AdminService {
 
   // ─── Vehicles ───────────────────────────────────────────────────────────────
   async createVehicle(orgId: string, dto: AdminCreateVehicleDto) {
+    if (!this.isValidUuid(orgId)) {
+      throw new NotFoundException('Tashkilot topilmadi');
+    }
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
     });
-    if (!org)
-      throw new NotFoundException(`Organization with id "${orgId}" not found`);
+    if (!org) throw new NotFoundException('Tashkilot topilmadi');
     return this.prisma.vehicle.create({
       data: {
         org_id: orgId,
-        plate_number: dto.plate_number,
-        model: dto.model,
+        plate_number: dto.plate_number.trim(),
+        model: dto.model.trim(),
       },
     });
   }
@@ -309,11 +311,11 @@ export class AdminService {
   async createProduct(dto: AdminCreateProductDto) {
     const product = await this.prisma.product.create({
       data: {
-        name: dto.name,
+        name: dto.name.trim(),
         cost_price: dto.cost_price,
         sale_price: dto.sale_price,
         stock_count: dto.stock_count,
-        min_limit: dto.min_limit,
+        min_limit: dto.min_limit ?? 0,
       },
     });
     await this.prisma.productPriceHistory.create({
@@ -1045,12 +1047,16 @@ export class AdminService {
   }
 
   async getClientOrders(clientPhone: string, filters?: { from?: string; to?: string; status?: string }) {
+    const phoneDigits = clientPhone.replace(/\D/g, '');
     const where: {
       organization_id: null;
-      client_phone: string;
+      client_phone: { contains: string };
       created_at?: { gte?: Date; lte?: Date };
       status?: OrderStatus;
-    } = { organization_id: null, client_phone: clientPhone };
+    } = {
+      organization_id: null,
+      client_phone: { contains: phoneDigits.length >= 7 ? phoneDigits : clientPhone },
+    };
 
     if (filters?.from || filters?.to) {
       where.created_at = {};

@@ -60,15 +60,17 @@ export class AdminReportsController {
 
   @Get('clients/individuals/orders')
   getClientOrders(
-    @Query('phone') phone?: string,
+    @Query('phone') phone?: string | string[],
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    if (!phone || phone.trim() === '') {
+    const phoneStr = Array.isArray(phone) ? phone[0] : phone;
+    const normalized = typeof phoneStr === 'string' ? phoneStr.trim() : '';
+    if (!normalized) {
       throw new BadRequestException('phone parametri kiritilishi shart');
     }
-    return this.adminService.getClientOrders(phone.trim(), { from, to, status });
+    return this.adminService.getClientOrders(normalized, { from, to, status });
   }
 
   @Get('clients/history')
