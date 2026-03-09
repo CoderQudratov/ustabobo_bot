@@ -23,6 +23,12 @@ import {
   type WebAppProductItem,
   type WebAppVehicleItem,
 } from "@/utils/api";
+import {
+  isValidUzbekPhone,
+  isValidUzbekPlate,
+  UZBEK_PHONE_PLACEHOLDER,
+  UZBEK_PLATE_PLACEHOLDER,
+} from "@/utils/validation";
 
 const DEBOUNCE_MS = 300;
 
@@ -270,6 +276,14 @@ export default function NewOrderPage() {
         setError("Mijoz ismi, telefoni va mashina raqami majburiy.");
         return;
       }
+      if (!isValidUzbekPhone(phone)) {
+        setError("Telefon raqami noto‘g‘ri. Masalan: 90 123 45 67");
+        return;
+      }
+      if (!isValidUzbekPlate(carNum)) {
+        setError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+        return;
+      }
       const hasServices = selectedServices.length > 0;
       const hasProducts = selectedProducts.length > 0;
       const hasManual = manualProducts.length > 0;
@@ -287,6 +301,14 @@ export default function NewOrderPage() {
     const name = clientName.trim();
     const phone = clientPhone.trim();
     const carNum = carNumber.trim();
+    if (!isValidUzbekPhone(phone)) {
+      setError("Telefon raqami noto‘g‘ri. Masalan: 90 123 45 67");
+      return;
+    }
+    if (!isValidUzbekPlate(carNum)) {
+      setError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+      return;
+    }
     const hasServices = selectedServices.length > 0;
     const hasProducts = selectedProducts.length > 0;
     const hasManual = manualProducts.length > 0;
@@ -331,10 +353,11 @@ export default function NewOrderPage() {
       }
       router.push("/orders/active");
     } catch (err) {
+      const msg = getErrorMessage(err, "Buyurtma saqlanmadi. Ma'lumotlarni tekshiring va qayta urinib ko'ring.");
       if (typeof window !== "undefined" && window.Telegram?.WebApp?.showAlert) {
-        window.Telegram.WebApp.showAlert("❌ Xato yuz berdi. Qayta urinib ko'ring.");
+        window.Telegram.WebApp.showAlert(`❌ ${msg}`);
       }
-      setError(getErrorMessage(err, "Saqlash xato"));
+      setError(msg);
     } finally {
       setSubmitLoading(false);
     }
@@ -408,7 +431,8 @@ export default function NewOrderPage() {
               />
               <input
                 type="tel"
-                placeholder="Telefon *"
+                inputMode="numeric"
+                placeholder={UZBEK_PHONE_PLACEHOLDER}
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}
                 className="input-webapp"
@@ -416,7 +440,7 @@ export default function NewOrderPage() {
               />
               <input
                 type="text"
-                placeholder="Mashina raqami *"
+                placeholder={UZBEK_PLATE_PLACEHOLDER}
                 value={carNumber}
                 onChange={(e) => setCarNumber(e.target.value)}
                 disabled={isCarFieldsDisabled}
@@ -923,7 +947,7 @@ export default function NewOrderPage() {
               <div className="space-y-3">
                 <input
                   type="text"
-                  placeholder="Raqam"
+                  placeholder={UZBEK_PLATE_PLACEHOLDER}
                   value={newVehiclePlate}
                   onChange={(e) => setNewVehiclePlate(e.target.value)}
                   className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
@@ -971,6 +995,10 @@ export default function NewOrderPage() {
                   disabled={newVehicleSubmitting || !newVehiclePlate.trim() || !newVehicleModel.trim()}
                   onClick={async () => {
                     setNewVehicleError("");
+                    if (!isValidUzbekPlate(newVehiclePlate.trim())) {
+                      setNewVehicleError("Mashina raqami noto‘g‘ri. Masalan: 01 A 123 AA");
+                      return;
+                    }
                     setNewVehicleSubmitting(true);
                     try {
                       const yearNum = newVehicleYear.trim() ? parseInt(newVehicleYear.trim(), 10) : undefined;

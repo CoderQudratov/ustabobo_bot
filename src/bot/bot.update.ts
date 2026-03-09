@@ -712,7 +712,7 @@ export class BotUpdate {
     }
     const msg = [
       `last_authenticated_at: ${user.last_authenticated_at ? user.last_authenticated_at.toISOString() : 'null'}`,
-      `pin_fail_count: ${user.pin_fail_count}`,
+      `password_fail_count: ${user.pin_fail_count}`,
       `locked_until: ${user.locked_until ? user.locked_until.toISOString() : 'null'}`,
     ].join('\n');
     await ctx.reply(msg).catch(() => {});
@@ -871,15 +871,6 @@ export class BotUpdate {
           await this.sendMasterStats(ctx, user);
           return;
         }
-        if (this.isMasterButton(text, '🌐 WebApp')) {
-          await ctx
-            .reply(
-              'WebApp ni ochish uchun quyidagi 🌐 WebApp tugmasini bosing.',
-              getMasterKeyboard(),
-            )
-            .catch(() => {});
-          return;
-        }
       }
 
       // Driver menu buttons
@@ -897,18 +888,6 @@ export class BotUpdate {
         ) {
           await ctx
             .reply('📜 Yetkazish tarixi (tez orada).', getDriverKeyboard())
-            .catch(() => {});
-          return;
-        }
-        if (
-          this.normalizeButtonText(text) === '🌐 WebApp' ||
-          this.normalizeButtonText(text) === 'WebApp'
-        ) {
-          await ctx
-            .reply(
-              'WebApp ni ochish uchun quyidagi 🌐 WebApp tugmasini bosing.',
-              getDriverKeyboard(),
-            )
             .catch(() => {});
           return;
         }

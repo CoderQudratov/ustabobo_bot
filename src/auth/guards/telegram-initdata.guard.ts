@@ -68,15 +68,6 @@ export class TelegramInitDataGuard implements CanActivate {
       );
     }
 
-    // TZ: if PIN exists, WebApp blocked until bot PIN verification
-    if (
-      user.pin_code_hash != null &&
-      user.pin_code_hash.trim() !== '' &&
-      !user.is_authenticated
-    ) {
-      throw new ForbiddenException('🔐 Botga qayting va PIN kiriting.');
-    }
-
     (request as Request & { user: TelegramWebAppUser }).user = {
       id: user.id,
       login: user.login,

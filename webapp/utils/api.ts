@@ -89,18 +89,26 @@ export function getApiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** Parse API error body and return user-friendly message (O'zbek). */
+export function parseApiError(text: string, status: number): string {
+  try {
+    const j = JSON.parse(text);
+    if (j?.error?.message && typeof j.error.message === 'string') return j.error.message;
+  } catch {
+    // ignore
+  }
+  if (status === 401) return "Tizimga kiring";
+  if (status === 403) return "Ruxsat yo'q. Tizimga qayta kiring.";
+  if (status === 404) return "Topilmadi.";
+  return text && text.length < 200 ? text : "Xato yuz berdi. Qayta urinib ko'ring.";
+}
+
 let onSessionExpired: (() => void) | null = null;
-let onPinRequired: (() => void) | null = null;
 let onTelegramRequired: (() => void) | null = null;
 
 /** Set callback when 401 is received (e.g. show "Session Expired" modal). */
 export function setSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler;
-}
-
-/** Set callback when 403 PIN required is received — show "Botga qayting va PIN kiriting." */
-export function setPinRequiredHandler(handler: (() => void) | null) {
-  onPinRequired = handler;
 }
 
 /** Set callback when initData is missing — do not call backend, show Telegram required screen. */
@@ -139,9 +147,6 @@ async function apiFetch(pathOrUrl: string, init: RequestInit = {}): Promise<Resp
     clearWebappAuth();
     if (onSessionExpired) onSessionExpired();
   }
-  if (res.status === 403 && onPinRequired) {
-    onPinRequired();
-  }
   return res;
 }
 
@@ -160,7 +165,7 @@ export async function webappLoginApi(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -187,12 +192,9 @@ export async function uploadCarPhoto(file: File): Promise<{ url: string }> {
   if (res.status === 401 && onSessionExpired) {
     onSessionExpired();
   }
-  if (res.status === 403 && onPinRequired) {
-    onPinRequired();
-  }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `Upload failed: ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -208,7 +210,7 @@ export async function fetchWebAppInit(): Promise<WebAppInitResponse> {
   const res = await apiFetch('webapp/init', { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -285,7 +287,7 @@ export async function createWebappVehicle(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -322,7 +324,7 @@ export async function createOrder(payload: CreateOrderPayload): Promise<{ id: st
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -390,7 +392,7 @@ export async function fetchMyOrders(
   const res = await apiFetch(url, { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   const data = await res.json();
   return Array.isArray(data) ? { items: data, total: data.length, page: 1, limit: data.length } : data;
@@ -401,7 +403,7 @@ export async function fetchOrder(orderId: string): Promise<MyOrder> {
   const res = await apiFetch(`orders/${encodeURIComponent(orderId)}`, { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -425,7 +427,7 @@ export async function finishOrderApi(orderId: string): Promise<{ deep_link: stri
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }
@@ -438,7 +440,7 @@ export async function driverFinishOrderApi(orderId: string): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
 }
 
@@ -450,7 +452,7 @@ export async function driverDeliveredOrderApi(orderId: string): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
 }
 
@@ -462,7 +464,7 @@ export async function receiveOrderApi(orderId: string): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
 }
 
@@ -483,7 +485,7 @@ export async function fetchWallet(): Promise<WalletResponse> {
   const res = await apiFetch('wallet', { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new Error(parseApiError(text || '', res.status));
   }
   return res.json();
 }

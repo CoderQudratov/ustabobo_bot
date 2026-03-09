@@ -2,7 +2,7 @@
 
 import { createContext, useEffect, useMemo, useState } from "react";
 import type { TelegramWebAppUser } from "@/types/telegram";
-import { setSessionExpiredHandler, setPinRequiredHandler, setTelegramRequiredHandler, clearWebappAuth } from "@/utils/api";
+import { setSessionExpiredHandler, setTelegramRequiredHandler, clearWebappAuth } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TelegramRequired } from "@/components/TelegramRequired";
 
@@ -46,7 +46,6 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [hasTelegramEnv, setHasTelegramEnv] = useState(false);
   const [hasInitData, setHasInitData] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [pinRequired, setPinRequired] = useState(false);
   const [telegramRequired, setTelegramRequired] = useState(false);
 
   const isTelegram = hasTelegramEnv && hasInitData;
@@ -118,11 +117,9 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
       setSessionExpired(true);
       window.location.href = "/";
     });
-    setPinRequiredHandler(() => setPinRequired(true));
     setTelegramRequiredHandler(() => setTelegramRequired(true));
     return () => {
       setSessionExpiredHandler(null);
-      setPinRequiredHandler(null);
       setTelegramRequiredHandler(null);
     };
   }, []);
@@ -183,33 +180,6 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
                 color: "var(--tg-theme-button-text-color)",
               }}
               onClick={() => setSessionExpired(false)}
-            >
-              Tushundim
-            </button>
-          </div>
-        </div>
-      )}
-      {pinRequired && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-        >
-          <div
-            className="max-w-sm rounded-2xl p-6 shadow-xl"
-            style={{ ...secondaryBg, ...screenFg }}
-          >
-            <p className="text-lg font-medium">🔐 PIN kiriting</p>
-            <p className="mt-2 text-sm opacity-90">
-              Botga qayting va PIN kiriting. Keyin ilovani qayta oching.
-            </p>
-            <button
-              type="button"
-              className="mt-4 w-full rounded-xl py-2.5 font-medium"
-              style={{
-                backgroundColor: "var(--tg-theme-button-color)",
-                color: "var(--tg-theme-button-text-color)",
-              }}
-              onClick={() => setPinRequired(false)}
             >
               Tushundim
             </button>
