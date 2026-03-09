@@ -141,7 +141,7 @@ Agar build da `prisma migrate deploy` ishlatmasangiz, production DB da jadvalar 
 
 **Port:** Backend `0.0.0.0` da `PORT` ni tinglaydi. Render “No open ports” ko‘rsatsa, `PORT` ni ishlatayotganingizni tekshiring va `GET /health` ochiq ekanini tekshiring.
 
-**Redis eviction:** Agar Render/Redis “Eviction policy is volatile-lru” deyilsa, Redis sozlamalarida `maxmemory-policy noeviction` qilib qo‘ying (agar xizmat ruxsat bersa). BullMQ noeviction tavsiya qiladi. Boshqa holatda RUN.md da yozilganidek, faqat bir marta ogohlantirish chiqadi.
+**Redis eviction:** Agar Render/Redis “Eviction policy is volatile-lru” deyilsa, Redis sozlamalarida `maxmemory-policy noeviction` qilib qo‘ying (agar xizmat ruxsat bersa). BullMQ noeviction tavsiya qiladi. **Render.com:** Redis xizmati bo‘lsa, Dashboard → Redis → Settings/Config da `maxmemory-policy noeviction` va `maxmemory 512mb` (yoki kerakli limit) qo‘ying; aks holda cache eviction tufayli ma’lumot yo‘qolishi mumkin. Lokal Docker: `docker-compose.yml` da Redis allaqachon `noeviction` va `maxmemory 512mb` bilan sozlangan.
 
 **Netlify (WebApp):** Build-time env: `NEXT_PUBLIC_API_URL=https://ustabobo-backend.onrender.com` (backend manzili). Parollarni hech qachon kodga yozmang.
 

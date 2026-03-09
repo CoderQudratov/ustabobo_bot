@@ -11,10 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CreateServiceSchema, type CreateServiceInput } from '@/lib/schemas/service';
 
 type Service = { id: string; name: string; price: string };
-const schema = z.object({ name: z.string().min(1), price: z.number().positive() });
-type FormData = z.infer<typeof schema>;
+type FormData = CreateServiceInput;
 
 export function ServiceFormDialog({
   service,
@@ -26,16 +26,16 @@ export function ServiceFormDialog({
   onCancel: () => void;
 }) {
   const form = useForm<FormData>({
-    resolver: zodResolver(schema) as Resolver<FormData>,
+    resolver: zodResolver(CreateServiceSchema) as Resolver<FormData>,
     defaultValues: service ? { name: service.name, price: Number(service.price) } : { name: '', price: 0 },
   });
   const createMu = useMutation({
-    mutationFn: (d: z.infer<typeof schema>) => apiPost('/admin/services', d),
+    mutationFn: (d: FormData) => apiPost('/admin/services', d),
     onSuccess,
     onError: (e) => toast.error(getErrorMessage(e)),
   });
   const updateMu = useMutation({
-    mutationFn: (d: z.infer<typeof schema>) => apiPatch(`/admin/services/${service!.id}`, d),
+    mutationFn: (d: FormData) => apiPatch(`/admin/services/${service!.id}`, d),
     onSuccess,
     onError: (e) => toast.error(getErrorMessage(e)),
   });

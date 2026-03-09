@@ -108,6 +108,9 @@ model Vehicle {
   org_id       String   @db.Uuid
   plate_number String
   model        String
+  year         Int?     // Optional: vehicle year (1900-2030)
+  color        String?  @db.VarChar(50) // Optional: vehicle color
+  vin          String?  @db.VarChar(50) // Optional: vehicle VIN
   is_active    Boolean  @default(true)
 
   organization Organization @relation(fields: [org_id], references: [id], onDelete: Restrict)

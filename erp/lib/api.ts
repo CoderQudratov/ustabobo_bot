@@ -41,13 +41,16 @@ export async function api<T>(
   if (!res.ok) {
     const text = await res.text();
     let message = text;
-    let data: { message?: string | string[] };
+    let data: { message?: string | string[]; error?: { code?: string; message?: string }; requestId?: string };
     try {
       const j = JSON.parse(text);
       data = j;
-      if (j.message) {
+      if (j.error?.message) {
+        message = j.error.message;
+      } else if (j.message) {
         message = Array.isArray(j.message) ? j.message.join(', ') : j.message;
       }
+      if (message && !data.message) data.message = message;
     } catch {
       data = {};
     }

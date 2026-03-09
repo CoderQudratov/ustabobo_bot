@@ -7,7 +7,7 @@ import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { validateEnv, getSafeStartupConfig } from './config/env';
 import { AppModule } from './app.module';
-import { config } from './config/configuration';
+import { config, validateRedisConfig } from './config/configuration';
 import { PrismaService } from './prisma/prisma.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
@@ -92,6 +92,7 @@ async function bootstrap() {
     throw err;
   }
   console.log('[Startup] DB ready');
+  validateRedisConfig();
 
   const port = parseInt(String(process.env.PORT || '10000'), 10);
   await app.listen(port, '0.0.0.0');

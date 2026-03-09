@@ -53,10 +53,21 @@ export function getRedisUrl(): string | undefined {
   return url && url.length > 0 ? url : undefined;
 }
 
+let redisEvictionWarnedOnce = false;
+function warnRedisEvictionOnce(): void {
+  if (!redisEvictionWarnedOnce) {
+    redisEvictionWarnedOnce = true;
+    console.warn(
+      '[BullMQ] If Redis shows "Eviction policy is volatile-lru", set maxmemory-policy noeviction in Redis config (see RUN.md).',
+    );
+  }
+}
+
 /**
  * BullMQ/ioredis connection options.
  * If REDIS_URL is set: parsed (host, port, password, tls for rediss://).
  * Else: REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_TLS.
+ * Call this once at app root (e.g. BullModule.forRoot) to avoid duplicate connections.
  */
 export function getRedisConnectionOptions(): {
   host: string;
@@ -65,6 +76,7 @@ export function getRedisConnectionOptions(): {
   tls?: object;
   maxRetriesPerRequest?: number | null;
 } {
+  warnRedisEvictionOnce();
   const url = getRedisUrl();
   if (url) {
     try {
@@ -95,6 +107,20 @@ export function getRedisConnectionOptions(): {
     ...(useTls && { tls: {} }),
     maxRetriesPerRequest: null,
   };
+}
+
+/**
+ * Environment-based Redis config validation (log only).
+ * In production, reminds to use maxmemory-policy noeviction to avoid cache eviction data loss.
+ */
+export function validateRedisConfig(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  const url = getRedisUrl();
+  if (url) {
+    console.info(
+      '[Config] Redis: REDIS_URL is set. Ensure Redis server uses maxmemory-policy noeviction (e.g. Render.com Redis: set in Dashboard or use Redis Cloud with noeviction).',
+    );
+  }
 }
 
 /** Normalized WebApp base URL; throws if not set (for bot). */

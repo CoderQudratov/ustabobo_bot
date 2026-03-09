@@ -1,14 +1,8 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { ParsePhone } from '../common/decorators/parse-phone.decorator';
 import { Role } from '../../generated/prisma/client';
 import { AdminService } from './admin.service';
 
@@ -60,21 +54,16 @@ export class AdminReportsController {
 
   @Get('clients/individuals/orders')
   async getClientOrders(
-    @Query('phone') phone?: string | string[],
+    @ParsePhone() phone: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    console.log('[getClientOrders] phone (raw):', phone);
-    const phoneStr = Array.isArray(phone) ? phone[0] : phone;
-    const normalized = typeof phoneStr === 'string' ? phoneStr.trim() : '';
-    if (!normalized) {
-      throw new BadRequestException('phone parametri kiritilishi shart');
-    }
+    console.log('[getClientOrders] Validated phone:', phone, '| from:', from, 'to:', to, 'status:', status);
     try {
-      return await this.adminService.getClientOrders(normalized, { from, to, status });
+      return await this.adminService.getClientOrders(phone, { from, to, status });
     } catch (e) {
-      console.error('[getClientOrders] ERROR:', e instanceof Error ? e.message : e);
+      console.error('[getClientOrders] ERROR:', e instanceof Error ? e.message : e, e instanceof Error ? e.stack : '');
       throw e;
     }
   }

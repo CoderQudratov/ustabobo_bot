@@ -238,6 +238,9 @@ export class AdminService {
           org_id: orgId,
           plate_number: dto.plate_number.trim(),
           model: dto.model.trim(),
+          ...(dto.year != null && { year: dto.year }),
+          ...(dto.color?.trim() && { color: dto.color.trim() }),
+          ...(dto.vin?.trim() && { vin: dto.vin.trim() }),
         },
       });
     } catch (e) {

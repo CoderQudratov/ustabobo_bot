@@ -3,7 +3,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -20,6 +22,8 @@ export class AdminCreateVehicleDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(1900, { message: 'Yil 1900–2030 orasida bo‘lishi kerak' })
+  @Max(2030, { message: 'Yil 1900–2030 orasida bo‘lishi kerak' })
   @Type(() => Number)
   year?: number;
 

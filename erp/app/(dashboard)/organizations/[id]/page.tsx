@@ -40,6 +40,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { formatSom } from '@/lib/dashboard';
+import { CreateVehicleSchema, createVehicleDefaultValues } from '@/lib/schemas/vehicle';
 import { orderStatusLabel, type OrderStatus } from '@/lib/types';
 import type { Order, OrdersListRes } from '@/lib/types';
 
@@ -68,13 +69,7 @@ export interface OrganizationDetail {
   created_at?: string | null;
 }
 
-const vehicleSchema = z.object({
-  plate_number: z.string().min(1, 'Davlat raqami kiritilishi shart'),
-  model: z.string().min(1, 'Model kiritilishi shart'),
-  year: z.string().optional(),
-  color: z.string().optional(),
-  vin: z.string().optional(),
-});
+const currentYear = new Date().getFullYear();
 
 const paymentSchema = z.object({
   amount: z.number().min(0.01, 'Summa 0 dan katta bo‘lishi kerak'),
@@ -442,22 +437,16 @@ function AddVehicleDialog({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const form = useForm<z.infer<typeof vehicleSchema>>({
-    resolver: zodResolver(vehicleSchema),
-    defaultValues: {
-      plate_number: '',
-      model: '',
-      year: '',
-      color: '',
-      vin: '',
-    },
+  const form = useForm<z.infer<typeof CreateVehicleSchema>>({
+    resolver: zodResolver(CreateVehicleSchema),
+    defaultValues: createVehicleDefaultValues,
   });
   const mutation = useMutation({
-    mutationFn: (d: z.infer<typeof vehicleSchema>) =>
+    mutationFn: (d: z.infer<typeof CreateVehicleSchema>) =>
       apiPost(`/admin/organizations/${orgId}/vehicles`, {
         plate_number: d.plate_number.trim(),
         model: d.model.trim(),
-        ...(d.year ? { year: Number(d.year) } : {}),
+        ...(d.year?.trim() ? { year: parseInt(d.year.trim(), 10) } : {}),
         ...(d.color?.trim() ? { color: d.color.trim() } : {}),
         ...(d.vin?.trim() ? { vin: d.vin.trim() } : {}),
       }),
@@ -494,15 +483,24 @@ function AddVehicleDialog({
           </div>
           <div>
             <Label>Yil (ixtiyoriy)</Label>
-            <Input type="number" {...form.register('year')} placeholder="2020" />
+            <Input type="number" {...form.register('year')} placeholder="2020" min={1900} max={currentYear + 1} />
+            {form.formState.errors.year && (
+              <p className="text-destructive text-sm">{form.formState.errors.year.message}</p>
+            )}
           </div>
           <div>
             <Label>Rang (ixtiyoriy)</Label>
-            <Input {...form.register('color')} placeholder="Oq" />
+            <Input {...form.register('color')} placeholder="Oq" maxLength={50} />
+            {form.formState.errors.color && (
+              <p className="text-destructive text-sm">{form.formState.errors.color.message}</p>
+            )}
           </div>
           <div>
-            <Label>VIN (ixtiyoriy)</Label>
-            <Input {...form.register('vin')} placeholder="1HGBH41JXMN109186" />
+            <Label>VIN (ixtiyoriy, 17 belgi)</Label>
+            <Input {...form.register('vin')} placeholder="1HGBH41JXMN109186" maxLength={17} />
+            {form.formState.errors.vin && (
+              <p className="text-destructive text-sm">{form.formState.errors.vin.message}</p>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onCancel}>

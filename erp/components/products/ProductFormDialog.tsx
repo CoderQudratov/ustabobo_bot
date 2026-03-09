@@ -2,7 +2,6 @@
 
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPost, apiPatch } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
@@ -11,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CreateProductSchema, type CreateProductInput } from '@/lib/schemas/product';
 
 type Product = {
   id: string;
@@ -21,15 +21,7 @@ type Product = {
   min_limit: number;
 };
 
-const schema = z.object({
-  name: z.string().min(1, 'Nomi kiriting'),
-  cost_price: z.number().positive(),
-  sale_price: z.number().positive(),
-  stock_count: z.number().min(0),
-  min_limit: z.number().min(0),
-});
-
-type FormData = z.infer<typeof schema>;
+type FormData = CreateProductInput;
 
 export function ProductFormDialog({
   product,
@@ -41,7 +33,7 @@ export function ProductFormDialog({
   onCancel: () => void;
 }) {
   const form = useForm<FormData>({
-    resolver: zodResolver(schema) as Resolver<FormData>,
+    resolver: zodResolver(CreateProductSchema) as Resolver<FormData>,
     defaultValues: product
       ? {
           name: product.name,

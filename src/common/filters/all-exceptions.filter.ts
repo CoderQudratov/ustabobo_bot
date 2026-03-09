@@ -6,6 +6,20 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
+import { Request } from 'express';
+import {
+  buildErrorResponse,
+  ERROR_CODES,
+  type ErrorResponseDto,
+} from '../dto/error-response.dto';
+
+const REQUEST_ID_HEADER = 'x-request-id';
+
+function getRequestId(request: Request): string {
+  const id = request.headers[REQUEST_ID_HEADER];
+  if (typeof id === 'string' && id.trim()) return id.trim();
+  return crypto.randomUUID();
+}
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -14,38 +28,63 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
+    const request = ctx.getRequest<Request>();
+    const requestId = getRequestId(request);
 
     const isHttpException = exception instanceof HttpException;
     const status = isHttpException
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
-    const message =
-      exception instanceof Error ? exception.message : 'Internal error';
     const stack = exception instanceof Error ? exception.stack : undefined;
 
-    console.error('[AllExceptionsFilter] UNHANDLED EXCEPTION:', exception);
-    if (stack) console.error('[AllExceptionsFilter] stack:', stack);
+    let message: string;
+    let details: Record<string, unknown> | undefined;
+    let code = ERROR_CODES[status] ?? 'INTERNAL_ERROR';
 
-    let responseBody: Record<string, unknown>;
     if (isHttpException) {
       const body = exception.getResponse();
-      responseBody =
-        typeof body === 'object' && body !== null
-          ? (body as Record<string, unknown>)
-          : { statusCode: status, message };
-      if (status === 401) {
-        responseBody = {
-          ok: false,
-          statusCode: 401,
-          error: 'Unauthorized',
-          message:
-            (responseBody.message as string) ||
-            'Invalid Telegram init data signature',
-        };
+      if (typeof body === 'object' && body !== null) {
+        const b = body as Record<string, unknown>;
+        if (typeof b.code === 'string' && b.code.trim()) {
+          code = b.code.trim();
+        }
+        const msg = b.message;
+        message = Array.isArray(msg)
+          ? (msg[0] as string) ?? exception.message
+          : (typeof msg === 'string' ? msg : exception.message) ?? exception.message;
+        if (status === 401 && !message) {
+          message = 'Invalid Telegram init data signature';
+        }
+        if (b.details && typeof b.details === 'object') {
+          details = b.details as Record<string, unknown>;
+        } else if (Array.isArray(b.message) && b.message.length > 1) {
+          details = { validationErrors: b.message };
+        }
+      } else {
+        message = (typeof body === 'string' ? body : exception.message) ?? 'Internal error';
       }
     } else {
-      responseBody = { statusCode: status, message };
+      message =
+        exception instanceof Error ? exception.message : 'Internal error';
+      if (process.env.NODE_ENV !== 'production' && stack) {
+        details = { stack };
+      }
     }
+
+    console.error(
+      `[AllExceptionsFilter] ${code} requestId=${requestId} status=${status}`,
+      message,
+    );
+    if (stack && process.env.NODE_ENV !== 'production') {
+      console.error('[AllExceptionsFilter] stack:', stack);
+    }
+
+    const responseBody: ErrorResponseDto = buildErrorResponse(
+      code,
+      message,
+      requestId,
+      details,
+    );
 
     httpAdapter.reply(ctx.getResponse(), responseBody, status);
   }
