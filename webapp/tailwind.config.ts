@@ -12,6 +12,7 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         primary: "var(--primary)",
+        "primary-on": "var(--primary-on)",
         "primary-dark": "var(--primary-dark)",
         surface: "var(--surface)",
         border: "var(--border)",

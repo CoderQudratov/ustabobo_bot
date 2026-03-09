@@ -1,61 +1,23 @@
 "use client";
 
+/** Semantic badge classes — dark/light mavzuda ham o‘qilishi yaxshi */
 const STATUS_CONFIG: Record<
   string,
   { label: string; className: string }
 > = {
-  draft: {
-    label: "Qoralama",
-    className: "bg-slate-500/10 text-slate-500 border-slate-500/20",
-  },
-  waiting_confirmation: {
-    label: "Tasdiqlash kutilmoqda",
-    className: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  },
-  broadcasted: {
-    label: "E'lon qilindi",
-    className: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  },
-  accepted: {
-    label: "Qabul qilindi",
-    className: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-  },
-  received_by_driver: {
-    label: "Qabul qilindi (kuryer)",
-    className: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-  },
-  waiting_master_delivery_confirmation: {
-    label: "Usta tasdiqlashi kutilmoqda",
-    className: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  },
-  waiting_master_work_start: {
-    label: "Ishni boshlash kutilmoqda",
-    className: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  },
-  delivered_by_driver: {
-    label: "Yetkazildi",
-    className: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30",
-  },
-  received_by_master: {
-    label: "Qabul qilindi (usta)",
-    className: "bg-blue-500/10 text-blue-600 border-blue-500/30",
-  },
-  working: {
-    label: "Ish jarayonida",
-    className: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30",
-  },
-  waiting_customer_confirmation: {
-    label: "Mijoz tasdiqlashi",
-    className: "bg-orange-500/10 text-orange-600 border-orange-500/30",
-  },
-  completed: {
-    label: "Yakunlangan",
-    className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-  },
-  cancelled: {
-    label: "Bekor qilindi",
-    className: "bg-red-500/10 text-red-600 border-red-500/30",
-  },
+  draft: { label: "Qoralama", className: "badge-neutral" },
+  waiting_confirmation: { label: "Tasdiqlash kutilmoqda", className: "badge-warning" },
+  broadcasted: { label: "E'lon qilindi", className: "badge-warning" },
+  accepted: { label: "Qabul qilindi", className: "badge-primary" },
+  received_by_driver: { label: "Qabul qilindi (kuryer)", className: "badge-primary" },
+  waiting_master_delivery_confirmation: { label: "Usta tasdiqlashi kutilmoqda", className: "badge-warning" },
+  waiting_master_work_start: { label: "Ishni boshlash kutilmoqda", className: "badge-warning" },
+  delivered_by_driver: { label: "Yetkazildi", className: "badge-success" },
+  received_by_master: { label: "Qabul qilindi (usta)", className: "badge-primary" },
+  working: { label: "Ish jarayonida", className: "badge-primary" },
+  waiting_customer_confirmation: { label: "Mijoz tasdiqlashi", className: "badge-warning" },
+  completed: { label: "Yakunlangan", className: "badge-success" },
+  cancelled: { label: "Bekor qilindi", className: "badge-danger" },
 };
 
 const ACTIVE_STATUSES = new Set([
@@ -75,13 +37,13 @@ export function StatusBadge({
   const config =
     STATUS_CONFIG[status] ?? {
       label: status,
-      className: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+      className: "badge-neutral",
     };
   const isActive = ACTIVE_STATUSES.has(status);
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium ${config.className} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-solid px-2.5 py-0.5 text-[11.5px] font-medium ${config.className} ${className}`}
     >
       <span
         className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? "animate-pulse" : ""}`}

@@ -45,8 +45,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const screenStyle: React.CSSProperties = {
-  backgroundColor: "var(--tg-theme-bg-color, #0f172a)",
-  color: "var(--tg-theme-text-color, #f9fafb)",
+  backgroundColor: "var(--background)",
+  color: "var(--foreground)",
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export default function DriverOrderPage() {
         style={screenStyle}
       >
         <div
-          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--tg-theme-button-color,#38bdf8)] border-t-transparent"
+          className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent"
           aria-hidden
         />
         <p className="text-sm opacity-70">Buyurtma yuklanmoqda...</p>
@@ -162,10 +162,10 @@ export default function DriverOrderPage() {
         className="flex min-h-screen flex-col items-center justify-center gap-4 p-6"
         style={screenStyle}
       >
-        <p className="text-red-400 text-center">❌ {error}</p>
+        <p className="text-[var(--danger)] text-center">❌ {error}</p>
         <button
           onClick={fetchOrder}
-          className="mt-2 rounded-xl bg-white/10 px-6 py-3 text-sm font-medium active:scale-95"
+          className="mt-2 rounded-xl bg-[var(--surface)] px-6 py-3 text-sm font-medium active:scale-95"
         >
           Qayta urinish
         </button>
@@ -201,19 +201,19 @@ export default function DriverOrderPage() {
       <div className="mb-4">
         <p className="text-xs uppercase tracking-wide opacity-50">Buyurtma</p>
         <h1 className="text-lg font-bold">#{order.id.slice(-8).toUpperCase()}</h1>
-        <span className="mt-1 inline-block rounded-full bg-white/10 px-3 py-0.5 text-xs">
+        <span className="mt-1 inline-block rounded-full bg-[var(--surface)] px-3 py-0.5 text-xs">
           {STATUS_LABELS[order.status] ?? order.status}
         </span>
       </div>
 
       {order.master && (
-        <div className="mb-3 rounded-2xl bg-white/5 p-3">
+        <div className="mb-3 rounded-2xl bg-[var(--surface)] p-3">
           <p className="text-xs opacity-50 mb-1">Usta</p>
           <p className="font-medium">{order.master.fullname}</p>
           {order.master.phone && (
             <a
               href={`tel:${order.master.phone}`}
-              className="text-sm text-sky-400 underline"
+              className="text-sm text-[var(--primary)] underline"
             >
               📞 {order.master.phone}
             </a>
@@ -222,20 +222,20 @@ export default function DriverOrderPage() {
       )}
 
       {order.lat != null && order.lng != null && (
-        <div className="mb-3 rounded-2xl bg-white/5 p-3">
+        <div className="mb-3 rounded-2xl bg-[var(--surface)] p-3">
           <p className="text-xs opacity-50 mb-1">Manzil</p>
           <a
             href={`https://maps.google.com/?q=${order.lat},${order.lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-sky-400 underline"
+            className="text-sm text-[var(--primary)] underline"
           >
             🗺️ Xaritada ko&apos;rish ({Number(order.lat).toFixed(4)}, {Number(order.lng).toFixed(4)})
           </a>
         </div>
       )}
 
-      <div className="mb-3 rounded-2xl bg-white/5 p-3">
+      <div className="mb-3 rounded-2xl bg-[var(--surface)] p-3">
         <p className="text-xs opacity-50 mb-2">Buyurtma tarkibi</p>
         <ul className="space-y-1">
           {order.orderItems.map((item) => (
@@ -250,14 +250,14 @@ export default function DriverOrderPage() {
             </li>
           ))}
         </ul>
-        <div className="mt-2 border-t border-white/10 pt-2 flex justify-between text-sm font-semibold">
+        <div className="mt-2 border-t border-[var(--border)] pt-2 flex justify-between text-sm font-semibold">
           <span>Jami</span>
           <span>{totalSum.toLocaleString("uz-UZ")} so&apos;m</span>
         </div>
       </div>
 
       {error && (
-        <div className="mb-3 rounded-xl bg-red-500/20 p-3 text-sm text-red-300">
+        <div className="mb-3 rounded-xl bg-[var(--danger)]/20 p-3 text-sm text-[var(--danger)]">
           ❌ {error}
         </div>
       )}
@@ -266,7 +266,7 @@ export default function DriverOrderPage() {
         <button
           onClick={handleDelivered}
           disabled={delivering}
-          className="mt-4 w-full rounded-2xl bg-[var(--tg-theme-button-color,#2481cc)] py-4 text-[var(--tg-theme-button-text-color,#fff)] font-semibold text-base active:scale-95 disabled:opacity-50 transition-all"
+          className="mt-4 w-full rounded-2xl bg-[var(--primary)] py-4 text-[var(--primary-on)] font-semibold text-base active:scale-95 disabled:opacity-50 transition-all"
         >
           {delivering ? "Yuklanmoqda..." : "✅ Yetkazib berdim"}
         </button>

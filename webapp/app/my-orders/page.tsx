@@ -19,7 +19,7 @@ import {
 
 const btnStyle = {
   backgroundColor: "var(--primary)",
-  color: "#fff",
+  color: "var(--primary-on)",
 };
 
 const CANCELABLE_STATUSES = ["draft", "waiting_confirmation"];
@@ -279,7 +279,7 @@ export default function MyOrdersPage() {
         >
           <button
             type="button"
-            className="absolute right-4 top-4 rounded-lg bg-white/20 px-3 py-1 text-sm text-white"
+            className="absolute right-4 top-4 rounded-lg bg-[var(--surface)] px-3 py-1 text-sm text-[var(--foreground)]"
             onClick={() => setCarPhotoModalUrl(null)}
           >
             Yopish
@@ -300,15 +300,15 @@ export default function MyOrdersPage() {
           <div
             className="max-w-sm rounded-2xl p-6 shadow-xl w-full"
             style={{
-              backgroundColor: "var(--tg-theme-secondary-bg-color, #2b2b2b)",
-              color: "var(--tg-theme-text-color, #fff)",
+              backgroundColor: "var(--surface)",
+              color: "var(--foreground)",
             }}
           >
             <p className="text-lg font-medium">Buyurtmani yakunlashni tasdiqlaysizmi?</p>
             <div className="mt-4 flex gap-3">
               <button
                 type="button"
-                className="flex-1 rounded-xl py-2.5 text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/40"
+                className="flex-1 rounded-xl py-2.5 text-sm font-medium bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/40"
                 onClick={() => setConfirmFinishOrderId(null)}
               >
                 Bekor qilish
@@ -336,7 +336,7 @@ export default function MyOrdersPage() {
             href={`/my-orders?role=driver&filter=active`}
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               filter === "active"
-                ? "bg-[var(--primary)] text-white"
+                ? "bg-[var(--primary)] text-[var(--primary-on)]"
                 : "bg-[var(--border)]/50 text-[var(--text-2)]"
             }`}
           >
@@ -346,7 +346,7 @@ export default function MyOrdersPage() {
             href={`/my-orders?role=driver&filter=history`}
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               filter === "history"
-                ? "bg-[var(--primary)] text-white"
+                ? "bg-[var(--primary)] text-[var(--primary-on)]"
                 : "bg-[var(--border)]/50 text-[var(--text-2)]"
             }`}
           >
@@ -508,7 +508,7 @@ export default function MyOrdersPage() {
                       <button
                         type="button"
                         disabled={actioningId === order.id}
-                        className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/40 disabled:opacity-50"
+                        className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/40 disabled:opacity-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCancel(order.id);
@@ -535,7 +535,7 @@ export default function MyOrdersPage() {
                       </button>
                     )}
                     {!isDriver && order.status === "waiting_master_delivery_confirmation" && (
-                      <p className="mt-2 text-sm text-amber-400 font-medium">
+                      <p className="mt-2 text-sm text-[var(--warning)] font-medium">
                         ⏳ Kuryerdan qabul qilish kutilmoqda
                       </p>
                     )}
@@ -543,7 +543,7 @@ export default function MyOrdersPage() {
                       <button
                         type="button"
                         disabled={actioningId === order.id}
-                        className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium bg-blue-500/20 text-blue-400 border border-blue-500/40 disabled:opacity-50"
+                        className="mt-2 w-full rounded-xl py-2.5 text-sm font-medium bg-[var(--primary)]/20 text-[var(--primary)] border border-[var(--primary)]/40 disabled:opacity-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMasterFinishClick(order);
@@ -556,7 +556,7 @@ export default function MyOrdersPage() {
                     )}
 
                     {isCompleted(order.status) && (
-                      <p className="mt-2 text-sm text-emerald-400 font-medium">
+                      <p className="mt-2 text-sm text-[var(--success)] font-medium">
                         ✅ Yakunlangan
                       </p>
                     )}

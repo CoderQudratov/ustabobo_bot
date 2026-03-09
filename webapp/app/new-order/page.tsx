@@ -37,7 +37,7 @@ const RETRY_DELAY_MS = 2000;
 
 const btnStyle = {
   backgroundColor: "var(--primary)",
-  color: "#fff",
+  color: "var(--primary-on)",
 };
 
 function isNetworkError(e: unknown): boolean {
@@ -488,7 +488,7 @@ export default function NewOrderPage() {
                     setCarNumber("");
                     setCarModel("");
                   }}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 >
                   <option value="">Tashkilotni tanlang</option>
                   {init?.organizations.map((o) => (
@@ -523,7 +523,7 @@ export default function NewOrderPage() {
                     }
                   }}
                   disabled={!orgId || orgVehiclesLoading}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)] disabled:opacity-50"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)] disabled:opacity-50"
                 >
                   <option value="">Mashinani tanlang</option>
                   {orgVehicles.map((v) => (
@@ -554,10 +554,10 @@ export default function NewOrderPage() {
                   setServiceDropdownOpen(true);
                 }}
                 onFocus={() => setServiceDropdownOpen(true)}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
               />
               {serviceDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-auto rounded-xl border border-white/20 bg-[var(--tg-theme-bg-color,#1a1a1a)] shadow-xl">
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl">
                   {serviceLoading ? (
                     <div className="p-3 text-center text-sm opacity-70">Yuklanmoqda...</div>
                   ) : (
@@ -566,7 +566,7 @@ export default function NewOrderPage() {
                         key={s.id}
                         type="button"
                         onClick={() => addService(s)}
-                        className="flex w-full flex-col gap-0.5 border-b border-white/10 px-4 py-3 text-left last:border-0 hover:bg-white/10"
+                        className="flex w-full flex-col gap-0.5 border-b border-[var(--border)] px-4 py-3 text-left last:border-0 hover:bg-[var(--surface)]"
                       >
                         <span className="font-medium">🔧 {s.name}</span>
                         <span className="text-sm opacity-80">{s.price.toLocaleString()} so&apos;m</span>
@@ -596,10 +596,10 @@ export default function NewOrderPage() {
                   setProductDropdownOpen(true);
                 }}
                 onFocus={() => setProductDropdownOpen(true)}
-                className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
               />
               {productDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-auto rounded-xl border border-white/20 bg-[var(--tg-theme-bg-color,#1a1a1a)] shadow-xl">
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-xl">
                   {productLoading ? (
                     <div className="p-3 text-center text-sm opacity-70">Yuklanmoqda...</div>
                   ) : (
@@ -608,7 +608,7 @@ export default function NewOrderPage() {
                         key={p.id}
                         type="button"
                         onClick={() => addProduct(p, 1)}
-                        className="flex w-full flex-col gap-0.5 border-b border-white/10 px-4 py-3 text-left last:border-0 hover:bg-white/10"
+                        className="flex w-full flex-col gap-0.5 border-b border-[var(--border)] px-4 py-3 text-left last:border-0 hover:bg-[var(--surface)]"
                       >
                         <span className="font-medium">📦 {p.name}</span>
                         <span className="text-sm opacity-80">
@@ -635,7 +635,7 @@ export default function NewOrderPage() {
               {manualProducts.map((mp, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-lg bg-[var(--surface)] px-3 py-2 text-sm"
                 >
                   <span>
                     {mp.name} × {mp.quantity} — {(mp.price * mp.quantity).toLocaleString()} so&apos;m
@@ -643,7 +643,7 @@ export default function NewOrderPage() {
                   <button
                     type="button"
                     onClick={() => removeManualProduct(i)}
-                    className="text-red-400"
+                    className="text-[var(--danger)]"
                   >
                     O&apos;chirish
                   </button>
@@ -653,7 +653,7 @@ export default function NewOrderPage() {
           </section>
 
           {/* Tanlangan narsalar + Jami */}
-          <section className="rounded-xl border border-white/20 bg-white/5 p-4">
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <h2 className="mb-3 text-sm font-medium opacity-80">
               Tanlangan narsalar
             </h2>
@@ -661,7 +661,7 @@ export default function NewOrderPage() {
               {selectedServices.map((s, i) => (
                 <div
                   key={`s-${s.id}-${i}`}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface)] px-3 py-2 text-sm"
                 >
                   <span>
                     🔧 {s.name}
@@ -670,7 +670,7 @@ export default function NewOrderPage() {
                   <button
                     type="button"
                     onClick={() => removeService(i)}
-                    className="shrink-0 text-red-400 hover:underline"
+                    className="shrink-0 text-[var(--danger)] hover:underline"
                     aria-label="O'chirish"
                   >
                     ×
@@ -680,7 +680,7 @@ export default function NewOrderPage() {
               {selectedProducts.map((p, i) => (
                 <div
                   key={`p-${p.product_id}-${i}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--surface)] px-3 py-2 text-sm"
                 >
                   <span>
                     📦 {p.name} × {p.quantity} — {(p.sale_price * p.quantity).toLocaleString()} so&apos;m
@@ -690,7 +690,7 @@ export default function NewOrderPage() {
                       <button
                         type="button"
                         onClick={() => updateProductQuantity(i, p.quantity - 1)}
-                        className="h-7 w-7 rounded bg-white/10 text-lg leading-none"
+                        className="h-7 w-7 rounded bg-[var(--surface)] text-lg leading-none"
                       >
                         −
                       </button>
@@ -698,7 +698,7 @@ export default function NewOrderPage() {
                       <button
                         type="button"
                         onClick={() => updateProductQuantity(i, p.quantity + 1)}
-                        className="h-7 w-7 rounded bg-white/10 text-lg leading-none"
+                        className="h-7 w-7 rounded bg-[var(--surface)] text-lg leading-none"
                       >
                         +
                       </button>
@@ -706,7 +706,7 @@ export default function NewOrderPage() {
                     <button
                       type="button"
                       onClick={() => removeProduct(i)}
-                      className="shrink-0 text-red-400 hover:underline"
+                      className="shrink-0 text-[var(--danger)] hover:underline"
                       aria-label="O'chirish"
                     >
                       ×
@@ -717,7 +717,7 @@ export default function NewOrderPage() {
               {manualProducts.map((mp, i) => (
                 <div
                   key={`m-${i}`}
-                  className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm opacity-90"
+                  className="flex items-center justify-between rounded-lg bg-[var(--surface)] px-3 py-2 text-sm opacity-90"
                 >
                   <span>
                     {mp.name} × {mp.quantity} — {(mp.price * mp.quantity).toLocaleString()} so&apos;m
@@ -726,7 +726,7 @@ export default function NewOrderPage() {
               ))}
             </div>
             {((selectedServices.length + selectedProducts.length + manualProducts.length) > 0) && (
-              <p className="mt-3 border-t border-white/10 pt-3 text-base font-semibold">
+              <p className="mt-3 border-t border-[var(--border)] pt-3 text-base font-semibold">
                 💰 Jami:{" "}
                 {(
                   selectedServices.reduce((a, s) => a + s.price * s.quantity, 0) +
@@ -775,7 +775,7 @@ export default function NewOrderPage() {
             />
             <label
               htmlFor="car-photo-input"
-              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus-within:border-[var(--tg-theme-button-color)] disabled:pointer-events-none disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus-within:border-[var(--tg-theme-button-color)] disabled:pointer-events-none disabled:opacity-50"
               style={carPhotoUploading ? { pointerEvents: "none" } : undefined}
             >
               {carPhotoUploading ? (
@@ -792,7 +792,7 @@ export default function NewOrderPage() {
                 <img
                   src={carPhotoPreview || carPhotoUrl}
                   alt="Mashina rasm"
-                  className="max-h-48 w-full rounded-xl object-contain bg-white/5"
+                  className="max-h-48 w-full rounded-xl object-contain bg-[var(--surface)]"
                 />
                 <button
                   type="button"
@@ -803,7 +803,7 @@ export default function NewOrderPage() {
                       setCarPhotoPreview(null);
                     }
                   }}
-                  className="mt-2 text-sm text-red-400 underline"
+                  className="mt-2 text-sm text-[var(--danger)] underline"
                 >
                   O‘chirish
                 </button>
@@ -840,7 +840,7 @@ export default function NewOrderPage() {
         {showConfirmScreen && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xl overflow-hidden text-[var(--text)]">
-              <div className="border-b border-white/10 px-5 py-4 text-center">
+              <div className="border-b border-[var(--border)] px-5 py-4 text-center">
                 <h2 className="text-lg font-semibold">📋 Buyurtmani tasdiqlang</h2>
               </div>
               <div className="max-h-[60vh] overflow-y-auto px-5 py-4 space-y-4">
@@ -891,11 +891,11 @@ export default function NewOrderPage() {
                     </ul>
                   </div>
                 )}
-                <div className="border-t border-white/10 pt-3">
+                <div className="border-t border-[var(--border)] pt-3">
                   <p className="text-base font-semibold">💰 JAMI: {orderTotal.toLocaleString()} so&apos;m</p>
                 </div>
               </div>
-              <div className="flex gap-3 px-5 py-4 border-t border-white/10">
+              <div className="flex gap-3 px-5 py-4 border-t border-[var(--border)]">
                 <button
                   type="button"
                   disabled={submitLoading}
@@ -903,7 +903,7 @@ export default function NewOrderPage() {
                     setShowConfirmScreen(false);
                     setError(null);
                   }}
-                  className="flex-1 rounded-xl border border-white/20 px-4 py-3 text-base font-medium disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-base font-medium disabled:opacity-50"
                 >
                   ◀ Orqaga
                 </button>
@@ -940,7 +940,7 @@ export default function NewOrderPage() {
             }}
           >
             <div
-              className="w-full max-w-sm rounded-2xl border border-white/20 bg-[var(--tg-theme-bg-color,#1a1a1a)] p-5 shadow-xl"
+              className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="mb-4 text-lg font-semibold">Mashina qo&apos;shish</h3>
@@ -950,14 +950,14 @@ export default function NewOrderPage() {
                   placeholder={UZBEK_PLATE_PLACEHOLDER}
                   value={newVehiclePlate}
                   onChange={(e) => setNewVehiclePlate(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 />
                 <input
                   type="text"
                   placeholder="Model"
                   value={newVehicleModel}
                   onChange={(e) => setNewVehicleModel(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 />
                 <input
                   type="text"
@@ -965,18 +965,18 @@ export default function NewOrderPage() {
                   placeholder="Yil"
                   value={newVehicleYear}
                   onChange={(e) => setNewVehicleYear(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 />
                 <input
                   type="text"
                   placeholder="Rang"
                   value={newVehicleColor}
                   onChange={(e) => setNewVehicleColor(e.target.value)}
-                  className="w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-base outline-none focus:border-[var(--tg-theme-button-color)]"
                 />
               </div>
               {newVehicleError && (
-                <p className="mt-2 text-sm text-red-400">{newVehicleError}</p>
+                <p className="mt-2 text-sm text-[var(--danger)]">{newVehicleError}</p>
               )}
               <div className="mt-5 flex gap-3">
                 <button
@@ -986,7 +986,7 @@ export default function NewOrderPage() {
                     setAddVehicleModalOpen(false);
                     setNewVehicleError("");
                   }}
-                  className="flex-1 rounded-xl border border-white/20 px-4 py-3 text-base font-medium disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-base font-medium disabled:opacity-50"
                 >
                   Bekor
                 </button>
@@ -1064,7 +1064,7 @@ function ManualProductForm({
         placeholder="Nomi"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="min-w-[120px] rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm outline-none"
+        className="min-w-[120px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
       />
       <input
         type="number"
@@ -1072,7 +1072,7 @@ function ManualProductForm({
         value={price}
         onChange={(e) => setPrice(e.target.value)}
         min={1}
-        className="w-24 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm outline-none"
+        className="w-24 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
       />
       <input
         type="number"
@@ -1080,7 +1080,7 @@ function ManualProductForm({
         value={qty}
         onChange={(e) => setQty(e.target.value)}
         min={1}
-        className="w-16 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm outline-none"
+        className="w-16 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"
       />
       <button
         type="button"

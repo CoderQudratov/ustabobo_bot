@@ -100,7 +100,7 @@ export default function OrdersActivePage() {
         title="📋 Faol buyurtmalar"
         backHref="/"
         right={
-          <span className="rounded-full bg-[var(--primary)] text-white text-xs font-semibold px-2 py-0.5 min-w-[1.25rem] text-center">
+          <span className="rounded-full bg-[var(--primary)] text-[var(--primary-on)] text-xs font-semibold px-2 py-0.5 min-w-[1.25rem] text-center">
             {data.total}
           </span>
         }
