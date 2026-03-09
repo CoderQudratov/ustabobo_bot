@@ -20,5 +20,7 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
-  }
+  },
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "prisma/**/*", "generated/**/*"],
+  "exclude": ["node_modules", "dist", "erp", "webapp"]
 }

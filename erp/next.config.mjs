@@ -1,4 +1,15 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  reactStrictMode: true,
+  productionBrowserSourceMaps: false,
+  poweredByHeader: false,
+  compress: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    tsconfigPath: './tsconfig.json',
+  },
+};
 
 export default nextConfig;

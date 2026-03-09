@@ -10,16 +10,22 @@ export const CreateProductSchema = z.object({
     .min(1, 'Mahsulot nomi kiritilishi shart')
     .max(255, 'Nomi 255 ta belgidan oshmasligi kerak'),
   cost_price: z
-    .number({ required_error: 'Kelgan narx kiritilishi shart', invalid_type_error: 'Son kiriting' })
+    .number({
+      error: (issue) =>
+        issue.input === undefined ? 'Kelgan narx kiritilishi shart' : 'Son kiriting',
+    })
     .min(0, 'Kelgan narx manfiy bo‘lmasligi kerak'),
   sale_price: z
-    .number({ required_error: 'Sotish narxi kiritilishi shart', invalid_type_error: 'Son kiriting' })
+    .number({
+      error: (issue) =>
+        issue.input === undefined ? 'Sotish narxi kiritilishi shart' : 'Son kiriting',
+    })
     .min(0, 'Sotish narxi manfiy bo‘lmasligi kerak'),
   stock_count: z
-    .number({ invalid_type_error: 'Son kiriting' })
+    .number({ error: 'Son kiriting' })
     .min(0, 'Qoldiq manfiy bo‘lmasligi kerak'),
   min_limit: z
-    .number({ invalid_type_error: 'Son kiriting' })
+    .number({ error: 'Son kiriting' })
     .min(0, 'Minimal limit manfiy bo‘lmasligi kerak'),
 });
 
