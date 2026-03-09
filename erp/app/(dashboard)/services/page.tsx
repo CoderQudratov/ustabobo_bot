@@ -159,7 +159,11 @@ export default function ServicesPage() {
       {/* Create/Edit dialog */}
       {open && (
         <ServiceFormDialog
-          service={editService}
+          service={
+            editService
+              ? { ...editService, price: String(editService.price) }
+              : null
+          }
           onSuccess={handleSuccess}
           onCancel={handleCloseDialog}
         />
