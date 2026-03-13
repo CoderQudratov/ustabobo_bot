@@ -65,6 +65,23 @@ cloudflared
 uploads/*
 !uploads/.gitkeep
 
+# Cursor IDE / editor
+.cursor/
+
+# Next.js (ERP, webapp)
+.next/
+out/
+
+# Turbo / Vercel
+.turbo
+.vercel
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Cache
+.cache/
+
 # build outputs
 /dist
 /node_modules

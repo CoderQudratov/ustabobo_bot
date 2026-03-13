@@ -14,6 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/organizations': 'Tashkilotlar',
   '/services': 'Xizmatlar',
   '/products': 'Ombor (Zapchast)',
+  '/suppliers': 'Taminotchilar',
   '/reports': 'Hisobotlar',
   '/client-history': 'Mijoz tarixi',
   '/vehicle-history': 'Mashina tarixi',
@@ -22,6 +23,7 @@ const PAGE_TITLES: Record<string, string> = {
 function getPageTitle(pathname: string): string {
   if (pathname in PAGE_TITLES) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/organizations/')) return 'Tashkilot';
+  if (pathname.startsWith('/suppliers/')) return 'Taminotchi';
   return 'ERP';
 }
 

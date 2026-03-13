@@ -4,14 +4,16 @@ import {
   Get,
   Param,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ParsePhone } from '../common/decorators/parse-phone.decorator';
 import { Role } from '../../generated/prisma/client';
-import { AdminService } from './admin.service';
+import { AdminService, AdminRequestUser } from './admin.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -143,5 +145,27 @@ export class AdminReportsController {
       master_id,
       org_id,
     });
+  }
+
+  @Get('reports/orders')
+  getOrdersReport(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Req() req?: Request & { user: AdminRequestUser },
+  ) {
+    if (!from?.trim() || !to?.trim()) {
+      throw new BadRequestException('from va to (YYYY-MM-DD) kerak');
+    }
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new BadRequestException('from va to sanalari noto‘g‘ri');
+    }
+    return this.adminService.getOrdersReport(
+      fromDate.toISOString(),
+      toDate.toISOString(),
+      req?.user,
+    );
   }
 }

@@ -8,7 +8,10 @@ import { Request } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TelegramWebAppGuard, TelegramWebAppUser } from './telegram-webapp.guard';
+import {
+  TelegramWebAppGuard,
+  TelegramWebAppUser,
+} from './telegram-webapp.guard';
 
 const AUTH_HEADER = 'authorization';
 const BEARER_PREFIX = 'bearer ';

@@ -12,6 +12,7 @@ export class BotWebhookSetupService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleDestroy(): Promise<void> {
+    await Promise.resolve();
     try {
       this.bot.stop('SIGTERM');
     } catch {

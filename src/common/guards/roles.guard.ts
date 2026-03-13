@@ -25,13 +25,13 @@ export class RolesGuard implements CanActivate {
       .getRequest<{ user: { role: Role } }>();
     if (!user?.role) {
       throw new ForbiddenException(
-        'Ruxsat yo\'q. Ilovani Telegram bot orqali qayta oching.',
+        "Ruxsat yo'q. Ilovani Telegram bot orqali qayta oching.",
       );
     }
     const hasRole = requiredRoles.includes(user.role);
     if (!hasRole) {
       throw new ForbiddenException(
-        'Ruxsat yo\'q. Ilovani Telegram bot orqali qayta oching.',
+        "Ruxsat yo'q. Ilovani Telegram bot orqali qayta oching.",
       );
     }
     return true;

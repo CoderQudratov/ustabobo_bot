@@ -62,7 +62,10 @@ export class AdminServicesController {
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+  delete(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.deleteService(id, req.user);
   }
 }

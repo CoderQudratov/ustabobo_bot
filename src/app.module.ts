@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { getRedisConnectionOptions } from './config/configuration';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { AuthModule } from './auth/auth.module';
@@ -18,6 +20,20 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 const imports = [
   BullModule.forRoot({
     connection: getRedisConnectionOptions(),
+  }),
+  ThrottlerModule.forRoot({
+    throttlers: [
+      {
+        name: 'global',
+        ttl: 60,
+        limit: 120,
+      },
+      {
+        name: 'login',
+        ttl: 60,
+        limit: 5,
+      },
+    ],
   }),
   PrismaModule,
   TelegramModule,
@@ -34,7 +50,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 @Module({
   imports,
-  controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  controllers: [AppController, HealthController],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

@@ -61,8 +61,12 @@ export class OrdersController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    const pageNum = page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
-    const limitNum = limit != null ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20)) : 100;
+    const pageNum =
+      page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
+    const limitNum =
+      limit != null
+        ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20))
+        : 100;
     return this.ordersService.getMyOrdersByUserId(req.user.id, req.user.role, {
       status: status ?? undefined,
       page: pageNum,
@@ -83,10 +87,14 @@ export class OrdersController {
   ) {
     const user = await this.ordersService.findUserByTelegramId(telegramId);
     if (!user || user.id !== req.user.id) {
-      throw new ForbiddenException('Ruxsat yo\'q. Tizimga qayta kiring.');
+      throw new ForbiddenException("Ruxsat yo'q. Tizimga qayta kiring.");
     }
-    const pageNum = page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
-    const limitNum = limit != null ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20)) : 100;
+    const pageNum =
+      page != null ? Math.max(1, parseInt(String(page), 10) || 1) : 1;
+    const limitNum =
+      limit != null
+        ? Math.min(100, Math.max(1, parseInt(String(limit), 10) || 20))
+        : 100;
     return this.ordersService.getMyOrders(telegramId, {
       status: status ?? undefined,
       page: pageNum,

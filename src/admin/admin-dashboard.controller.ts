@@ -5,7 +5,10 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../../generated/prisma/client';
 import { AdminService } from './admin.service';
-import { AdminDashboardService, AdminDashboardRequestUser } from './admin-dashboard.service';
+import {
+  AdminDashboardService,
+  AdminDashboardRequestUser,
+} from './admin-dashboard.service';
 import type { AdminRequestUser } from './admin.service';
 
 @Controller('admin')
@@ -18,22 +21,47 @@ export class AdminDashboardController {
   ) {}
 
   @Get('dashboard/weekly-orders')
-  getWeeklyOrders(@Req() req: Request & { user: AdminDashboardRequestUser & AdminRequestUser }) {
+  getWeeklyOrders(
+    @Req()
+    req: Request & { user: AdminDashboardRequestUser & AdminRequestUser },
+  ) {
     return this.dashboardService.getWeeklyOrders(req.user);
   }
 
   @Get('dashboard/weekly-revenue')
-  getWeeklyRevenue(@Req() req: Request & { user: AdminDashboardRequestUser & AdminRequestUser }) {
+  getWeeklyRevenue(
+    @Req()
+    req: Request & { user: AdminDashboardRequestUser & AdminRequestUser },
+  ) {
     return this.dashboardService.getWeeklyRevenue(req.user);
   }
 
   @Get('dashboard/order-status-counts')
-  getOrderStatusCounts(@Req() req: Request & { user: AdminDashboardRequestUser & AdminRequestUser }) {
+  getOrderStatusCounts(
+    @Req()
+    req: Request & { user: AdminDashboardRequestUser & AdminRequestUser },
+  ) {
     return this.dashboardService.getOrderStatusCounts(req.user);
   }
 
   @Get('dashboard')
   getDashboard(@Req() req: Request & { user: AdminRequestUser }) {
     return this.adminService.getDashboard(req.user);
+  }
+
+  @Get('dashboard/umumiy-tushum')
+  getUmumiyTushum(
+    @Req()
+    req: Request & { user: AdminDashboardRequestUser & AdminRequestUser },
+  ) {
+    return this.dashboardService.getUmumiyTushum(req.user);
+  }
+
+  @Get('dashboard/sof-foyda')
+  getSofFoyda(
+    @Req()
+    req: Request & { user: AdminDashboardRequestUser & AdminRequestUser },
+  ) {
+    return this.dashboardService.getSofFoyda(req.user);
   }
 }

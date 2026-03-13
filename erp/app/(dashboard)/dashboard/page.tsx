@@ -32,6 +32,8 @@ import {
   AlertTriangle,
   TrendingUp,
   RefreshCw,
+  Wallet,
+  PiggyBank,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +43,29 @@ function useDashboard() {
     queryFn: () => apiGet<DashboardRes>('/admin/dashboard'),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+}
+
+function useUmumiyTushum() {
+  return useQuery({
+    queryKey: ['dashboard', 'umumiy-tushum'],
+    queryFn: () => apiGet<{ total: number }>('/admin/dashboard/umumiy-tushum'),
+    staleTime: 30_000,
+  });
+}
+
+function useSofFoyda() {
+  return useQuery({
+    queryKey: ['dashboard', 'sof-foyda'],
+    queryFn: () =>
+      apiGet<{
+        sof_foyda: number;
+        tushum: number;
+        ish_haqi: number;
+        zapchast_tannarx: number;
+        yalpi_foyda: number;
+      }>('/admin/dashboard/sof-foyda'),
+    staleTime: 30_000,
   });
 }
 
@@ -107,6 +132,8 @@ function ChartError({ message }: { message: string }) {
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { data: dashboard, isLoading: dashLoading } = useDashboard();
+  const umumiyTushum = useUmumiyTushum();
+  const sofFoyda = useSofFoyda();
   const weeklyOrders = useWeeklyOrders();
   const weeklyRevenue = useWeeklyRevenue();
 
@@ -174,6 +201,97 @@ export default function DashboardPage() {
             </Card>
           );
         })}
+      </div>
+
+      {/* Umumiy tushum va foyda tahlili */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="animate-fade-in-up transition-all duration-200 hover:shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-[var(--text-2)]">
+              Umumiy tushum
+            </CardTitle>
+            <Wallet className="h-5 w-5 text-[var(--accent)]" />
+          </CardHeader>
+          <CardContent>
+            {umumiyTushum.isLoading ? (
+              <Skeleton className="h-9 w-32 bg-surface-2 animate-shimmer" />
+            ) : (
+              <div className="font-mono text-3xl font-bold text-[var(--text-1)]">
+                {formatSom(umumiyTushum.data?.total ?? 0)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="animate-fade-in-up transition-all duration-200 hover:shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-[var(--text-2)]">
+              Foyda tahlili (yalpi / sof)
+            </CardTitle>
+            <PiggyBank className="h-5 w-5 text-success" />
+          </CardHeader>
+          <CardContent>
+            {sofFoyda.isLoading ? (
+              <Skeleton className="h-20 w-full bg-surface-2 animate-shimmer" />
+            ) : (
+              <>
+                <div className="mb-2 flex flex-wrap gap-6">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-[var(--text-3)]">
+                      Yalpi foyda
+                    </p>
+                    <p className="font-mono text-2xl font-semibold text-[var(--accent)]">
+                      {formatSom(sofFoyda.data?.yalpi_foyda ?? 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-[var(--text-3)]">
+                      Sof foyda
+                    </p>
+                    <p className="font-mono text-2xl font-semibold text-success">
+                      {formatSom(sofFoyda.data?.sof_foyda ?? 0)}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-2 text-xs text-[var(--text-3)]">
+                  <div className="flex items-center justify-between">
+                    <span>Yalpi marja</span>
+                    <span className="font-medium text-[var(--accent)]">
+                      {sofFoyda.data?.tushum
+                        ? `${Math.round(((sofFoyda.data?.yalpi_foyda ?? 0) / sofFoyda.data.tushum) * 100)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Sof marja</span>
+                    <span className="font-medium text-success">
+                      {sofFoyda.data?.tushum
+                        ? `${Math.round(((sofFoyda.data?.sof_foyda ?? 0) / sofFoyda.data.tushum) * 100)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Zapchast tannarxi</span>
+                    <span className="font-medium text-[var(--text-2)]">
+                      {formatSom(sofFoyda.data?.zapchast_tannarx ?? 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Usta va haydovchi ish haqi</span>
+                    <span className="font-medium text-[var(--text-2)]">
+                      {formatSom(sofFoyda.data?.ish_haqi ?? 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Tugallangan buyurtmalar tushumi</span>
+                    <span className="font-medium text-[var(--text-2)]">
+                      {formatSom(sofFoyda.data?.tushum ?? 0)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Grafiklar */}
@@ -247,7 +365,7 @@ export default function DashboardPage() {
               (!weeklyOrders.data?.items?.length ||
                 weeklyOrders.data.items.length === 0) && (
                 <div className="flex min-h-[280px] items-center justify-center text-text-muted">
-                  Ma'lumot yo'q
+                  Ma&apos;lumot yo&apos;q
                 </div>
               )}
           </CardContent>
@@ -256,7 +374,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[var(--text-1)]">
-              Oxirgi 7 kun — tushum (so'm)
+              Oxirgi 7 kun — tushum (so&apos;m)
             </CardTitle>
           </CardHeader>
           <CardContent className="w-full">
@@ -354,7 +472,7 @@ export default function DashboardPage() {
               (!weeklyRevenue.data?.items?.length ||
                 weeklyRevenue.data.items.length === 0) && (
                 <div className="flex min-h-[280px] items-center justify-center text-text-muted">
-                  Ma'lumot yo'q
+                  Ma&apos;lumot yo&apos;q
                 </div>
               )}
           </CardContent>
@@ -368,7 +486,7 @@ export default function DashboardPage() {
             Oxirgi buyurtmalar
           </CardTitle>
           <Button variant="outline" size="sm" className="text-[var(--text-2)] hover:bg-[var(--bg-3)]" asChild>
-            <Link href="/orders">Barchasini ko'rish →</Link>
+            <Link href="/orders">Barchasini ko&apos;rish →</Link>
           </Button>
         </CardHeader>
         <CardContent>
@@ -384,7 +502,7 @@ export default function DashboardPage() {
           ) : recentOrders.length === 0 ? (
             <div className="erp-table-empty">
               <ClipboardList className="h-12 w-12 text-text-muted" />
-              <p>Ma'lumot topilmadi</p>
+              <p>Ma&apos;lumot topilmadi</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

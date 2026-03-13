@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -44,8 +45,26 @@ export class AdminOrganizationsController {
     return this.adminService.getOrganizations(page, limit, req?.user);
   }
 
+  @Get(':id/report')
+  getReport(
+    @Param('id') id: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException(
+        'from va to parametrlari kerak (YYYY-MM-DD)',
+      );
+    }
+    return this.adminService.getOrganizationReport(id, from, to, req.user);
+  }
+
   @Get(':id')
-  getOne(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+  getOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.getOrganizationById(id, req.user);
   }
 
@@ -70,11 +89,22 @@ export class AdminOrganizationsController {
   @Get(':orgId/vehicles')
   listVehicles(
     @Param('orgId') orgId: string,
-    @Query() pagination?: PaginationDto,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
     @Req() req?: Request & { user: AdminRequestUser },
   ) {
-    const page = pagination?.page ?? 1;
-    const limit = pagination?.limit ?? 50;
-    return this.adminService.getVehiclesByOrg(orgId, page, limit, req?.user);
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(String(limit), 10) || 50),
+    );
+    return this.adminService.getVehiclesByOrg(
+      orgId,
+      pageNum,
+      limitNum,
+      req?.user,
+      search,
+    );
   }
 }

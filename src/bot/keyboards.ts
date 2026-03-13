@@ -37,7 +37,12 @@ const DRIVER_DELIVERED_PREFIX = 'driver_delivered_';
 /** Inline keyboard: [✅ Yetkazib bo'ldim] for driver to mark order delivered. */
 export function getDriverDeliveredInline(orderId: string) {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Yetkazib bo\'ldim', `${DRIVER_DELIVERED_PREFIX}${orderId}`)],
+    [
+      Markup.button.callback(
+        "✅ Yetkazib bo'ldim",
+        `${DRIVER_DELIVERED_PREFIX}${orderId}`,
+      ),
+    ],
   ]);
 }
 
@@ -79,6 +84,36 @@ export function getMasterTarixPaginationInline(
 }
 
 export const MASTER_TARIX_CB_REGEX = /^master_tarix_(\d+)$/;
+
+const DRIVER_TARIX_PREFIX = 'driver_tarix_';
+
+/** Inline keyboard: pagination for driver's yetkazish tarixi (skip in callback). */
+export function getDriverTarixPaginationInline(
+  skip: number,
+  hasPrev: boolean,
+  hasNext: boolean,
+) {
+  const row: ReturnType<typeof Markup.button.callback>[] = [];
+  if (hasPrev) {
+    row.push(
+      Markup.button.callback(
+        '⬅️ Oldingi 10',
+        `${DRIVER_TARIX_PREFIX}${skip - 10}`,
+      ),
+    );
+  }
+  if (hasNext) {
+    row.push(
+      Markup.button.callback(
+        'Keyingi 10 ➡️',
+        `${DRIVER_TARIX_PREFIX}${skip + 10}`,
+      ),
+    );
+  }
+  return Markup.inlineKeyboard(row.length ? [row] : []);
+}
+
+export const DRIVER_TARIX_CB_REGEX = /^driver_tarix_(\d+)$/;
 
 /** Boss menu: Bugungi hisobot, Haftalik, Xodimlar, Qarzlar, Kam mahsulotlar. */
 export function getBossKeyboard() {
@@ -147,3 +182,31 @@ export function getMasterOrderInlineButton(orderId: string) {
     ],
   ]);
 }
+
+const CONFIRM_ORDER_PREFIX = 'confirm_order_';
+const CANCEL_ORDER_PREFIX = 'cancel_order_';
+const ADD_MANUAL_SERVICE_PREFIX = 'add_manual_service_';
+
+/** Inline keyboard for draft order: Tasdiqlash, Bekor qilish, Qo'lda xizmat qo'shish. */
+export function getConfirmOrderInline(orderId: string) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback(
+        '✅ Tasdiqlash',
+        `${CONFIRM_ORDER_PREFIX}${orderId}`,
+      ),
+      Markup.button.callback(
+        '❌ Bekor qilish',
+        `${CANCEL_ORDER_PREFIX}${orderId}`,
+      ),
+    ],
+    [
+      Markup.button.callback(
+        "➕ Qo'lda xizmat",
+        `${ADD_MANUAL_SERVICE_PREFIX}${orderId}`,
+      ),
+    ],
+  ]);
+}
+
+export const ADD_MANUAL_SERVICE_CB_REGEX = /^add_manual_service_(.+)$/;

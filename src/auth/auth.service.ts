@@ -121,7 +121,13 @@ export class AuthService {
   }
 
   /** WebApp: login with login/password. Returns JWT (8h) + user. Only is_active users. */
-  async webappLogin(login: string, password: string): Promise<{ token: string; user: { id: string; fullname: string; login: string; role: string } }> {
+  async webappLogin(
+    login: string,
+    password: string,
+  ): Promise<{
+    token: string;
+    user: { id: string; fullname: string; login: string; role: string };
+  }> {
     const user = await this.validateUser(login, password);
     if (!user) {
       throw new UnauthorizedException('Login yoki parol xato');
@@ -129,7 +135,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       login: user.login,
-      role: user.role as Role,
+      role: user.role,
       tenant_id: user.tenant_id ?? null,
     };
     const expiresIn = '8h';

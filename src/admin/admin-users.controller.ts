@@ -17,7 +17,6 @@ import { Role } from '../../generated/prisma/client';
 import { AdminService, AdminRequestUser } from './admin.service';
 import { AdminCreateUserDto } from './dto/create-user.dto';
 import { AdminUpdateUserDto } from './dto/update-user.dto';
-import { PaginationDto } from './dto/pagination.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,7 +25,10 @@ export class AdminUsersController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post()
-  create(@Body() dto: AdminCreateUserDto, @Req() req: Request & { user: AdminRequestUser }) {
+  create(
+    @Body() dto: AdminCreateUserDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.createUser(dto, req.user);
   }
 
@@ -34,7 +36,8 @@ export class AdminUsersController {
   list(
     @Query('role') role?: string,
     @Query('is_active') is_active?: string,
-    @Query() pagination?: PaginationDto,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @Req() req?: Request & { user: AdminRequestUser },
   ) {
     const isActive =
@@ -45,18 +48,24 @@ export class AdminUsersController {
           : is_active === 'false'
             ? false
             : undefined;
-    const page = pagination?.page ?? 1;
-    const limit = pagination?.limit ?? 20;
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(String(limit), 10) || 20),
+    );
     return this.adminService.getUsers(
       { role, is_active: isActive },
-      page,
-      limit,
+      pageNum,
+      limitNum,
       req?.user,
     );
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+  getOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.getUserById(id, req.user);
   }
 

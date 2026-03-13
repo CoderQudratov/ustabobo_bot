@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { ProductsService } from '../products/products.service';
 import {
   OrderStatus,
@@ -25,7 +26,11 @@ import { AdminCreateProductDto } from './dto/create-product.dto';
 import { AdminUpdateProductDto } from './dto/update-product.dto';
 import { AdminStockInDto } from './dto/stock-in.dto';
 import { AdminCreateOrderDto } from './dto/create-order.dto';
-import { calculateOrderTotal } from '../orders/price-calculator';
+import type { AdminUpdateOrderDto } from './dto/update-order.dto';
+import { AdminCreateSupplierDto } from './dto/create-supplier.dto';
+import { AdminUpdateSupplierDto } from './dto/update-supplier.dto';
+import { AdminSupplierPaymentDto } from './dto/supplier-payment.dto';
+import { calculateOrderTotal, DELIVERY_FEE } from '../orders/price-calculator';
 
 const orderInclude = {
   master: { select: { id: true, fullname: true, phone: true, username: true } },
@@ -53,6 +58,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly productsService: ProductsService,
+    private readonly audit: AuditService,
   ) {}
 
   private tenantFilter(_user: AdminRequestUser): Record<string, never> {
@@ -60,7 +66,7 @@ export class AdminService {
   }
 
   // ─── Users ─────────────────────────────────────────────────────────────────
-  async createUser(dto: AdminCreateUserDto, user: AdminRequestUser) {
+  async createUser(dto: AdminCreateUserDto, _user: AdminRequestUser) {
     console.log('[createUser] dto:', JSON.stringify(dto));
     try {
       const fullname = dto.fullname?.trim();
@@ -107,10 +113,14 @@ export class AdminService {
     filters: { role?: string; is_active?: boolean },
     page = 1,
     limit = 20,
-    user?: AdminRequestUser,
+    _user?: AdminRequestUser,
   ) {
-    const where: { role?: Role; is_active?: boolean; tenant_id?: string | null } = {
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+    const where: {
+      role?: Role;
+      is_active?: boolean;
+      tenant_id?: string | null;
+    } = {
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
     if (filters.role) where.role = filters.role as Role;
     if (typeof filters.is_active === 'boolean')
@@ -138,7 +148,7 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async getUserById(id: string, requestUser?: AdminRequestUser) {
+  async getUserById(id: string, _requestUser?: AdminRequestUser) {
     if (!this.isValidUuid(id)) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
@@ -163,8 +173,12 @@ export class AdminService {
     return rest;
   }
 
-  async updateUser(id: string, dto: AdminUpdateUserDto, requestUser?: AdminRequestUser) {
-    await this.getUserById(id, requestUser);
+  async updateUser(
+    id: string,
+    dto: AdminUpdateUserDto,
+    _requestUser?: AdminRequestUser,
+  ) {
+    await this.getUserById(id, _requestUser);
     const percent_rate = dto.percent_rate ?? dto.commission ?? undefined;
     const data: Prisma.UserUpdateInput = {
       ...(dto.fullname !== undefined && { fullname: dto.fullname }),
@@ -183,11 +197,15 @@ export class AdminService {
     });
   }
 
-  async toggleUserActive(id: string, requesterId?: string, requestUser?: AdminRequestUser) {
+  async toggleUserActive(
+    id: string,
+    requesterId?: string,
+    _requestUser?: AdminRequestUser,
+  ) {
     if (!this.isValidUuid(id)) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
-    await this.getUserById(id, requestUser);
+    await this.getUserById(id, _requestUser);
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     if (requesterId && id === requesterId) {
@@ -210,7 +228,10 @@ export class AdminService {
   }
 
   // ─── Organizations ─────────────────────────────────────────────────────────
-  async createOrganization(dto: AdminCreateOrganizationDto, user: AdminRequestUser) {
+  async createOrganization(
+    dto: AdminCreateOrganizationDto,
+    _user: AdminRequestUser,
+  ) {
     return this.prisma.organization.create({
       data: {
         name: dto.name,
@@ -223,8 +244,8 @@ export class AdminService {
     });
   }
 
-  async getOrganizations(page = 1, limit = 20, user?: AdminRequestUser) {
-    const where = this.tenantFilter(user ?? ({} as AdminRequestUser));
+  async getOrganizations(page = 1, limit = 20, _user?: AdminRequestUser) {
+    const where = this.tenantFilter(_user ?? ({} as AdminRequestUser));
     const [items, total] = await Promise.all([
       this.prisma.organization.findMany({
         where,
@@ -237,7 +258,7 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async getOrganizationById(id: string, requestUser?: AdminRequestUser) {
+  async getOrganizationById(id: string, _requestUser?: AdminRequestUser) {
     const org = await this.prisma.organization.findUnique({
       where: { id },
       include: { vehicles: true },
@@ -247,8 +268,12 @@ export class AdminService {
     return org;
   }
 
-  async updateOrganization(id: string, dto: AdminUpdateOrganizationDto, requestUser?: AdminRequestUser) {
-    await this.getOrganizationById(id, requestUser);
+  async updateOrganization(
+    id: string,
+    dto: AdminUpdateOrganizationDto,
+    _requestUser?: AdminRequestUser,
+  ) {
+    await this.getOrganizationById(id, _requestUser);
     return this.prisma.organization.update({
       where: { id },
       data: dto,
@@ -256,7 +281,11 @@ export class AdminService {
   }
 
   // ─── Vehicles ───────────────────────────────────────────────────────────────
-  async createVehicle(orgId: string, dto: AdminCreateVehicleDto, user: AdminRequestUser) {
+  async createVehicle(
+    orgId: string,
+    dto: AdminCreateVehicleDto,
+    _user: AdminRequestUser,
+  ) {
     if (process.env.NODE_ENV !== 'test') {
       console.log('[createVehicle] orgId:', orgId);
       console.log('[createVehicle] dto:', JSON.stringify(dto));
@@ -292,8 +321,24 @@ export class AdminService {
     }
   }
 
-  async getVehiclesByOrg(orgId: string, page = 1, limit = 50, user?: AdminRequestUser) {
-    const where = { org_id: orgId, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
+  async getVehiclesByOrg(
+    orgId: string,
+    page = 1,
+    limit = 50,
+    _user?: AdminRequestUser,
+    search?: string,
+  ) {
+    const where: Prisma.VehicleWhereInput = {
+      org_id: orgId,
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+    };
+    if (search?.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { plate_number: { contains: q, mode: 'insensitive' } },
+        { model: { contains: q, mode: 'insensitive' } },
+      ];
+    }
     const [items, total] = await Promise.all([
       this.prisma.vehicle.findMany({
         where,
@@ -306,7 +351,189 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async updateVehicle(id: string, dto: AdminUpdateVehicleDto, requestUser?: AdminRequestUser) {
+  /** Tashkilot bo‘yicha hisobot (Excel uchun): berilgan sana oralig‘idagi buyurtmalar */
+  async getOrganizationReport(
+    orgId: string,
+    from: string,
+    to: string,
+    _requestUser?: AdminRequestUser,
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+    });
+    if (!org) throw new NotFoundException(`Tashkilot topilmadi`);
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()))
+      throw new BadRequestException('Noto‘g‘ri sana oralig‘i');
+    toDate.setHours(23, 59, 59, 999);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        organization_id: orgId,
+        created_at: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        master: { select: { fullname: true } },
+        vehicle: { select: { plate_number: true, model: true } },
+        orderItems: {
+          include: {
+            product: { select: { name: true } },
+            service: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    const rows = orders.map((o) => {
+      const itemLines = o.orderItems.map((i) => {
+        const name = i.service?.name ?? i.product?.name ?? i.item_name ?? '—';
+        const type = i.item_type === 'service' ? 'Xizmat' : 'Zapchast';
+        return {
+          name,
+          type,
+          quantity: i.quantity,
+          price: Number(i.price_at_time),
+        };
+      });
+      return {
+        id: o.id,
+        created_at: o.created_at,
+        client_name: o.client_name,
+        client_phone: o.client_phone,
+        car_number: o.car_number,
+        car_model:
+          o.car_model ??
+          (o.vehicle ? `${o.vehicle.plate_number} ${o.vehicle.model}` : '—'),
+        master_fullname: o.master?.fullname ?? '—',
+        total_amount: Number(o.total_amount),
+        items: itemLines,
+      };
+    });
+
+    return {
+      organization: { id: org.id, name: org.name },
+      from,
+      to,
+      orders: rows,
+    };
+  }
+
+  /** Usta bo‘yicha hisobot (sana oralig‘i): buyurtmalar + summary, Excel uchun */
+  async getMasterReport(
+    masterId: string,
+    from: string,
+    to: string,
+    _requestUser?: AdminRequestUser,
+  ) {
+    const master = await this.prisma.user.findFirst({
+      where: {
+        id: masterId,
+        role: Role.master,
+        ...this.tenantFilter(_requestUser ?? ({} as AdminRequestUser)),
+      },
+      select: { id: true, fullname: true, phone: true },
+    });
+    if (!master) throw new NotFoundException('Usta topilmadi');
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()))
+      throw new BadRequestException('Noto‘g‘ri sana oralig‘i');
+    toDate.setHours(23, 59, 59, 999);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        master_id: masterId,
+        status: OrderStatus.completed,
+        completed_at: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        vehicle: { select: { plate_number: true, model: true } },
+        orderItems: {
+          include: {
+            product: { select: { name: true } },
+            service: { select: { name: true } },
+          },
+        },
+        transactions: true,
+      },
+      orderBy: { completed_at: 'asc' },
+    });
+
+    const totalRevenue = orders.reduce((s, o) => s + Number(o.total_amount), 0);
+    const masterFee = orders.reduce((s, o) => {
+      return (
+        s +
+        o.transactions
+          .filter((t) => t.type === 'master_fee')
+          .reduce((sum, t) => sum + Number(t.amount), 0)
+      );
+    }, 0);
+
+    const rows = orders.map((o) => {
+      const itemLines = o.orderItems.map((i) => {
+        const name =
+          (
+            i as {
+              service?: { name: string };
+              product?: { name: string };
+              item_name?: string | null;
+            }
+          ).service?.name ??
+          (i as { product?: { name: string }; item_name?: string | null })
+            .product?.name ??
+          (i as { item_name: string | null }).item_name ??
+          '—';
+        const type =
+          (i as { item_type: string }).item_type === 'service'
+            ? 'Xizmat'
+            : 'Zapchast';
+        return {
+          name,
+          type,
+          quantity: i.quantity,
+          price: Number(i.price_at_time),
+        };
+      });
+      return {
+        id: o.id,
+        completed_at: o.completed_at,
+        client_name: o.client_name,
+        client_phone: o.client_phone,
+        car_number: o.car_number,
+        car_model:
+          o.car_model ??
+          (o.vehicle ? `${o.vehicle.plate_number} ${o.vehicle.model}` : '—'),
+        total_amount: Number(o.total_amount),
+        items: itemLines,
+      };
+    });
+
+    return {
+      master: {
+        id: master.id,
+        fullname: master.fullname,
+        phone: master.phone ?? '',
+      },
+      from,
+      to,
+      orders: rows,
+      summary: {
+        orders_count: orders.length,
+        total_revenue: totalRevenue,
+        master_fee: masterFee,
+      },
+    };
+  }
+
+  async updateVehicle(
+    id: string,
+    dto: AdminUpdateVehicleDto,
+    _requestUser?: AdminRequestUser,
+  ) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
@@ -316,7 +543,7 @@ export class AdminService {
     });
   }
 
-  async toggleVehicleActive(id: string, requestUser?: AdminRequestUser) {
+  async toggleVehicleActive(id: string, _requestUser?: AdminRequestUser) {
     const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!vehicle)
       throw new NotFoundException(`Vehicle with id "${id}" not found`);
@@ -327,7 +554,7 @@ export class AdminService {
   }
 
   // ─── Services ───────────────────────────────────────────────────────────────
-  async createService(dto: AdminCreateServiceDto, user: AdminRequestUser) {
+  async createService(dto: AdminCreateServiceDto, _user: AdminRequestUser) {
     return this.prisma.service.create({
       data: {
         name: dto.name,
@@ -337,8 +564,11 @@ export class AdminService {
     });
   }
 
-  async getServices(page = 1, limit = 50, user?: AdminRequestUser) {
-    const where = { is_active: true, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
+  async getServices(page = 1, limit = 50, _user?: AdminRequestUser) {
+    const where = {
+      is_active: true,
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+    };
     const [items, total] = await Promise.all([
       this.prisma.service.findMany({
         where,
@@ -351,7 +581,11 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async updateService(id: string, dto: AdminUpdateServiceDto, requestUser?: AdminRequestUser) {
+  async updateService(
+    id: string,
+    dto: AdminUpdateServiceDto,
+    _requestUser?: AdminRequestUser,
+  ) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
@@ -361,7 +595,7 @@ export class AdminService {
     });
   }
 
-  async deleteService(id: string, requestUser?: AdminRequestUser) {
+  async deleteService(id: string, _requestUser?: AdminRequestUser) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
@@ -372,7 +606,7 @@ export class AdminService {
     return { deleted: true, soft: true };
   }
 
-  async toggleServiceActive(id: string, requestUser?: AdminRequestUser) {
+  async toggleServiceActive(id: string, _requestUser?: AdminRequestUser) {
     const service = await this.prisma.service.findUnique({ where: { id } });
     if (!service)
       throw new NotFoundException(`Service with id "${id}" not found`);
@@ -383,7 +617,7 @@ export class AdminService {
   }
 
   // ─── Products ──────────────────────────────────────────────────────────────
-  async createProduct(dto: AdminCreateProductDto, user: AdminRequestUser) {
+  async createProduct(dto: AdminCreateProductDto, _user: AdminRequestUser) {
     const salePrice = dto.sale_price ?? dto.selling_price;
     if (salePrice == null || salePrice <= 0) {
       throw new BadRequestException(
@@ -398,6 +632,7 @@ export class AdminService {
         stock_count: dto.stock_count,
         min_limit: dto.min_limit ?? dto.min_stock ?? 0,
         tenant_id: undefined,
+        supplier_id: dto.supplier_id ?? undefined,
       },
     });
     await this.prisma.productPriceHistory.create({
@@ -408,6 +643,19 @@ export class AdminService {
         note: 'Yaratildi',
       },
     });
+    // Agar taminotchi tanlangan va boshlang'ich qoldiq > 0 bo'lsa, xarid va qarz yozamiz
+    if (dto.supplier_id && dto.stock_count > 0) {
+      const total = dto.stock_count * dto.cost_price;
+      await this.prisma.supplierPurchase.create({
+        data: {
+          supplier_id: dto.supplier_id,
+          product_id: product.id,
+          quantity: dto.stock_count,
+          unit_cost: dto.cost_price,
+          total,
+        },
+      });
+    }
     return product;
   }
 
@@ -418,7 +666,7 @@ export class AdminService {
       sortBy?: 'name' | 'cost_price' | 'sale_price' | 'stock_count';
       sortOrder?: 'asc' | 'desc';
     },
-    user?: AdminRequestUser,
+    _user?: AdminRequestUser,
   ) {
     const orderBy =
       opts?.sortBy === 'cost_price'
@@ -429,13 +677,19 @@ export class AdminService {
             ? { stock_count: opts.sortOrder ?? 'asc' }
             : { name: opts?.sortOrder ?? 'asc' };
 
-    const where = { is_active: true, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
+    const where = {
+      is_active: true,
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+    };
     const [items, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy,
+        include: {
+          supplier: { select: { id: true, fullname: true } },
+        },
       }),
       this.prisma.product.count({ where }),
     ]);
@@ -446,12 +700,19 @@ export class AdminService {
     return { items: itemsWithFlag, total, page, limit };
   }
 
-  async getProductsLowStock(page = 1, limit = 50, user?: AdminRequestUser) {
-    const tf = this.tenantFilter(user ?? ({} as AdminRequestUser));
+  async getProductsLowStock(page = 1, limit = 50, _user?: AdminRequestUser) {
+    const tf = this.tenantFilter(_user ?? ({} as AdminRequestUser));
     const where = { is_active: true, ...tf };
     const allProducts = await this.prisma.product.findMany({
       where,
-      select: { id: true, name: true, stock_count: true, min_limit: true, cost_price: true, sale_price: true },
+      select: {
+        id: true,
+        name: true,
+        stock_count: true,
+        min_limit: true,
+        cost_price: true,
+        sale_price: true,
+      },
     });
     const lowStock = allProducts.filter((p) => p.stock_count <= p.min_limit);
     const total_low_stock_count = lowStock.length;
@@ -463,8 +724,8 @@ export class AdminService {
     return { products, total_low_stock_count, page, limit };
   }
 
-  async getDashboard(user?: AdminRequestUser) {
-    const tf = this.tenantFilter(user ?? ({} as AdminRequestUser));
+  async getDashboard(_user?: AdminRequestUser) {
+    const tf = this.tenantFilter(_user ?? ({} as AdminRequestUser));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -499,7 +760,9 @@ export class AdminService {
           where: { ...tf, is_active: true },
           select: { stock_count: true, min_limit: true },
         })
-        .then((rows) => ({ _count: rows.filter((r) => r.stock_count <= r.min_limit).length })),
+        .then((rows) => ({
+          _count: rows.filter((r) => r.stock_count <= r.min_limit).length,
+        })),
       this.prisma.order.findMany({
         where: tf,
         take: 5,
@@ -552,7 +815,7 @@ export class AdminService {
     id: string,
     dto: AdminUpdateProductDto,
     changedByUserId?: string,
-    requestUser?: AdminRequestUser,
+    _requestUser?: AdminRequestUser,
   ) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
@@ -583,7 +846,7 @@ export class AdminService {
     return updated;
   }
 
-  async toggleProductActive(id: string, requestUser?: AdminRequestUser) {
+  async toggleProductActive(id: string, _requestUser?: AdminRequestUser) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
@@ -593,7 +856,7 @@ export class AdminService {
     });
   }
 
-  async deleteProduct(id: string, requestUser?: AdminRequestUser) {
+  async deleteProduct(id: string, _requestUser?: AdminRequestUser) {
     const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product)
       throw new NotFoundException(`Product with id "${id}" not found`);
@@ -605,7 +868,7 @@ export class AdminService {
     productId: string,
     dto: AdminStockInDto,
     changedByUserId?: string,
-    requestUser?: AdminRequestUser,
+    _requestUser?: AdminRequestUser,
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -620,29 +883,67 @@ export class AdminService {
         : Number(product.cost_price);
     const salePrice = Number(product.sale_price);
 
-    await this.prisma.$transaction([
-      this.prisma.product.update({
-        where: { id: productId },
-        data: {
-          stock_count: newStock,
-          cost_price: costPrice,
-        },
-      }),
-      this.prisma.productPriceHistory.create({
-        data: {
-          product_id: productId,
-          cost_price: costPrice,
-          sale_price: salePrice,
-          changed_by_id: changedByUserId ?? null,
-          note: dto.note ?? null,
-        },
-      }),
-    ]);
+    if (dto.supplier_id) {
+      const supplier = await this.prisma.supplier.findUnique({
+        where: { id: dto.supplier_id, is_active: true },
+      });
+      if (!supplier) throw new NotFoundException(`Taminotchi topilmadi`);
+      const total = dto.quantity * costPrice;
+      await this.prisma.$transaction([
+        this.prisma.product.update({
+          where: { id: productId },
+          data: {
+            stock_count: newStock,
+            cost_price: costPrice,
+          },
+        }),
+        this.prisma.productPriceHistory.create({
+          data: {
+            product_id: productId,
+            cost_price: costPrice,
+            sale_price: salePrice,
+            changed_by_id: changedByUserId ?? null,
+            note: dto.note ?? null,
+          },
+        }),
+        this.prisma.supplierPurchase.create({
+          data: {
+            supplier_id: dto.supplier_id,
+            product_id: productId,
+            quantity: dto.quantity,
+            unit_cost: costPrice,
+            total,
+          },
+        }),
+      ]);
+    } else {
+      await this.prisma.$transaction([
+        this.prisma.product.update({
+          where: { id: productId },
+          data: {
+            stock_count: newStock,
+            cost_price: costPrice,
+          },
+        }),
+        this.prisma.productPriceHistory.create({
+          data: {
+            product_id: productId,
+            cost_price: costPrice,
+            sale_price: salePrice,
+            changed_by_id: changedByUserId ?? null,
+            note: dto.note ?? null,
+          },
+        }),
+      ]);
+    }
 
     return this.prisma.product.findUnique({ where: { id: productId } });
   }
 
-  async getProductPriceHistory(productId: string, requestUser?: AdminRequestUser) {
+  async getProductPriceHistory(
+    productId: string,
+    _requestUser?: AdminRequestUser,
+  ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
     });
@@ -671,6 +972,205 @@ export class AdminService {
     };
   }
 
+  // ─── Suppliers (Taminotchilar) ───────────────────────────────────────────────
+  async createSupplier(dto: AdminCreateSupplierDto, __user?: AdminRequestUser) {
+    return this.prisma.supplier.create({
+      data: {
+        fullname: dto.fullname,
+        phone: dto.phone ?? null,
+        bank_account: dto.bank_account ?? null,
+        note: dto.note ?? null,
+      },
+    });
+  }
+
+  async getSuppliers(page = 1, limit = 50, __user?: AdminRequestUser) {
+    const [items, total] = await Promise.all([
+      this.prisma.supplier.findMany({
+        where: {},
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { fullname: 'asc' },
+      }),
+      this.prisma.supplier.count(),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  async getSupplierById(id: string) {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        purchases: {
+          orderBy: { created_at: 'desc' },
+          take: 50,
+          include: { product: { select: { name: true } } },
+        },
+        payments: { orderBy: { created_at: 'desc' }, take: 50 },
+      },
+    });
+    if (!supplier) throw new NotFoundException(`Taminotchi topilmadi`);
+    const totalPurchases = await this.prisma.supplierPurchase.aggregate({
+      where: { supplier_id: id },
+      _sum: { total: true },
+    });
+    const totalPayments = await this.prisma.supplierPayment.aggregate({
+      where: { supplier_id: id },
+      _sum: { amount: true },
+    });
+    const debt =
+      Number(totalPurchases._sum.total ?? 0) -
+      Number(totalPayments._sum.amount ?? 0);
+    return {
+      ...supplier,
+      total_purchases: Number(totalPurchases._sum.total ?? 0),
+      total_payments: Number(totalPayments._sum.amount ?? 0),
+      debt,
+    };
+  }
+
+  async updateSupplier(id: string, dto: AdminUpdateSupplierDto) {
+    await this.prisma.supplier.findUniqueOrThrow({
+      where: { id },
+    });
+    return this.prisma.supplier.update({
+      where: { id },
+      data: {
+        ...(dto.fullname !== undefined && { fullname: dto.fullname }),
+        ...(dto.phone !== undefined && { phone: dto.phone }),
+        ...(dto.bank_account !== undefined && {
+          bank_account: dto.bank_account,
+        }),
+        ...(dto.note !== undefined && { note: dto.note }),
+        ...(dto.is_active !== undefined && { is_active: dto.is_active }),
+      },
+    });
+  }
+
+  async getSupplierDebtSummary(__user?: AdminRequestUser) {
+    const suppliers = await this.prisma.supplier.findMany({
+      where: { is_active: true },
+      select: { id: true, fullname: true, phone: true },
+    });
+    const result = await Promise.all(
+      suppliers.map(async (s) => {
+        const [purchasesAgg, paymentsAgg, purchases] = await Promise.all([
+          this.prisma.supplierPurchase.aggregate({
+            where: { supplier_id: s.id },
+            _sum: { total: true },
+          }),
+          this.prisma.supplierPayment.aggregate({
+            where: { supplier_id: s.id },
+            _sum: { amount: true },
+          }),
+          this.prisma.supplierPurchase.findMany({
+            where: { supplier_id: s.id },
+            orderBy: { created_at: 'asc' },
+            select: { created_at: true, total: true },
+          }),
+          this.prisma.supplierPayment.findMany({
+            where: { supplier_id: s.id },
+            orderBy: { created_at: 'asc' },
+            select: { amount: true },
+          }),
+        ]);
+        const total = Number(purchasesAgg._sum.total ?? 0);
+        const paid = Number(paymentsAgg._sum.amount ?? 0);
+        const debt = total - paid;
+
+        // Aging (0–30, 31–60, 61+ kun), FIFO bo'yicha to'lovlarni eng eski xaridlarga qo'llash
+        let remainingPayments = paid;
+        const now = new Date();
+        let age_0_30 = 0;
+        let age_31_60 = 0;
+        let age_61_plus = 0;
+
+        for (const p of purchases) {
+          let remaining = Number(p.total);
+          if (remainingPayments > 0) {
+            const applied = Math.min(remaining, remainingPayments);
+            remaining -= applied;
+            remainingPayments -= applied;
+          }
+          if (remaining <= 0) continue;
+          const diffMs = now.getTime() - p.created_at.getTime();
+          const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          if (days <= 30) {
+            age_0_30 += remaining;
+          } else if (days <= 60) {
+            age_31_60 += remaining;
+          } else {
+            age_61_plus += remaining;
+          }
+        }
+
+        return {
+          id: s.id,
+          fullname: s.fullname,
+          phone: s.phone,
+          total_purchases: total,
+          total_payments: paid,
+          debt,
+          age_0_30,
+          age_31_60,
+          age_61_plus,
+        };
+      }),
+    );
+    return { suppliers: result };
+  }
+
+  /** Barcha taminotchilar xaridlari — Excel «Xaridlar batafsil» uchun */
+  async getSuppliersAllPurchases(_user?: AdminRequestUser) {
+    const purchases = await this.prisma.supplierPurchase.findMany({
+      orderBy: { created_at: 'desc' },
+      include: {
+        supplier: { select: { fullname: true } },
+        product: { select: { name: true } },
+      },
+    });
+    return {
+      purchases: purchases.map((p) => ({
+        supplier_name: p.supplier.fullname,
+        product_name: p.product.name,
+        quantity: p.quantity,
+        unit_cost: Number(p.unit_cost),
+        total: Number(p.total),
+        created_at: p.created_at.toISOString(),
+      })),
+    };
+  }
+
+  async recordSupplierPayment(
+    supplierId: string,
+    dto: AdminSupplierPaymentDto,
+    _requestUser?: AdminRequestUser,
+  ) {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id: supplierId },
+    });
+    if (!supplier) throw new NotFoundException(`Taminotchi topilmadi`);
+    const payment = await this.prisma.supplierPayment.create({
+      data: {
+        supplier_id: supplierId,
+        amount: dto.amount,
+        note: dto.note ?? null,
+      },
+    });
+    await this.audit.log({
+      userId: _requestUser?.id,
+      action: 'supplier.payment.create',
+      entity: 'Supplier',
+      entityId: supplierId,
+      meta: {
+        amount: dto.amount,
+        note: dto.note ?? null,
+        payment_id: payment.id,
+      },
+    });
+    return payment;
+  }
+
   // ─── Orders ─────────────────────────────────────────────────────────────────
   async getOrders(
     filters: {
@@ -683,9 +1183,11 @@ export class AdminService {
     },
     page = 1,
     limit = 20,
-    user?: AdminRequestUser,
+    _user?: AdminRequestUser,
   ) {
-    const where: Prisma.OrderWhereInput = { ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
+    const where: Prisma.OrderWhereInput = {
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+    };
 
     if (filters.status) {
       if (filters.status === 'pending') {
@@ -722,6 +1224,7 @@ export class AdminService {
       where.OR = [
         { client_name: { contains: q, mode: 'insensitive' } },
         { client_phone: { contains: q } },
+        { car_number: { contains: q, mode: 'insensitive' } },
       ];
     }
 
@@ -738,7 +1241,11 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async updateOrderStatus(orderId: string, status: OrderStatus, requestUser?: AdminRequestUser) {
+  async updateOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+    _requestUser?: AdminRequestUser,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -751,11 +1258,21 @@ export class AdminService {
     if (status === OrderStatus.completed) {
       updateData.completed_at = new Date();
     }
-    return this.prisma.order.update({
+    const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: updateData,
       include: orderInclude,
     });
+    await this.audit.log({
+      userId: _requestUser?.id,
+      action: 'order.status.update',
+      entity: 'Order',
+      entityId: orderId,
+      meta: {
+        new_status: status,
+      },
+    });
+    return updated;
   }
 
   async createOrder(dto: AdminCreateOrderDto, user: AdminRequestUser) {
@@ -929,7 +1446,7 @@ export class AdminService {
     });
   }
 
-  async getOrderById(id: string, requestUser?: AdminRequestUser) {
+  async getOrderById(id: string, _requestUser?: AdminRequestUser) {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: orderInclude,
@@ -938,7 +1455,217 @@ export class AdminService {
     return order;
   }
 
-  async getVehicleByPlate(plateNumber: string, user?: AdminRequestUser) {
+  async updateOrder(
+    orderId: string,
+    dto: AdminUpdateOrderDto,
+    _requestUser?: AdminRequestUser,
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true },
+    });
+    if (!order) throw new NotFoundException(`Order "${orderId}" not found`);
+
+    const tf = this.tenantFilter(_requestUser ?? ({} as AdminRequestUser));
+
+    const updateData: Prisma.OrderUpdateInput = {};
+    if (dto.master_id !== undefined) {
+      const master = await this.prisma.user.findFirst({
+        where: { id: dto.master_id, role: Role.master, ...tf },
+      });
+      if (!master) throw new BadRequestException('Usta topilmadi');
+      updateData.master = { connect: { id: dto.master_id } };
+    }
+    if (dto.client_name !== undefined) updateData.client_name = dto.client_name;
+    if (dto.client_phone !== undefined)
+      updateData.client_phone = dto.client_phone;
+    if (dto.car_number !== undefined) updateData.car_number = dto.car_number;
+    if (dto.car_model !== undefined) updateData.car_model = dto.car_model;
+    if (dto.organization_id !== undefined) {
+      updateData.organization = dto.organization_id
+        ? { connect: { id: dto.organization_id } }
+        : { disconnect: true };
+    }
+    if (dto.vehicle_id !== undefined) {
+      updateData.vehicle = dto.vehicle_id
+        ? { connect: { id: dto.vehicle_id } }
+        : { disconnect: true };
+    }
+    if (dto.delivery_needed !== undefined)
+      updateData.delivery_needed = dto.delivery_needed;
+
+    let newTotal: number | null = null;
+
+    if (dto.order_items && Array.isArray(dto.order_items)) {
+      const existingIds = new Set(order.orderItems.map((i) => i.id));
+      const keptIds = new Set<string>();
+
+      for (const row of dto.order_items) {
+        const itemType = row.item_type as OrderItemType;
+        const quantity = Number(row.quantity);
+        const priceAtTime = Number(row.price_at_time);
+        if (row.id && existingIds.has(row.id)) {
+          await this.prisma.orderItem.update({
+            where: { id: row.id },
+            data: {
+              item_type: itemType,
+              service_id: row.service_id ?? null,
+              product_id: row.product_id ?? null,
+              item_name: row.item_name ?? null,
+              quantity,
+              price_at_time: priceAtTime,
+            },
+          });
+          keptIds.add(row.id);
+        } else {
+          const created = await this.prisma.orderItem.create({
+            data: {
+              order_id: orderId,
+              item_type: itemType,
+              service_id: row.service_id ?? null,
+              product_id: row.product_id ?? null,
+              item_name: row.item_name ?? null,
+              quantity,
+              price_at_time: priceAtTime,
+            },
+          });
+          keptIds.add(created.id);
+        }
+      }
+      for (const item of order.orderItems) {
+        if (!keptIds.has(item.id)) {
+          await this.prisma.orderItem.delete({ where: { id: item.id } });
+        }
+      }
+      const updatedItems = await this.prisma.orderItem.findMany({
+        where: { order_id: orderId },
+      });
+      newTotal = calculateOrderTotal(
+        updatedItems.map((i) => ({
+          item_type: i.item_type,
+          price_at_time: Number(i.price_at_time),
+          quantity: i.quantity,
+        })),
+        dto.delivery_needed ?? order.delivery_needed,
+      );
+      updateData.total_amount = newTotal;
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: updateData,
+      include: orderInclude,
+    });
+    await this.audit.log({
+      userId: _requestUser?.id,
+      action: 'order.update',
+      entity: 'Order',
+      entityId: orderId,
+      meta: {
+        changed_fields: Object.keys(updateData),
+        new_total_amount: newTotal ?? undefined,
+      },
+    });
+    return updated;
+  }
+
+  /** Tugallangan buyurtma uchun ish haqi (master_fee, driver_fee) qayta hisoblash */
+  async recalculateOrderFees(orderId: string, _requestUser?: AdminRequestUser) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        master: true,
+        driver: true,
+        orderItems: true,
+        transactions: true,
+      },
+    });
+    if (!order) throw new NotFoundException(`Order "${orderId}" not found`);
+    if (order.status !== OrderStatus.completed) {
+      throw new BadRequestException(
+        'Faqat tugallangan buyurtma uchun ish haqini qayta hisoblash mumkin',
+      );
+    }
+
+    const servicesSum = order.orderItems
+      .filter((i) => i.item_type === OrderItemType.service)
+      .reduce((sum, i) => sum + Number(i.price_at_time) * i.quantity, 0);
+    const deliveryFee = order.delivery_needed ? DELIVERY_FEE : 0;
+    const masterPercent = Number(order.master.percent_rate) || 0;
+    const driverPercent = order.driver
+      ? Number(order.driver.percent_rate) || 0
+      : 0;
+    const newUstaHaqi = Math.round((servicesSum * masterPercent) / 100);
+    const newKuryerHaqi =
+      order.driver_id && order.driver
+        ? Math.round((deliveryFee * driverPercent) / 100)
+        : 0;
+
+    const oldMasterFeeTx = order.transactions.find(
+      (t) => t.type === 'master_fee',
+    );
+    const oldDriverFeeTx = order.transactions.find(
+      (t) => t.type === 'driver_fee',
+    );
+    const oldMasterFee = oldMasterFeeTx ? Number(oldMasterFeeTx.amount) : 0;
+    const oldDriverFee = oldDriverFeeTx ? Number(oldDriverFeeTx.amount) : 0;
+
+    await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (oldMasterFeeTx) {
+        await tx.transaction.delete({ where: { id: oldMasterFeeTx.id } });
+      }
+      if (oldDriverFeeTx) {
+        await tx.transaction.delete({ where: { id: oldDriverFeeTx.id } });
+      }
+      const masterRow = await tx.user.findUnique({
+        where: { id: order.master_id },
+        select: { balance: true },
+      });
+      const masterBalance = Number(masterRow?.balance ?? 0);
+      const newMasterBalance = masterBalance - oldMasterFee + newUstaHaqi;
+      await tx.user.update({
+        where: { id: order.master_id },
+        data: { balance: newMasterBalance },
+      });
+      if (order.driver_id) {
+        const driverRow = await tx.user.findUnique({
+          where: { id: order.driver_id },
+          select: { balance: true },
+        });
+        const driverBalance = Number(driverRow?.balance ?? 0);
+        const newDriverBalance = driverBalance - oldDriverFee + newKuryerHaqi;
+        await tx.user.update({
+          where: { id: order.driver_id },
+          data: { balance: newDriverBalance },
+        });
+      }
+      await tx.transaction.create({
+        data: {
+          order_id: order.id,
+          user_id: order.master_id,
+          amount: newUstaHaqi,
+          type: 'master_fee',
+        },
+      });
+      if (order.driver_id && newKuryerHaqi > 0) {
+        await tx.transaction.create({
+          data: {
+            order_id: order.id,
+            user_id: order.driver_id,
+            amount: newKuryerHaqi,
+            type: 'driver_fee',
+          },
+        });
+      }
+    });
+
+    return this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: orderInclude,
+    });
+  }
+
+  async getVehicleByPlate(plateNumber: string, _user?: AdminRequestUser) {
     const normalized = plateNumber.trim().replace(/\s+/g, ' ').toUpperCase();
     if (!normalized) {
       throw new NotFoundException('Davlat raqami kiriting');
@@ -947,7 +1674,7 @@ export class AdminService {
       where: {
         is_active: true,
         plate_number: { equals: normalized, mode: 'insensitive' },
-        ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+        ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
       },
       include: { organization: { select: { name: true } } },
     });
@@ -957,7 +1684,12 @@ export class AdminService {
     return vehicle;
   }
 
-  async getVehicleHistory(vehicleId: string, page = 1, limit = 20, user?: AdminRequestUser) {
+  async getVehicleHistory(
+    vehicleId: string,
+    page = 1,
+    limit = 20,
+    _user?: AdminRequestUser,
+  ) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
       include: { organization: { select: { name: true } } },
@@ -965,7 +1697,10 @@ export class AdminService {
     if (!vehicle) {
       throw new NotFoundException('Mashina topilmadi');
     }
-    const where = { vehicle_id: vehicleId, ...this.tenantFilter(user ?? ({} as AdminRequestUser)) };
+    const where = {
+      vehicle_id: vehicleId,
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+    };
     const [orders, total, aggregate, lastOrder] = await Promise.all([
       this.prisma.order.findMany({
         where,
@@ -1039,7 +1774,11 @@ export class AdminService {
     };
   }
 
-  async getAllVehicles(orgId?: string, search?: string, user?: AdminRequestUser) {
+  async getAllVehicles(
+    orgId?: string,
+    search?: string,
+    _user?: AdminRequestUser,
+  ) {
     const where: {
       org_id?: string;
       is_active: boolean;
@@ -1047,7 +1786,7 @@ export class AdminService {
       tenant_id?: string | null;
     } = {
       is_active: true,
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
     if (orgId) where.org_id = orgId;
     if (search?.trim()) {
@@ -1064,18 +1803,21 @@ export class AdminService {
     });
   }
 
-  async getIndividualClients(filters: {
-    from?: string;
-    to?: string;
-    status?: string;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }, user?: AdminRequestUser) {
+  async getIndividualClients(
+    filters: {
+      from?: string;
+      to?: string;
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+    _user?: AdminRequestUser,
+  ) {
     const { from, to, status, search, page = 1, limit = 20 } = filters;
     const where: Prisma.OrderWhereInput = {
       organization_id: null,
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
 
     if (from || to) {
@@ -1173,7 +1915,7 @@ export class AdminService {
   async getClientOrders(
     clientPhone: string,
     filters?: { from?: string; to?: string; status?: string },
-    user?: AdminRequestUser,
+    _user?: AdminRequestUser,
   ) {
     if (process.env.NODE_ENV !== 'test') {
       console.log('[getClientOrders] clientPhone (normalized):', clientPhone);
@@ -1184,14 +1926,15 @@ export class AdminService {
       client_phone: {
         contains: phoneDigits.length >= 7 ? phoneDigits : clientPhone,
       },
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
 
     if (filters?.from || filters?.to) {
       (where as { created_at?: { gte?: Date; lte?: Date } }).created_at = {};
       if (filters.from) {
         const d = new Date(filters.from);
-        if (!Number.isNaN(d.getTime())) (where as { created_at: { gte?: Date } }).created_at.gte = d;
+        if (!Number.isNaN(d.getTime()))
+          (where as { created_at: { gte?: Date } }).created_at.gte = d;
       }
       if (filters.to) {
         const d = new Date(filters.to);
@@ -1201,7 +1944,9 @@ export class AdminService {
         }
       }
     }
-    if (filters?.status) (where as { status?: OrderStatus }).status = filters.status as OrderStatus;
+    if (filters?.status)
+      (where as { status?: OrderStatus }).status =
+        filters.status as OrderStatus;
 
     const orders = await this.prisma.order.findMany({
       where,
@@ -1243,12 +1988,15 @@ export class AdminService {
     };
   }
 
-  async getClientsHistory(query: {
-    phone?: string;
-    car_number?: string;
-    page?: number;
-    limit?: number;
-  }, user?: AdminRequestUser) {
+  async getClientsHistory(
+    query: {
+      phone?: string;
+      car_number?: string;
+      page?: number;
+      limit?: number;
+    },
+    _user?: AdminRequestUser,
+  ) {
     const { phone, car_number, page = 1, limit = 20 } = query;
     if (!phone?.trim() && !car_number?.trim()) {
       throw new BadRequestException(
@@ -1256,16 +2004,20 @@ export class AdminService {
       );
     }
     const where: Prisma.OrderWhereInput = {
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
     if (phone?.trim()) {
       const normalizedPhone = phone.replace(/[\s\-+()]/g, '');
       if (normalizedPhone) {
-        (where as { client_phone?: { contains: string } }).client_phone = { contains: normalizedPhone };
+        (where as { client_phone?: { contains: string } }).client_phone = {
+          contains: normalizedPhone,
+        };
       }
     }
     if (car_number?.trim()) {
-      (where as { car_number?: { contains: string; mode: 'insensitive' } }).car_number = {
+      (
+        where as { car_number?: { contains: string; mode: 'insensitive' } }
+      ).car_number = {
         contains: car_number.trim(),
         mode: 'insensitive',
       };
@@ -1318,12 +2070,15 @@ export class AdminService {
   }
 
   // ─── Reports ───────────────────────────────────────────────────────────────
-  async getReports(filters: {
-    from: string;
-    to: string;
-    master_id?: string;
-    org_id?: string;
-  }, user?: AdminRequestUser) {
+  async getReports(
+    filters: {
+      from: string;
+      to: string;
+      master_id?: string;
+      org_id?: string;
+    },
+    _user?: AdminRequestUser,
+  ) {
     if (!filters.from?.trim() || !filters.to?.trim()) {
       throw new BadRequestException('from and to (ISO date) are required');
     }
@@ -1340,10 +2095,12 @@ export class AdminService {
     const where: Prisma.OrderWhereInput = {
       status: OrderStatus.completed,
       completed_at: { gte: dateFrom, lte: dateTo },
-      ...this.tenantFilter(user ?? ({} as AdminRequestUser)),
+      ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
     };
-    if (filters.master_id) (where as { master_id?: string }).master_id = filters.master_id;
-    if (filters.org_id) (where as { organization_id?: string }).organization_id = filters.org_id;
+    if (filters.master_id)
+      (where as { master_id?: string }).master_id = filters.master_id;
+    if (filters.org_id)
+      (where as { organization_id?: string }).organization_id = filters.org_id;
 
     const completedOrders = await this.prisma.order.findMany({
       where,
@@ -1494,6 +2251,74 @@ export class AdminService {
       driver_breakdown: [...driverMap.values()],
       organization_debts,
       top_services,
+    };
+  }
+
+  /** Buyurtmalar hisoboti — Excel uchun (sana oralig‘ida: usta, mashina, egasi, summa, xizmatlar) */
+  async getOrdersReport(from: string, to: string, _user?: AdminRequestUser) {
+    const dateFrom = new Date(from);
+    const dateTo = new Date(to);
+    if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
+      throw new BadRequestException('from va to sanalari noto‘g‘ri');
+    }
+    dateTo.setHours(23, 59, 59, 999);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        created_at: { gte: dateFrom, lte: dateTo },
+        ...this.tenantFilter(_user ?? ({} as AdminRequestUser)),
+      },
+      include: {
+        master: { select: { fullname: true } },
+        vehicle: { select: { plate_number: true, model: true } },
+        organization: { select: { name: true } },
+        orderItems: {
+          include: {
+            service: { select: { name: true } },
+            product: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+
+    return {
+      period: { from: from.slice(0, 10), to: to.slice(0, 10) },
+      orders: orders.map((o) => {
+        const ownerName = o.organization?.name ?? o.client_name ?? '—';
+        const items = o.orderItems.map((i) => {
+          const name =
+            (i as { service?: { name: string }; product?: { name: string } })
+              .service?.name ??
+            (i as { product?: { name: string } }).product?.name ??
+            i.item_name ??
+            '—';
+          const type =
+            i.item_type === 'service'
+              ? 'Xizmat'
+              : i.item_type === 'product'
+                ? 'Zapchast'
+                : 'Qo‘lda';
+          return {
+            name,
+            type,
+            quantity: i.quantity,
+            price: Number(i.price_at_time),
+          };
+        });
+        return {
+          created_at: o.created_at.toISOString(),
+          completed_at: o.completed_at?.toISOString() ?? null,
+          master_fullname: o.master.fullname,
+          vehicle_plate: o.vehicle?.plate_number ?? o.car_number ?? '—',
+          vehicle_model: o.vehicle?.model ?? o.car_model ?? '—',
+          owner_name: ownerName,
+          client_phone: o.client_phone,
+          total_amount: Number(o.total_amount),
+          status: o.status,
+          items,
+        };
+      }),
     };
   }
 }

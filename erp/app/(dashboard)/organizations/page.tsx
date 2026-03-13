@@ -82,7 +82,7 @@ export default function OrganizationsPage() {
     const p: number[] = [];
     const show = 3;
     let start = Math.max(1, page - 1);
-    let end = Math.min(totalPages, start + show - 1);
+    const end = Math.min(totalPages, start + show - 1);
     if (end - start + 1 < show) start = Math.max(1, end - show + 1);
     for (let i = start; i <= end; i++) p.push(i);
     return p;

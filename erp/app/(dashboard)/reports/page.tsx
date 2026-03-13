@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
-import { startOfMonth, endOfDay, format } from 'date-fns';
+import { startOfMonth, endOfDay, format, startOfDay, startOfWeek, endOfWeek, startOfYear, endOfYear } from 'date-fns';
 import {
   BarChart,
   Bar,
@@ -19,13 +19,14 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import * as XLSX from 'xlsx';
+import { createWorkbook, addSheet, downloadWorkbook } from '@/lib/excel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatSom } from '@/lib/dashboard';
+import { toast } from 'sonner';
 
 const CHART_COLORS = [
   '#3b82f6',
@@ -62,6 +63,22 @@ type ReportsRes = {
 const defaultFrom = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 const defaultTo = format(endOfDay(new Date()), 'yyyy-MM-dd');
 
+type OrdersReportRes = {
+  period: { from: string; to: string };
+  orders: {
+    created_at: string;
+    completed_at: string | null;
+    master_fullname: string;
+    vehicle_plate: string;
+    vehicle_model: string;
+    owner_name: string;
+    client_phone: string;
+    total_amount: number;
+    status: string;
+    items: { name: string; type: string; quantity: number; price: number }[];
+  }[];
+};
+
 export default function ReportsPage() {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
@@ -83,60 +100,108 @@ export default function ReportsPage() {
     setQueryTo(to);
   };
 
+  const setPeriod = (preset: 'bugun' | 'hafta' | 'oy' | 'yil') => {
+    const now = new Date();
+    let fromDate: Date;
+    let toDate: Date;
+    if (preset === 'bugun') {
+      fromDate = startOfDay(now);
+      toDate = endOfDay(now);
+    } else if (preset === 'hafta') {
+      fromDate = startOfWeek(now, { weekStartsOn: 1 });
+      toDate = endOfWeek(now, { weekStartsOn: 1 });
+    } else if (preset === 'oy') {
+      fromDate = startOfMonth(now);
+      toDate = endOfDay(now);
+    } else {
+      fromDate = startOfYear(now);
+      toDate = endOfYear(now);
+    }
+    setFrom(format(fromDate, 'yyyy-MM-dd'));
+    setTo(format(toDate, 'yyyy-MM-dd'));
+    setQueryFrom(format(fromDate, 'yyyy-MM-dd'));
+    setQueryTo(format(toDate, 'yyyy-MM-dd'));
+  };
+
+  const handleExportOrdersExcel = async () => {
+    try {
+      const ordersData = await apiGet<OrdersReportRes>(
+        `/admin/reports/orders?from=${encodeURIComponent(queryFrom)}&to=${encodeURIComponent(queryTo)}`
+      );
+      const wb = createWorkbook();
+      const headers = [
+        'Sana',
+        'Usta',
+        'Mashina raqami',
+        'Mashina modeli',
+        'Egasi (mijoz/tashkilot)',
+        'Telefon',
+        'Xizmatlar va mahsulotlar',
+        'Jami (so\'m)',
+        'Holat',
+      ];
+      const rows = (ordersData?.orders ?? []).map((o) => {
+        const itemsText =
+          o.items
+            .map((i) => `${i.name} (${i.type}) ${i.quantity} × ${i.price.toLocaleString('uz-UZ')}`)
+            .join('; ') || '—';
+        return [
+          format(new Date(o.created_at), 'dd.MM.yyyy HH:mm'),
+          o.master_fullname,
+          o.vehicle_plate,
+          o.vehicle_model,
+          o.owner_name,
+          o.client_phone,
+          itemsText,
+          o.total_amount,
+          o.status === 'completed' ? 'Tugallangan' : o.status === 'cancelled' ? 'Bekor' : 'Jarayonda',
+        ];
+      });
+      addSheet(wb, 'Buyurtmalar', {
+        title: `Buyurtmalar hisoboti: ${queryFrom} — ${queryTo}`,
+        headers,
+        rows,
+        colWidths: [18, 18, 14, 16, 22, 14, 45, 14, 12],
+      });
+      downloadWorkbook(wb, `Buyurtmalar_${queryFrom}_${queryTo}.xlsx`);
+      toast.success('Excel fayl yuklandi');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Xatolik');
+    }
+  };
+
   const handleExportExcel = () => {
     if (!data) return;
-    const wb = XLSX.utils.book_new();
+    const wb = createWorkbook();
 
-    const masterData = [
-      ['Usta', 'Buyurtmalar', 'Tushum (so\'m)', 'Haq (so\'m)'],
-      ...data.master_breakdown.map((m) => [
+    addSheet(wb, 'Ustalar', {
+      headers: ['Usta', 'Buyurtmalar', 'Tushum (so\'m)', 'Haq (so\'m)'],
+      rows: data.master_breakdown.map((m) => [
         m.fullname,
         m.orders_count,
         m.total_revenue,
         m.master_fee,
       ]),
-    ];
-    const orgData = [
-      ['Tashkilot', 'Qarz (so\'m)'],
-      ...data.organization_debts.map((o) => [o.name, o.balance_due]),
-    ];
-    const serviceData = [
-      ['Xizmat', 'Soni', 'Tushum (so\'m)'],
-      ...data.top_services.map((s) => [s.name, s.count, s.revenue]),
-    ];
+    });
+    addSheet(wb, 'Qarzdorlar', {
+      headers: ['Tashkilot', 'Qarz (so\'m)'],
+      rows: data.organization_debts.map((o) => [o.name, o.balance_due]),
+    });
+    addSheet(wb, 'Xizmatlar', {
+      headers: ['Xizmat', 'Soni', 'Tushum (so\'m)'],
+      rows: data.top_services.map((s) => [s.name, s.count, s.revenue]),
+    });
+    addSheet(wb, 'Umumiy', {
+      title: `Hisobot: ${queryFrom} — ${queryTo}`,
+      headers: ['Ko‘rsatkich', 'Qiymat'],
+      rows: [
+        ['Jami buyurtmalar', data.summary.total_orders],
+        ['Jami tushum (so\'m)', data.summary.total_revenue],
+        ['Boss foyda (so\'m)', data.summary.boss_profit],
+      ],
+    });
 
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(masterData),
-      'Ustalar'
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(orgData),
-      'Qarzdorlar'
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(serviceData),
-      'Xizmatlar'
-    );
-
-    const summaryData = [
-      ['Hisobot', queryFrom, '—', queryTo],
-      ['Jami buyurtmalar', data.summary.total_orders],
-      ['Jami tushum (so\'m)', data.summary.total_revenue],
-      ['Boss foyda (so\'m)', data.summary.boss_profit],
-    ];
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(summaryData),
-      'Umumiy'
-    );
-
-    XLSX.writeFile(
-      wb,
-      `hisobot_${queryFrom}_${queryTo}.xlsx`
-    );
+    downloadWorkbook(wb, `hisobot_${queryFrom}_${queryTo}.xlsx`);
   };
 
   const dailyData =
@@ -168,31 +233,47 @@ export default function ReportsPage() {
 
       {/* Sana + Hisobot olish + Export */}
       <Card>
-        <CardContent className="flex flex-wrap items-end gap-4 pt-6">
-          <div>
-            <Label>Dan</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-40"
-            />
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <Label>Dan</Label>
+              <Input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div>
+              <Label>Gacha</Label>
+              <Input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPeriod('bugun')}>Bugun</Button>
+              <Button variant="outline" size="sm" onClick={() => setPeriod('hafta')}>Hafta</Button>
+              <Button variant="outline" size="sm" onClick={() => setPeriod('oy')}>Oy</Button>
+              <Button variant="outline" size="sm" onClick={() => setPeriod('yil')}>Yil</Button>
+            </div>
+            <Button onClick={handleFetch}>Hisobot olish</Button>
+            {data && (
+              <Button variant="outline" onClick={handleExportExcel}>
+                Excel ga eksport
+              </Button>
+            )}
           </div>
-          <div>
-            <Label>Gacha</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-40"
-            />
-          </div>
-          <Button onClick={handleFetch}>Hisobot olish</Button>
-          {data && (
-            <Button variant="outline" onClick={handleExportExcel}>
-              Excel ga eksport
+          <div className="border-t border-[var(--border)] pt-4">
+            <p className="text-sm text-[var(--text-3)] mb-2">
+              Buyurtmalar hisoboti — usta, mashina, egasi (mijoz/tashkilot), summa, xizmatlar bo‘yicha
+            </p>
+            <Button variant="outline" onClick={handleExportOrdersExcel}>
+              Buyurtmalar hisoboti (Excel)
             </Button>
-          )}
+          </div>
         </CardContent>
       </Card>
 

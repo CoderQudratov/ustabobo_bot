@@ -19,7 +19,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import {
+  format,
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+} from 'date-fns';
+import { createWorkbook, addSheet, downloadWorkbook } from '@/lib/excel';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +83,42 @@ export interface OrganizationDetail {
 
 const currentYear = new Date().getFullYear();
 
+/** Tashkilot hisoboti (Excel): /admin/organizations/:id/report */
+export interface OrganizationReportRes {
+  organization: { id: string; name: string };
+  from: string;
+  to: string;
+  orders: {
+    id: string;
+    created_at: string;
+    client_name: string;
+    client_phone: string;
+    car_number: string;
+    car_model: string;
+    master_fullname: string;
+    total_amount: number;
+    items: { name: string; type: string; quantity: number; price: number }[];
+  }[];
+}
+
+/** Vehicles by org API */
+interface VehiclesByOrgRes {
+  items: OrganizationVehicle[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+function dateRangeShortcuts() {
+  const today = new Date();
+  return {
+    bugun: [format(startOfDay(today), 'yyyy-MM-dd'), format(endOfDay(today), 'yyyy-MM-dd')] as const,
+    hafta: [format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'), format(endOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd')] as const,
+    oy: [format(startOfMonth(today), 'yyyy-MM-dd'), format(endOfMonth(today), 'yyyy-MM-dd')] as const,
+    yil: [format(startOfYear(today), 'yyyy-MM-dd'), format(endOfYear(today), 'yyyy-MM-dd')] as const,
+  };
+}
+
 const paymentSchema = z.object({
   amount: z.number().min(0.01, 'Summa 0 dan katta bo‘lishi kerak'),
 });
@@ -84,6 +132,9 @@ const editOrgSchema = z.object({
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 
+const defaultFrom = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+const defaultTo = format(endOfDay(new Date()), 'yyyy-MM-dd');
+
 export default function OrganizationDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -93,6 +144,10 @@ export default function OrganizationDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo] = useState(defaultTo);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [vehicleSearch, setVehicleSearch] = useState('');
 
   const {
     data: org,
@@ -105,18 +160,43 @@ export default function OrganizationDetailPage() {
     enabled: !!id,
   });
 
+  const ordersParams = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set('organization_id', id);
+    p.set('limit', '50');
+    p.set('page', '1');
+    p.set('from', new Date(from + 'T00:00:00').toISOString());
+    p.set('to', new Date(to + 'T23:59:59').toISOString());
+    if (orderSearch.trim()) p.set('search', orderSearch.trim());
+    return p.toString();
+  }, [id, from, to, orderSearch]);
+
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
-    queryKey: ['orders', 'organization', id],
+    queryKey: ['orders', 'organization', id, from, to, orderSearch],
     queryFn: () =>
-      apiGet<OrdersListRes>(
-        `/admin/orders?organization_id=${id}&limit=10&page=1`
-      ),
+      apiGet<OrdersListRes>(`/admin/orders?${ordersParams}`),
     enabled: !!id && !!org,
+  });
+
+  const vehiclesParams = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set('limit', '100');
+    p.set('page', '1');
+    if (vehicleSearch.trim()) p.set('search', vehicleSearch.trim());
+    return p.toString();
+  }, [vehicleSearch]);
+
+  const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery({
+    queryKey: ['organization-vehicles', id, vehicleSearch],
+    queryFn: () =>
+      apiGet<VehiclesByOrgRes>(`/admin/organizations/${id}/vehicles?${vehiclesParams}`),
+    enabled: !!id,
   });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['organization', id] });
-    queryClient.invalidateQueries({ queryKey: ['orders', 'organization', id] });
+    queryClient.invalidateQueries({ queryKey: ['orders', 'organization', id, from, to, orderSearch] });
+    queryClient.invalidateQueries({ queryKey: ['organization-vehicles', id, vehicleSearch] });
   };
 
   if (!id) return null;
@@ -150,6 +230,44 @@ export default function OrganizationDetailPage() {
     orders
       .filter((o) => o.status === 'completed')
       .reduce((s, o) => s + Number(o.total_amount), 0) ?? 0;
+  const vehicles = vehiclesData?.items ?? [];
+  const shortcuts = dateRangeShortcuts();
+
+  const handleExportExcel = async () => {
+    try {
+      const report = await apiGet<OrganizationReportRes>(
+        `/admin/organizations/${id}/report?from=${encodeURIComponent(new Date(from + 'T00:00:00').toISOString())}&to=${encodeURIComponent(new Date(to + 'T23:59:59').toISOString())}`
+      );
+      const wb = createWorkbook();
+      const headers = ['Sana', 'Mijoz', 'Telefon', 'Mashina', 'Usta', 'Xizmatlar / mahsulotlar', 'Jami (so\'m)'];
+      const rows = report.orders.map((o) => {
+        const itemsText = o.items
+          .map((i) => `${i.name} (${i.type}) ${i.quantity} x ${i.price}`)
+          .join('; ') || '—';
+        return [
+          format(new Date(o.created_at), 'dd.MM.yyyy HH:mm'),
+          o.client_name,
+          o.client_phone,
+          o.car_number || o.car_model || '—',
+          o.master_fullname,
+          itemsText,
+          o.total_amount,
+        ];
+      });
+      addSheet(wb, 'Buyurtmalar', {
+        title: `${report.organization.name || 'Tashkilot'} — ${from} … ${to}`,
+        headers,
+        rows,
+        colWidths: [18, 20, 14, 14, 18, 40, 14],
+      });
+      const safeName = (report.organization.name || 'Tashkilot').replace(/[/\\?*\[\]:]/g, '_').slice(0, 50);
+      const ts = format(new Date(), 'yyyy-MM-dd_HH-mm');
+      downloadWorkbook(wb, `Tashkilot_${safeName}_${from}_${to}_${ts}.xlsx`);
+      toast.success('Excel fayl yuklandi');
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -207,11 +325,11 @@ export default function OrganizationDetailPage() {
             <span>{org.contact_person}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Umumiy buyurtmalar soni: </span>
+            <span className="text-muted-foreground">Hisobotdagi buyurtmalar (tanlangan davr): </span>
             <span className="font-medium">{totalOrders}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Jami to‘langan (oxirgi 10 da): </span>
+            <span className="text-muted-foreground">Jami to‘langan (tanlangan davr): </span>
             <span>{formatSom(totalPaid)}</span>
           </div>
           <div>
@@ -233,11 +351,23 @@ export default function OrganizationDetailPage() {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>Mashinalar</CardTitle>
-          <Button onClick={() => setAddVehicleOpen(true)}>Mashina qo‘shish</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              placeholder="Raqam yoki model bo‘yicha qidirish..."
+              value={vehicleSearch}
+              onChange={(e) => setVehicleSearch(e.target.value)}
+              className="max-w-[220px]"
+            />
+            <Button onClick={() => setAddVehicleOpen(true)}>Mashina qo‘shish</Button>
+          </div>
         </CardHeader>
         <CardContent>
-          {org.vehicles.length === 0 ? (
-            <p className="text-muted-foreground">Mashinalar yo‘q</p>
+          {vehiclesLoading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : vehicles.length === 0 ? (
+            <p className="text-muted-foreground">
+              {vehicleSearch.trim() ? 'Qidiruv bo‘yicha mashina topilmadi' : 'Mashinalar yo‘q'}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -251,7 +381,7 @@ export default function OrganizationDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {org.vehicles.map((v) => (
+                  {vehicles.map((v) => (
                     <tr key={v.id} className="border-b border-[var(--border)]">
                       <td className="p-3 font-medium">{v.plate_number}</td>
                       <td className="p-3">{v.model}</td>
@@ -297,15 +427,50 @@ export default function OrganizationDetailPage() {
         />
       )}
 
-      {/* 4. BUYURTMALAR TARIXI */}
+      {/* 4. BUYURTMALAR (HISOBOT) */}
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-          <CardTitle>Buyurtmalar tarixi (oxirgi 10)</CardTitle>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/orders?organization_id=${encodeURIComponent(id)}`}>
-              Barchasini ko‘rish
-            </Link>
-          </Button>
+        <CardHeader>
+          <CardTitle>Hisobot — buyurtmalar</CardTitle>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div>
+              <Label className="text-muted-foreground text-xs">Dan</Label>
+              <Input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div>
+              <Label className="text-muted-foreground text-xs">Gacha</Label>
+              <Input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <Button type="button" variant="outline" size="sm" onClick={() => { setFrom(shortcuts.bugun[0]); setTo(shortcuts.bugun[1]); }}>Bugun</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setFrom(shortcuts.hafta[0]); setTo(shortcuts.hafta[1]); }}>Hafta</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setFrom(shortcuts.oy[0]); setTo(shortcuts.oy[1]); }}>Oy</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setFrom(shortcuts.yil[0]); setTo(shortcuts.yil[1]); }}>Yil</Button>
+            </div>
+            <Input
+              placeholder="Mijoz, telefon, mashina raqami..."
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              className="max-w-[240px]"
+            />
+            <Button variant="outline" size="sm" onClick={handleExportExcel}>
+              Excel yuklab olish
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/orders?organization_id=${encodeURIComponent(id)}`}>
+                Barcha buyurtmalar
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {ordersLoading ? (

@@ -22,8 +22,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ChevronDown, Search } from 'lucide-react';
+import { Plus, ChevronDown, Search, FileDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createWorkbook, addSheet, downloadWorkbook } from '@/lib/excel';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'Barchasi' },
@@ -125,7 +127,7 @@ function Content() {
     const p: number[] = [];
     const show = 3;
     let start = Math.max(1, page - 1);
-    let end = Math.min(totalPages, start + show - 1);
+    const end = Math.min(totalPages, start + show - 1);
     if (end - start + 1 < show) start = Math.max(1, end - show + 1);
     for (let i = start; i <= end; i++) p.push(i);
     return p;
@@ -133,6 +135,69 @@ function Content() {
 
   const invalidateOrders = () => {
     queryClient.invalidateQueries({ queryKey: ['orders'] });
+  };
+
+  const handleExportOrdersExcel = async () => {
+    try {
+      const now = new Date();
+      const fromDate = from ? new Date(from) : startOfMonth(now);
+      const toDate = to ? new Date(to) : endOfMonth(now);
+      const fromStr = format(fromDate, 'yyyy-MM-dd');
+      const toStr = format(toDate, 'yyyy-MM-dd');
+      const ordersData = await apiGet<{
+        orders: {
+          created_at: string;
+          master_fullname: string;
+          vehicle_plate: string;
+          vehicle_model: string;
+          owner_name: string;
+          client_phone: string;
+          total_amount: number;
+          status: string;
+          items: { name: string; type: string; quantity: number; price: number }[];
+        }[];
+      }>(`/admin/reports/orders?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`);
+      const orders = ordersData?.orders ?? [];
+      const wb = createWorkbook();
+      const headers = [
+        'Sana',
+        'Usta',
+        'Mashina raqami',
+        'Mashina modeli',
+        'Egasi (mijoz/tashkilot)',
+        'Telefon',
+        'Xizmatlar va mahsulotlar',
+        'Jami (so\'m)',
+        'Holat',
+      ];
+      const rows = orders.map((o) => {
+        const itemsText =
+          o.items
+            .map((i) => `${i.name} (${i.type}) ${i.quantity} × ${i.price.toLocaleString('uz-UZ')}`)
+            .join('; ') || '—';
+        return [
+          format(new Date(o.created_at), 'dd.MM.yyyy HH:mm'),
+          o.master_fullname,
+          o.vehicle_plate,
+          o.vehicle_model,
+          o.owner_name,
+          o.client_phone,
+          itemsText,
+          o.total_amount,
+          o.status === 'completed' ? 'Tugallangan' : o.status === 'cancelled' ? 'Bekor' : 'Jarayonda',
+        ];
+      });
+      addSheet(wb, 'Buyurtmalar', {
+        title: `Buyurtmalar: ${fromStr} — ${toStr}`,
+        headers,
+        rows,
+        colWidths: [18, 18, 14, 16, 22, 14, 45, 14, 12],
+      });
+      downloadWorkbook(wb, `Buyurtmalar_${fromStr}_${toStr}.xlsx`);
+      toast.success('Excel fayl yuklandi');
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
   };
 
   return (
@@ -148,13 +213,19 @@ function Content() {
               Jami {total} ta buyurtma
             </p>
           </div>
-          <Button
-            onClick={() => setNewOrderOpen(true)}
-            className="shrink-0"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Yangi buyurtma
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportOrdersExcel}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Excel yuklab olish
+            </Button>
+            <Button
+              onClick={() => setNewOrderOpen(true)}
+              className="shrink-0"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Yangi buyurtma
+            </Button>
+          </div>
         </div>
       </div>
 

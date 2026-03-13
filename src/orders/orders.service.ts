@@ -237,6 +237,72 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Add a manual service/product (qo'lda xizmat) to a draft order. Only the order's master can add.
+   * Used by the bot when master clicks "Qo'lda xizmat" and enters name + price.
+   */
+  async addManualProductToOrder(
+    orderId: string,
+    masterId: string,
+    payload: { name: string; price: number; quantity?: number },
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with id "${orderId}" not found`);
+    }
+    if (order.status !== OrderStatus.draft) {
+      throw new BadRequestException(
+        "Faqat qoralama (draft) buyurtmaga qo'lda xizmat qo'shish mumkin",
+      );
+    }
+    if (order.master_id !== masterId) {
+      throw new ForbiddenException(
+        "Faqat o'z buyurtmangizga qo'lda xizmat qo'sha olasiz",
+      );
+    }
+    const name = (payload.name ?? '').trim();
+    if (!name) {
+      throw new BadRequestException("Xizmat nomi bo'sh bo'lmasligi kerak");
+    }
+    const price = Number(payload.price);
+    if (!Number.isFinite(price) || price < 0) {
+      throw new BadRequestException("Narx noto'g'ri");
+    }
+    const quantity = Math.max(1, Math.floor(Number(payload.quantity) || 1));
+
+    await this.prisma.orderItem.create({
+      data: {
+        order_id: orderId,
+        item_type: OrderItemType.manual_product,
+        item_name: name.slice(0, 255),
+        quantity,
+        price_at_time: price,
+      },
+    });
+
+    const updatedItems = await this.prisma.orderItem.findMany({
+      where: { order_id: orderId },
+    });
+    const newTotal = calculateOrderTotal(
+      updatedItems.map((i) => ({
+        item_type: i.item_type,
+        price_at_time: Number(i.price_at_time),
+        quantity: i.quantity,
+      })),
+      order.delivery_needed,
+    );
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { total_amount: newTotal },
+      include: { orderItems: true },
+    });
+    return updated;
+  }
+
   /** Resolve master id from Telegram ID (Prisma tg_id is string; handle number/BigInt from client). */
   async findMasterByTelegramId(
     telegramId: string | number,
@@ -274,7 +340,8 @@ export class OrdersService {
     opts?: { status?: string; page?: number; limit?: number },
   ) {
     const user = await this.findUserByTelegramId(telegramId);
-    if (!user) return { items: [], total: 0, page: 1, limit: opts?.limit ?? 100 };
+    if (!user)
+      return { items: [], total: 0, page: 1, limit: opts?.limit ?? 100 };
     const page = opts?.page ?? 1;
     const limit = opts?.limit ?? 100;
     const baseWhere =

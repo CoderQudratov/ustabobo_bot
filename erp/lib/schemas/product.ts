@@ -9,6 +9,7 @@ export const CreateProductSchema = z.object({
     .string()
     .min(1, 'Mahsulot nomi kiritilishi shart')
     .max(255, 'Nomi 255 ta belgidan oshmasligi kerak'),
+  supplier_id: z.string().uuid().optional().nullable(),
   cost_price: z
     .number({
       error: (issue) =>

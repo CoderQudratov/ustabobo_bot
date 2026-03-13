@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const MSG_NO_ACCESS =
   "🚫 Siz tizimga kirishga ruxsat olmagan foydalanuvchisiz.\n📞 Admin bilan bog'laning.";
-const MSG_BLOCKED = "🚫 Akkauntingiz bloklangan.";
+const MSG_BLOCKED = '🚫 Akkauntingiz bloklangan.';
 
 @Injectable()
 export class BotAuthMiddleware implements OnModuleInit {
@@ -17,6 +17,7 @@ export class BotAuthMiddleware implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    await Promise.resolve();
     this.bot.use(async (ctx: Context, next) => {
       const fromId = ctx.from?.id;
       const msgText =
@@ -31,7 +32,7 @@ export class BotAuthMiddleware implements OnModuleInit {
 
       const text =
         ctx.message && 'text' in ctx.message
-          ? (ctx.message as { text: string }).text?.trim() ?? ''
+          ? ((ctx.message as { text: string }).text?.trim() ?? '')
           : '';
       if (text && /^\/?(start|help|logout)$/i.test(text)) return next();
 

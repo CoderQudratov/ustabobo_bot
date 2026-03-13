@@ -7,9 +7,10 @@ import {
 } from '@nestjs/common';
 import { Action, Ctx, Command, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
-import { Markup, Scenes } from 'telegraf';
+import { Scenes } from 'telegraf';
 import {
   getBossKeyboard,
+  getConfirmOrderInline,
   getDriverDeliveredInline,
   getDriverKeyboard,
   getDriverOrderInlineButton,
@@ -17,8 +18,11 @@ import {
   getMasterFaolRefreshInline,
   getMasterKeyboard,
   getMasterTarixPaginationInline,
+  getDriverTarixPaginationInline,
   DRIVER_DELIVERED_CB_REGEX,
   MASTER_TARIX_CB_REGEX,
+  DRIVER_TARIX_CB_REGEX,
+  ADD_MANUAL_SERVICE_CB_REGEX,
 } from './keyboards';
 import {
   logBotError,
@@ -34,6 +38,18 @@ import { calculateOrderTotal } from '../orders/price-calculator';
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+/** Pending "qo'lda xizmat" flow: tgId -> { orderId, chatId, messageId, step, name? } */
+const pendingManualServiceByTgId = new Map<
+  number,
+  {
+    orderId: string;
+    chatId: number;
+    messageId: number;
+    step: 'name' | 'price';
+    name?: string;
+  }
+>();
+
 const FAOL_STATUS_LABELS: Record<string, string> = {
   waiting_confirmation: '⏳ Tasdiq kutmoqda',
   confirmed: '✅ Tasdiqlandi',
@@ -43,7 +59,7 @@ const FAOL_STATUS_LABELS: Record<string, string> = {
   delivered_by_driver: '🚗 Yetkazildi',
   draft: '📝 Qoralama',
   waiting_master_work_start: '⏳ Usta ishni boshlashi',
-  broadcasted: '📢 E\'lon qilindi',
+  broadcasted: "📢 E'lon qilindi",
   accepted: '✅ Qabul qilindi',
   received_by_driver: '📦 Kuryer oldi',
   waiting_master_delivery_confirmation: '⏳ Yetkazilishi tasdiqlanadi',
@@ -128,38 +144,39 @@ export class BotUpdate {
     from.setHours(0, 0, 0, 0);
     const to = new Date(now.getTime());
 
-    const [orders, completed, cancelled, revenue, topMasters] = await Promise.all([
-      this.prisma.order.count({
-        where: { created_at: { gte: from, lte: to } },
-      }),
-      this.prisma.order.count({
-        where: {
-          created_at: { gte: from, lte: to },
-          status: OrderStatus.completed,
-        },
-      }),
-      this.prisma.order.count({
-        where: {
-          created_at: { gte: from, lte: to },
-          status: OrderStatus.cancelled,
-        },
-      }),
-      this.prisma.order.aggregate({
-        where: {
-          created_at: { gte: from, lte: to },
-          status: OrderStatus.completed,
-        },
-        _sum: { total_amount: true },
-      }),
-      this.prisma.order.groupBy({
-        by: ['master_id'],
-        where: {
-          created_at: { gte: from, lte: to },
-          status: OrderStatus.completed,
-        },
-        _count: { id: true },
-      }),
-    ]);
+    const [orders, completed, cancelled, revenue, topMasters] =
+      await Promise.all([
+        this.prisma.order.count({
+          where: { created_at: { gte: from, lte: to } },
+        }),
+        this.prisma.order.count({
+          where: {
+            created_at: { gte: from, lte: to },
+            status: OrderStatus.completed,
+          },
+        }),
+        this.prisma.order.count({
+          where: {
+            created_at: { gte: from, lte: to },
+            status: OrderStatus.cancelled,
+          },
+        }),
+        this.prisma.order.aggregate({
+          where: {
+            created_at: { gte: from, lte: to },
+            status: OrderStatus.completed,
+          },
+          _sum: { total_amount: true },
+        }),
+        this.prisma.order.groupBy({
+          by: ['master_id'],
+          where: {
+            created_at: { gte: from, lte: to },
+            status: OrderStatus.completed,
+          },
+          _count: { id: true },
+        }),
+      ]);
 
     const totalAmount = revenue._sum?.total_amount ?? null;
     const fromStr = this.formatDate(from).slice(0, 5);
@@ -233,7 +250,7 @@ export class BotUpdate {
     const text =
       '👥 Xodimlar (oxirgi 7 kun)\n' +
       '─────────────────\n' +
-      (lines.length ? lines.join('\n') : 'Hozircha ma\'lumot yo\'q.') +
+      (lines.length ? lines.join('\n') : "Hozircha ma'lumot yo'q.") +
       '\n─────────────────';
 
     await ctx.reply(text, getBossKeyboard()).catch(() => {});
@@ -253,7 +270,7 @@ export class BotUpdate {
     const text =
       '🏢 Qarzdor tashkilotlar\n' +
       '─────────────────\n' +
-      (lines.length ? lines.join('\n') : 'Qarzdor tashkilot yo\'q.') +
+      (lines.length ? lines.join('\n') : "Qarzdor tashkilot yo'q.") +
       '\n─────────────────';
 
     await ctx.reply(text, getBossKeyboard()).catch(() => {});
@@ -368,9 +385,7 @@ export class BotUpdate {
 
     for (const order of orders) {
       const text = this.formatDriverOrderCard(order);
-      await ctx
-        .reply(text, getDriverDeliveredInline(order.id))
-        .catch(() => {});
+      await ctx.reply(text, getDriverDeliveredInline(order.id)).catch(() => {});
     }
   }
 
@@ -405,12 +420,18 @@ export class BotUpdate {
     const statusLabel = this.formatOrderStatus(order.status);
     return (
       '┌─────────────────────────┐\n' +
-      line(`🔧 Buyurtma #${idShort}`) + '\n' +
-      line(`👤 ${order.client_name} — ${order.client_phone}`) + '\n' +
-      line(`🚗 ${order.car_number}`) + '\n' +
-      line(`💰 ${total} so'm`) + '\n' +
-      line(`📌 ${statusLabel}`) + '\n' +
-      line(`🕐 ${dateStr}`) + '\n' +
+      line(`🔧 Buyurtma #${idShort}`) +
+      '\n' +
+      line(`👤 ${order.client_name} — ${order.client_phone}`) +
+      '\n' +
+      line(`🚗 ${order.car_number}`) +
+      '\n' +
+      line(`💰 ${total} so'm`) +
+      '\n' +
+      line(`📌 ${statusLabel}`) +
+      '\n' +
+      line(`🕐 ${dateStr}`) +
+      '\n' +
       '└─────────────────────────┘'
     );
   }
@@ -442,13 +463,7 @@ export class BotUpdate {
 
     if (edit) {
       await ctx.telegram
-        .editMessageText(
-          edit.chatId,
-          edit.messageId,
-          undefined,
-          text,
-          keyboard,
-        )
+        .editMessageText(edit.chatId, edit.messageId, undefined, text, keyboard)
         .catch(() => {});
     } else {
       await ctx.reply(text, keyboard).catch(() => {});
@@ -508,20 +523,58 @@ export class BotUpdate {
       this.formatTarixOrderLine(o, skip + i + 1),
     );
     const text =
-      '📜 So\'nggi 10 ta buyurtma:\n\n' +
-      (lines.length ? lines.join('\n\n') : '📭 Buyurtma yo\'q.');
+      "📜 So'nggi 10 ta buyurtma:\n\n" +
+      (lines.length ? lines.join('\n\n') : "📭 Buyurtma yo'q.");
 
     const keyboard = getMasterTarixPaginationInline(skip, skip > 0, hasNext);
 
     if (edit) {
       await ctx.telegram
-        .editMessageText(
-          edit.chatId,
-          edit.messageId,
-          undefined,
-          text,
-          keyboard,
-        )
+        .editMessageText(edit.chatId, edit.messageId, undefined, text, keyboard)
+        .catch(() => {});
+    } else {
+      await ctx.reply(text, keyboard).catch(() => {});
+    }
+  }
+
+  /** Build and send (or edit) driver's yetkazish tarixi list with pagination. */
+  private async sendDriverTarixList(
+    ctx: Context,
+    user: User,
+    skip: number,
+    edit?: { chatId: number; messageId: number },
+  ): Promise<void> {
+    const TAKE = 10;
+    const orders = await this.prisma.order.findMany({
+      where: {
+        driver_id: user.id,
+        status: {
+          in: [
+            OrderStatus.completed,
+            OrderStatus.cancelled,
+            OrderStatus.delivered_by_driver,
+          ],
+        },
+      },
+      orderBy: { created_at: 'desc' },
+      take: TAKE + 1,
+      skip,
+    });
+    const hasNext = orders.length > TAKE;
+    const list = orders.slice(0, TAKE);
+
+    const lines = list.map((o, i) =>
+      this.formatTarixOrderLine(o, skip + i + 1),
+    );
+    const text =
+      "📜 So'nggi 10 ta yetkazish:\n\n" +
+      (lines.length ? lines.join('\n\n') : "📭 Yetkazish yo'q.");
+
+    const keyboard = getDriverTarixPaginationInline(skip, skip > 0, hasNext);
+
+    if (edit) {
+      await ctx.telegram
+        .editMessageText(edit.chatId, edit.messageId, undefined, text, keyboard)
         .catch(() => {});
     } else {
       await ctx.reply(text, keyboard).catch(() => {});
@@ -553,14 +606,14 @@ export class BotUpdate {
         return;
       }
       if (user.role !== 'driver') {
-        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        await ctx.answerCbQuery("Ruxsat yo'q.").catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
       const match = (cb?.data ?? '').match(DRIVER_DELIVERED_CB_REGEX);
       const orderId = match?.[1];
       if (!orderId) {
-        await ctx.answerCbQuery('Noto\'g\'ri buyurtma.').catch(() => {});
+        await ctx.answerCbQuery("Noto'g'ri buyurtma.").catch(() => {});
         return;
       }
       await this.prisma.order.updateMany({
@@ -589,7 +642,7 @@ export class BotUpdate {
         return;
       }
       if (user.role !== 'master') {
-        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        await ctx.answerCbQuery("Ruxsat yo'q.").catch(() => {});
         return;
       }
       const cb = ctx.callbackQuery as { data?: string } | undefined;
@@ -610,6 +663,36 @@ export class BotUpdate {
     }
   }
 
+  @Action(DRIVER_TARIX_CB_REGEX)
+  async onDriverTarixPage(@Ctx() ctx: Context): Promise<void> {
+    try {
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
+        return;
+      }
+      if (user.role !== 'driver') {
+        await ctx.answerCbQuery("Ruxsat yo'q.").catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(DRIVER_TARIX_CB_REGEX);
+      const skip = match ? parseInt(match[1], 10) : 0;
+      const msg = ctx.callbackQuery?.message;
+      const chatId = ctx.chat?.id;
+      const messageId = msg && 'message_id' in msg ? msg.message_id : undefined;
+      if (chatId == null || messageId == null) {
+        await ctx.answerCbQuery('Xatolik.').catch(() => {});
+        return;
+      }
+      await ctx.answerCbQuery('Yuklanmoqda…').catch(() => {});
+      await this.sendDriverTarixList(ctx, user, skip, { chatId, messageId });
+    } catch (err) {
+      logBotError(BOT_ERROR_CODES.TEXT, err, ctx);
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
   @Action('master_faol_refresh')
   async onMasterFaolRefresh(@Ctx() ctx: Context): Promise<void> {
     try {
@@ -619,7 +702,7 @@ export class BotUpdate {
         return;
       }
       if (user.role !== 'master') {
-        await ctx.answerCbQuery('Ruxsat yo\'q.').catch(() => {});
+        await ctx.answerCbQuery("Ruxsat yo'q.").catch(() => {});
         return;
       }
       const msg = ctx.callbackQuery?.message;
@@ -642,7 +725,7 @@ export class BotUpdate {
     const user = await this.requireAuth(ctx);
     if (!user) return;
     if (user.role !== 'boss') {
-      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      await ctx.reply("Ruxsat yo'q.").catch(() => {});
       return;
     }
     await this.sendBossTodayReport(ctx);
@@ -653,7 +736,7 @@ export class BotUpdate {
     const user = await this.requireAuth(ctx);
     if (!user) return;
     if (user.role !== 'boss') {
-      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      await ctx.reply("Ruxsat yo'q.").catch(() => {});
       return;
     }
     await this.sendBossWeekReport(ctx);
@@ -664,7 +747,7 @@ export class BotUpdate {
     const user = await this.requireAuth(ctx);
     if (!user) return;
     if (user.role !== 'boss') {
-      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      await ctx.reply("Ruxsat yo'q.").catch(() => {});
       return;
     }
     await this.sendBossStaffReport(ctx);
@@ -675,7 +758,7 @@ export class BotUpdate {
     const user = await this.requireAuth(ctx);
     if (!user) return;
     if (user.role !== 'boss') {
-      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      await ctx.reply("Ruxsat yo'q.").catch(() => {});
       return;
     }
     await this.sendBossDebtsReport(ctx);
@@ -686,7 +769,7 @@ export class BotUpdate {
     const user = await this.requireAuth(ctx);
     if (!user) return;
     if (user.role !== 'boss') {
-      await ctx.reply('Ruxsat yo\'q.').catch(() => {});
+      await ctx.reply("Ruxsat yo'q.").catch(() => {});
       return;
     }
     await this.sendBossLowstockReport(ctx);
@@ -742,9 +825,7 @@ export class BotUpdate {
       });
     }
     await ctx
-      .reply(
-        '👋 Siz tizimdan chiqdingiz.\n\nQayta kirish uchun /start bosing.',
-      )
+      .reply('👋 Siz tizimdan chiqdingiz.\n\nQayta kirish uchun /start bosing.')
       .catch(() => {});
   }
 
@@ -916,9 +997,7 @@ export class BotUpdate {
           this.normalizeButtonText(text) === '📜 Yetkazish tarixi' ||
           this.normalizeButtonText(text) === 'Yetkazish tarixi'
         ) {
-          await ctx
-            .reply('📜 Yetkazish tarixi (tez orada).', getDriverKeyboard())
-            .catch(() => {});
+          await this.sendDriverTarixList(ctx, user, 0);
           return;
         }
       }
@@ -942,7 +1021,10 @@ export class BotUpdate {
           await this.sendBossDebtsReport(ctx);
           return;
         }
-        if (n === '📦 Kam qolgan mahsulotlar' || n === 'Kam qolgan mahsulotlar') {
+        if (
+          n === '📦 Kam qolgan mahsulotlar' ||
+          n === 'Kam qolgan mahsulotlar'
+        ) {
           await this.sendBossLowstockReport(ctx);
           return;
         }
@@ -1038,12 +1120,7 @@ export class BotUpdate {
         order.delivery_needed,
       );
       const totalFormatted = total.toLocaleString('uz-UZ');
-      const keyboard = Markup.inlineKeyboard([
-        [
-          Markup.button.callback('✅ Tasdiqlash', `confirm_order_${orderId}`),
-          Markup.button.callback('❌ Bekor qilish', `cancel_order_${orderId}`),
-        ],
-      ]);
+      const keyboard = getConfirmOrderInline(orderId);
 
       await ctx
         .reply(
@@ -1150,6 +1227,125 @@ export class BotUpdate {
       await ctx
         .answerCbQuery(userMessageWithCode(BOT_ERROR_CODES.CANCEL_ORDER))
         .catch(() => {});
+    }
+  }
+
+  @Action(ADD_MANUAL_SERVICE_CB_REGEX)
+  async onAddManualService(@Ctx() ctx: Context): Promise<void> {
+    const telegramId = ctx.from?.id;
+    if (telegramId == null) return;
+    try {
+      const user = await this.requireAuth(ctx);
+      if (!user) {
+        await ctx.answerCbQuery('Avval kirish (/start).').catch(() => {});
+        return;
+      }
+      const cb = ctx.callbackQuery as { data?: string } | undefined;
+      const match = (cb?.data ?? '').match(ADD_MANUAL_SERVICE_CB_REGEX);
+      const orderId = match?.[1];
+      if (!orderId) {
+        await ctx.answerCbQuery('Noto‘g‘ri buyurtma.').catch(() => {});
+        return;
+      }
+      const msg = ctx.callbackQuery?.message;
+      const chatId =
+        msg && 'chat' in msg && msg.chat && 'id' in msg.chat
+          ? (msg.chat as { id: number }).id
+          : null;
+      const messageId =
+        msg && 'message_id' in msg
+          ? (msg as { message_id: number }).message_id
+          : null;
+      if (chatId == null || messageId == null) {
+        await ctx
+          .answerCbQuery("Xatolik: xabar ma'lumotlari topilmadi.")
+          .catch(() => {});
+        return;
+      }
+      pendingManualServiceByTgId.set(telegramId, {
+        orderId,
+        chatId,
+        messageId,
+        step: 'name',
+      });
+      await ctx.answerCbQuery("Qo'lda xizmat qo'shish").catch(() => {});
+      await ctx.reply('✏️ Xizmat nomini yuboring:').catch(() => {});
+    } catch (err) {
+      if (
+        err instanceof NotFoundException ||
+        err instanceof ForbiddenException ||
+        err instanceof BadRequestException
+      ) {
+        const msg = err instanceof Error ? err.message : 'Xatolik.';
+        await ctx.answerCbQuery(msg, { show_alert: true }).catch(() => {});
+        return;
+      }
+      await ctx.answerCbQuery('Xatolik yuz berdi.').catch(() => {});
+    }
+  }
+
+  @On('text')
+  async onTextForManualService(@Ctx() ctx: Context): Promise<void> {
+    const telegramId = ctx.from?.id;
+    if (telegramId == null) return;
+    const state = pendingManualServiceByTgId.get(telegramId);
+    if (!state) return;
+    const text =
+      ctx.message && 'text' in ctx.message
+        ? (ctx.message as { text: string }).text?.trim()
+        : '';
+    if (state.step === 'name') {
+      if (!text) {
+        await ctx.reply('Iltimos, xizmat nomini yozing.').catch(() => {});
+        return;
+      }
+      state.name = text.slice(0, 255);
+      state.step = 'price';
+      pendingManualServiceByTgId.set(telegramId, state);
+      await ctx.reply("Narx (so'm) kiriting:").catch(() => {});
+      return;
+    }
+    if (state.step === 'price') {
+      const num = parseFloat(text.replace(/\s/g, '').replace(',', '.'));
+      if (!Number.isFinite(num) || num < 0) {
+        await ctx
+          .reply("Noto'g'ri summa. Iltimos, raqam kiriting (masalan: 150000).")
+          .catch(() => {});
+        return;
+      }
+      pendingManualServiceByTgId.delete(telegramId);
+      try {
+        const user = await this.requireAuth(ctx);
+        if (!user) {
+          await ctx.reply('Avval kirish (/start).').catch(() => {});
+          return;
+        }
+        const order = await this.ordersService.addManualProductToOrder(
+          state.orderId,
+          user.id,
+          { name: state.name ?? 'Xizmat', price: num },
+        );
+        const totalFormatted = Number(order.total_amount).toLocaleString(
+          'uz-UZ',
+        );
+        const keyboard = getConfirmOrderInline(state.orderId);
+        await ctx.telegram
+          .editMessageText(
+            state.chatId,
+            state.messageId,
+            undefined,
+            `📝 Buyurtma ma'lumotlari qabul qilindi.\n\n➕ Qo'lda xizmat qo'shildi: ${state.name} — ${num.toLocaleString('uz-UZ')} so'm\n\n💰 Jami summa: ${totalFormatted} so'm\n\nTasdiqlaysizmi?`,
+            { reply_markup: keyboard.reply_markup },
+          )
+          .catch(() => {});
+        await ctx
+          .reply(`✅ Qo'shildi. Jami: ${totalFormatted} so'm`)
+          .catch(() => {});
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Xizmat qo'shib bo'lmadi.";
+        await ctx.reply(`❌ ${msg}`).catch(() => {});
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -15,6 +16,10 @@ export class AdminCreateProductDto {
   @IsNotEmpty()
   @MaxLength(255)
   name: string;
+
+  @IsOptional()
+  @IsUUID()
+  supplier_id?: string;
 
   @IsNumber()
   @IsPositive()

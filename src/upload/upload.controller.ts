@@ -17,7 +17,6 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 type FileFilterCallback = (error: Error | null, acceptFile: boolean) => void;
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- MulterOptions.fileFilter from @nestjs/platform-express has unresolved types */
 export const multerCarPhotoOptions: MulterOptions = {
   storage: memoryStorage(),
   limits: { fileSize: MAX_SIZE },
@@ -34,7 +33,6 @@ export const multerCarPhotoOptions: MulterOptions = {
     void cb(null, true);
   },
 };
-/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call */
 
 @Controller('api')
 @Public()

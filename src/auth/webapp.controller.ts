@@ -62,15 +62,11 @@ export class WebappController {
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
   ) {
-    const limitNum = Math.min(
-      20,
-      Math.max(1, parseInt(limit ?? '5', 10) || 5),
-    );
+    const limitNum = Math.min(20, Math.max(1, parseInt(limit ?? '5', 10) || 5));
     const items = await this.webappService.searchServices({
       search: search ?? undefined,
       limit: limitNum,
-      sortBy:
-        sortBy === 'usage' ? 'usage' : undefined,
+      sortBy: sortBy === 'usage' ? 'usage' : undefined,
     });
     return { items };
   }
@@ -83,15 +79,11 @@ export class WebappController {
     @Query('limit') limit?: string,
     @Query('sortBy') sortBy?: string,
   ) {
-    const limitNum = Math.min(
-      20,
-      Math.max(1, parseInt(limit ?? '5', 10) || 5),
-    );
+    const limitNum = Math.min(20, Math.max(1, parseInt(limit ?? '5', 10) || 5));
     const items = await this.webappService.searchProducts({
       search: search ?? undefined,
       limit: limitNum,
-      sortBy:
-        sortBy === 'usage' ? 'usage' : undefined,
+      sortBy: sortBy === 'usage' ? 'usage' : undefined,
     });
     return { items };
   }

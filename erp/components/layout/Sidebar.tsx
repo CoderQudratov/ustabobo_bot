@@ -14,6 +14,7 @@ import {
   Car,
   UserSearch,
   LogOut,
+  Truck,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const MENU_GROUPS = [
     items: [
       { href: '/orders', label: 'Buyurtmalar', icon: ClipboardList },
       { href: '/organizations', label: 'Tashkilotlar', icon: Building2 },
+      { href: '/masters', label: 'Ustalar', icon: Wrench },
       { href: '/users', label: 'Xodimlar', icon: Users },
     ],
   },
@@ -38,6 +40,7 @@ const MENU_GROUPS = [
     items: [
       { href: '/services', label: 'Xizmatlar', icon: Wrench },
       { href: '/products', label: 'Ombor (Zapchast)', icon: Package },
+      { href: '/suppliers', label: 'Taminotchilar', icon: Truck },
     ],
   },
   {

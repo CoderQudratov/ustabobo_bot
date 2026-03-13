@@ -2,7 +2,6 @@
 
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { apiPost, apiPatch } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';

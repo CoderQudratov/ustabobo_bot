@@ -2,15 +2,24 @@
 
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
-import { apiPost, apiPatch } from '@/lib/api';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { getErrorMessage } from '@/lib/errors';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { CreateProductSchema, type CreateProductInput } from '@/lib/schemas/product';
+
+type Supplier = { id: string; fullname: string };
 
 type Product = {
   id: string;
@@ -19,6 +28,7 @@ type Product = {
   sale_price: string;
   stock_count: number;
   min_limit: number;
+  supplier_id?: string | null;
 };
 
 type FormData = CreateProductInput;
@@ -32,6 +42,13 @@ export function ProductFormDialog({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
+  const { data: suppliersRes } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: () =>
+      apiGet<{ items: Supplier[] }>('/admin/suppliers?page=1&limit=200'),
+  });
+  const suppliers = suppliersRes?.items ?? [];
+
   const form = useForm<FormData>({
     resolver: zodResolver(CreateProductSchema) as Resolver<FormData>,
     defaultValues: product
@@ -41,17 +58,26 @@ export function ProductFormDialog({
           sale_price: Number(product.sale_price),
           stock_count: product.stock_count,
           min_limit: product.min_limit,
+          supplier_id: product.supplier_id ?? undefined,
         }
       : { name: '', cost_price: 0, sale_price: 0, stock_count: 0, min_limit: 0 },
   });
   const isEdit = !!product;
   const createMu = useMutation({
-    mutationFn: (d: FormData) => apiPost('/admin/products', d),
+    mutationFn: (d: FormData) =>
+      apiPost('/admin/products', {
+        ...d,
+        supplier_id: d.supplier_id && d.supplier_id !== '__none__' ? d.supplier_id : undefined,
+      }),
     onSuccess,
     onError: (e) => toast.error(getErrorMessage(e)),
   });
   const updateMu = useMutation({
-    mutationFn: (d: FormData) => apiPatch(`/admin/products/${product!.id}`, d),
+    mutationFn: (d: FormData) =>
+      apiPatch(`/admin/products/${product!.id}`, {
+        ...d,
+        supplier_id: d.supplier_id && d.supplier_id !== '__none__' ? d.supplier_id : undefined,
+      }),
     onSuccess,
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -67,6 +93,27 @@ export function ProductFormDialog({
             <Label>Nomi</Label>
             <Input {...form.register('name')} />
             {form.formState.errors.name && <p className="text-destructive text-sm">{form.formState.errors.name.message}</p>}
+          </div>
+          <div>
+            <Label>Taminotchi</Label>
+            <Select
+              value={form.watch('supplier_id') ?? '__none__'}
+              onValueChange={(v) =>
+                form.setValue('supplier_id', v === '__none__' ? undefined : v)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Taminotchini tanlang" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Tanlanmagan</SelectItem>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.fullname}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Kelgan narx</Label>

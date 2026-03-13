@@ -55,10 +55,14 @@ async function bootstrap() {
   if (erpOrigin && !corsOrigins.includes(erpOrigin)) {
     corsOrigins.push(erpOrigin);
   }
-  const allowOrigin = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  const allowOrigin = (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
     if (!origin) return callback(null, true);
     if (corsOrigins.includes(origin)) return callback(null, true);
-    if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app')) return callback(null, true);
+    if (origin.endsWith('.vercel.app') || origin.endsWith('.netlify.app'))
+      return callback(null, true);
     callback(null, false);
   };
   app.enableCors({

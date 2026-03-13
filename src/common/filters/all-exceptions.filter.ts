@@ -57,7 +57,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message = message || 'Tizimga kiring';
         }
         if (status === 403) {
-          message = message || 'Ruxsat yo\'q. Tizimga qayta kiring.';
+          message = message || "Ruxsat yo'q. Tizimga qayta kiring.";
         }
         if (b.details && typeof b.details === 'object') {
           details = b.details as Record<string, unknown>;

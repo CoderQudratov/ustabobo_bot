@@ -39,6 +39,8 @@ type Product = {
   stock_count: number;
   min_limit: number;
   is_low_stock?: boolean;
+  supplier_id?: string | null;
+  supplier?: { id: string; fullname: string } | null;
 };
 type ProductsRes = {
   items: Product[];
@@ -175,6 +177,7 @@ export default function ProductsPage() {
                     <thead>
                       <tr className="border-b border-[var(--border)] bg-[var(--bg-2)]">
                         <th className="p-3 text-left">Nomi</th>
+                        <th className="p-3 text-left">Taminotchi</th>
                         <th className="p-3 text-right">Kelgan narx</th>
                         <th className="p-3 text-right">Sotish narx</th>
                         <th className="p-3 text-right">Mavjud soni</th>
@@ -187,6 +190,9 @@ export default function ProductsPage() {
                       {items.map((p) => (
                         <tr key={p.id} className="border-b border-[var(--border)]">
                           <td className="p-3">{p.name}</td>
+                          <td className="p-3 text-[var(--text-2)]">
+                            {p.supplier?.fullname ?? '—'}
+                          </td>
                           <td className="p-3 text-right">
                             {Number(p.cost_price).toLocaleString('uz-UZ')}
                           </td>
@@ -305,8 +311,10 @@ export default function ProductsPage() {
       )}
       {stockInProduct && (
         <StockInDialog
+          key={stockInProduct.id}
           productId={stockInProduct.id}
           productName={stockInProduct.name}
+          defaultSupplierId={stockInProduct.supplier_id ?? stockInProduct.supplier?.id}
           onSuccess={() => {
             setStockInProduct(null);
             invalidate();

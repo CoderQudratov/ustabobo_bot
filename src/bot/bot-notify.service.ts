@@ -3,7 +3,7 @@ import { InjectBot } from 'nestjs-telegraf';
 import { Markup } from 'telegraf';
 import type { Telegraf } from 'telegraf';
 import { PrismaService } from '../prisma/prisma.service';
-import { getMasterOrderInlineButton } from './keyboards';
+import { getMasterOrderInlineButton, getConfirmOrderInline } from './keyboards';
 
 /** Order shape needed for post-draft notification (from createDraft result). */
 export interface DraftOrderForNotify {
@@ -37,12 +37,7 @@ export class BotNotifyService {
       return;
     }
 
-    const confirmKeyboard = Markup.inlineKeyboard([
-      [
-        Markup.button.callback('✅ Tasdiqlash', `confirm_order_${order.id}`),
-        Markup.button.callback('❌ Bekor qilish', `cancel_order_${order.id}`),
-      ],
-    ]);
+    const confirmKeyboard = getConfirmOrderInline(order.id);
 
     if (order.delivery_needed) {
       await this.bot.telegram.sendMessage(

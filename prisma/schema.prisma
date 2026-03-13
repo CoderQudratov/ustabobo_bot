@@ -61,12 +61,13 @@ model Tenant {
   plan_expires DateTime? @db.Timestamptz(6)
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
 
-  users         User[]
-  orders        Order[]
-  organizations Organization[]
-  vehicles      Vehicle[]
-  services      Service[]
-  products      Product[]
+  users             User[]
+  orders            Order[]
+  organizations     Organization[]
+  vehicles          Vehicle[]
+  services          Service[]
+  products          Product[]
+  suppliers         Supplier[]
 }
 
 model User {
@@ -95,6 +96,7 @@ model User {
   orderEvents        OrderEvent[]
   transactions       Transaction[]
   productPriceHistories ProductPriceHistory[]
+  auditLogs          AuditLog[]
 }
 
 model Transaction {
@@ -143,6 +145,50 @@ model Vehicle {
   orders       Order[]
 }
 
+model Supplier {
+  id           String   @id @default(uuid()) @db.Uuid
+  fullname     String
+  phone        String?
+  bank_account String?
+  note         String?
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  tenant_id    String?  @db.Uuid
+
+  tenant    Tenant?           @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
+  products  Product[]         @relation("ProductSupplier")
+  purchases SupplierPurchase[]
+  payments  SupplierPayment[]
+}
+
+model SupplierPurchase {
+  id          String   @id @default(uuid()) @db.Uuid
+  supplier_id String   @db.Uuid
+  product_id  String   @db.Uuid
+  quantity    Int
+  unit_cost   Decimal  @db.Decimal(12, 2)
+  total       Decimal  @db.Decimal(12, 2)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  supplier Supplier @relation(fields: [supplier_id], references: [id], onDelete: Restrict)
+  product  Product  @relation(fields: [product_id], references: [id], onDelete: Restrict)
+
+  @@index([supplier_id])
+  @@index([product_id])
+}
+
+model SupplierPayment {
+  id          String   @id @default(uuid()) @db.Uuid
+  supplier_id String   @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  note        String?
+
+  supplier Supplier @relation(fields: [supplier_id], references: [id], onDelete: Restrict)
+
+  @@index([supplier_id])
+}
+
 model Product {
   id          String   @id @default(uuid()) @db.Uuid
   name        String
@@ -153,10 +199,15 @@ model Product {
   is_active   Boolean  @default(true)
   created_at  DateTime @default(now())
   tenant_id   String?  @db.Uuid
+  supplier_id String?  @db.Uuid
 
-  tenant        Tenant? @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
-  orderItems    OrderItem[]
+  tenant         Tenant?              @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
+  supplier       Supplier?           @relation("ProductSupplier", fields: [supplier_id], references: [id], onDelete: SetNull)
+  orderItems     OrderItem[]
   priceHistories ProductPriceHistory[]
+  supplierPurchases SupplierPurchase[]
+
+  @@index([supplier_id])
 }
 
 model ProductPriceHistory {
@@ -239,4 +290,19 @@ model OrderEvent {
 
   order  Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
   actor  User? @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String?  @db.Uuid
+  action     String
+  entity     String
+  entity_id  String?  @db.Uuid
+  meta       Json?
+  created_at DateTime @default(now())
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([entity, entity_id])
 }

@@ -144,7 +144,9 @@ export class AuthScene {
           (new Date(user.locked_until).getTime() - Date.now()) / 60_000,
         );
         await ctx
-          .reply(`🚫 30 daqiqa bloklandi. ${mins} daqiqa keyin qayta urinib ko'ring.`)
+          .reply(
+            `🚫 30 daqiqa bloklandi. ${mins} daqiqa keyin qayta urinib ko'ring.`,
+          )
           .catch(() => {});
         await (ctx.scene?.reenter() ?? Promise.resolve()).catch(() => {});
         return;

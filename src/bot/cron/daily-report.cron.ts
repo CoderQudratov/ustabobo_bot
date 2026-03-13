@@ -82,7 +82,10 @@ export class DailyReportCronService implements OnModuleInit {
           services: o.orderItems
             .map(
               (item) =>
-                item.service?.name ?? item.product?.name ?? item.item_name ?? '',
+                item.service?.name ??
+                item.product?.name ??
+                item.item_name ??
+                '',
             )
             .filter(Boolean)
             .join(', '),
@@ -91,7 +94,10 @@ export class DailyReportCronService implements OnModuleInit {
         });
       });
 
-      const totalAmount = orders.reduce((s, o) => s + Number(o.total_amount), 0);
+      const totalAmount = orders.reduce(
+        (s, o) => s + Number(o.total_amount),
+        0,
+      );
       const totalRow = sheet.addRow({
         num: '',
         date: '',

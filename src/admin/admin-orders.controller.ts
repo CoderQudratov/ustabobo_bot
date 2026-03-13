@@ -17,6 +17,7 @@ import { Role } from '../../generated/prisma/client';
 import { AdminService } from './admin.service';
 import { AdminOrdersQueryDto } from './dto/orders-query.dto';
 import { AdminCreateOrderDto } from './dto/create-order.dto';
+import { AdminUpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import type { AdminRequestUser } from './admin.service';
 
@@ -27,7 +28,10 @@ export class AdminOrdersController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get()
-  list(@Query() query: AdminOrdersQueryDto, @Req() req: Request & { user: AdminRequestUser }) {
+  list(
+    @Query() query: AdminOrdersQueryDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     return this.adminService.getOrders(
@@ -46,13 +50,36 @@ export class AdminOrdersController {
   }
 
   @Post()
-  create(@Body() dto: AdminCreateOrderDto, @Req() req: Request & { user: AdminRequestUser }) {
+  create(
+    @Body() dto: AdminCreateOrderDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.createOrder(dto, req.user);
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+  getOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.getOrderById(id, req.user);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: AdminUpdateOrderDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    return this.adminService.updateOrder(id, dto, req.user);
+  }
+
+  @Post(':id/recalculate-fees')
+  recalculateFees(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
+    return this.adminService.recalculateOrderFees(id, req.user);
   }
 
   @Patch(':id/status')

@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class AdminStockInDto {
   @IsNumber()
@@ -9,6 +9,11 @@ export class AdminStockInDto {
   @IsNumber()
   @Min(0)
   price_per_unit?: number;
+
+  /** Taminotchi (postavchik) – berilsa qarz hisobga yoziladi */
+  @IsOptional()
+  @IsUUID()
+  supplier_id?: string;
 
   @IsOptional()
   @IsString()

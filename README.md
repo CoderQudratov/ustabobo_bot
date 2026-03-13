@@ -25,6 +25,33 @@
 
 Ko'chma avtoservis buyurtmalari tizimi: NestJS backend, Telegram Bot (Telegraf), Next.js WebApp (Mini App). Batafsil: [TZ.md](TZ.md), [RUN.md](RUN.md).
 
+### Docker orqali ishga tushirish (backend + ERP)
+
+Backend va ERP uchun Dockerfile'lar mavjud:
+
+- `Dockerfile.backend` — NestJS API (`PORT=10000`)
+- `erp/Dockerfile` — ERP Next.js ilovasi (`PORT=3001`)
+
+`docker-compose.yml` quyidagi servislarni ishga tushiradi:
+
+- `postgres` — asosiy baza (`avtopro_db`)
+- `redis` — BullMQ navbatlari uchun
+- `backend` — NestJS API (`/health` endpoint bilan healthcheck)
+- `erp` — ERP boshqaruv paneli
+
+Ishga tushirish:
+
+```bash
+docker compose up --build -d
+```
+
+Shundan so'ng:
+
+- Backend API: `http://localhost:10000`
+- ERP: `http://localhost:3001`
+
+`.env` va `erp/.env` fayllarida production konfiguratsiyalarni (DB, JWT, TELEGRAM, ERP_URL, API_URL va hokazo) to‘g‘ri to‘ldirish zarur.
+
 ### Telegram Mini App — xavfsizlik (Security)
 
 - **Yagona ishonch manbai:** server faqat **Telegram WebApp initData** ni tekshiradi (HMAC-SHA256, [rasmiy hujjat](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app)). URL da `tg_id` yoki `role` ishonchsiz — ular hech qachon ishlatilmaydi.

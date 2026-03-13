@@ -28,7 +28,10 @@ export class AdminProductsController {
   constructor(private readonly adminService: AdminService) {}
 
   @Post()
-  create(@Body() dto: AdminCreateProductDto, @Req() req: Request & { user: AdminRequestUser }) {
+  create(
+    @Body() dto: AdminCreateProductDto,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.createProduct(dto, req.user);
   }
 
@@ -53,7 +56,12 @@ export class AdminProductsController {
   ) {
     const p = page != null ? Number(page) : 1;
     const l = limit != null ? Number(limit) : 50;
-    return this.adminService.getProducts(p, l, { sortBy, sortOrder }, req?.user);
+    return this.adminService.getProducts(
+      p,
+      l,
+      { sortBy, sortOrder },
+      req?.user,
+    );
   }
 
   @Get(':id/price-history')
@@ -91,7 +99,10 @@ export class AdminProductsController {
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string, @Req() req: Request & { user: AdminRequestUser }) {
+  delete(
+    @Param('id') id: string,
+    @Req() req: Request & { user: AdminRequestUser },
+  ) {
     return this.adminService.deleteProduct(id, req.user);
   }
 }
