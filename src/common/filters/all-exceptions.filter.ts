@@ -14,10 +14,12 @@ import {
 } from '../dto/error-response.dto';
 
 const REQUEST_ID_HEADER = 'x-request-id';
+const FALLBACK_REQUEST_ID = 'telegram-bot';
 
-function getRequestId(request: Request): string {
-  const id = request.headers[REQUEST_ID_HEADER];
+function getRequestId(request: Request | undefined): string {
+  const id = request?.headers?.[REQUEST_ID_HEADER];
   if (typeof id === 'string' && id.trim()) return id.trim();
+  if (!request?.headers) return FALLBACK_REQUEST_ID;
   return crypto.randomUUID();
 }
 
