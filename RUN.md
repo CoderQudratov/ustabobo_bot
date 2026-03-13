@@ -143,6 +143,8 @@ Agar build da `prisma migrate deploy` ishlatmasangiz, production DB da jadvalar 
 
 **Redis eviction:** Agar Render/Redis “Eviction policy is volatile-lru” deyilsa, Redis sozlamalarida `maxmemory-policy noeviction` qilib qo‘ying (agar xizmat ruxsat bersa). BullMQ noeviction tavsiya qiladi. **Render.com:** Redis xizmati bo‘lsa, Dashboard → Redis → Settings/Config da `maxmemory-policy noeviction` va `maxmemory 512mb` (yoki kerakli limit) qo‘ying; aks holda cache eviction tufayli ma’lumot yo‘qolishi mumkin. Lokal Docker: `docker-compose.yml` da Redis allaqachon `noeviction` va `maxmemory 512mb` bilan sozlangan.
 
+**BullMQ "Eviction policy is volatile-lru" ogohlantirishini olib tashlash:** Loyiha ildizida: `chmod +x scripts/redis-set-noeviction.sh && ./scripts/redis-set-noeviction.sh`. Remote Redis uchun: `REDIS_URL=redis://... ./scripts/redis-set-noeviction.sh` yoki `REDIS_HOST=... REDIS_PORT=6379 REDIS_PASSWORD=... ./scripts/redis-set-noeviction.sh`. Qo'lda: `redis-cli CONFIG SET maxmemory-policy noeviction`.
+
 **Netlify (WebApp):** Build-time env: `NEXT_PUBLIC_API_URL=https://ustabobo-backend.onrender.com` (backend manzili). Parollarni hech qachon kodga yozmang.
 
 **Seed (ixtiyoriy):** Production DB bo‘sh bo‘lsa, bir marta seed qilish: Render shell yoki lokalda `DATABASE_URL` ni production ga qo‘yib `npx prisma db seed` ishlating.
