@@ -17,10 +17,14 @@ const REQUEST_ID_HEADER = 'x-request-id';
 const FALLBACK_REQUEST_ID = 'telegram-bot';
 
 function getRequestId(request: Request | undefined): string {
-  const id = request?.headers?.[REQUEST_ID_HEADER];
-  if (typeof id === 'string' && id.trim()) return id.trim();
-  if (!request?.headers) return FALLBACK_REQUEST_ID;
-  return crypto.randomUUID();
+  try {
+    const id = request?.headers?.[REQUEST_ID_HEADER];
+    if (typeof id === 'string' && id.trim()) return id.trim();
+    if (!request?.headers) return FALLBACK_REQUEST_ID;
+    return crypto.randomUUID();
+  } catch {
+    return FALLBACK_REQUEST_ID;
+  }
 }
 
 @Catch()
@@ -29,9 +33,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
-    const ctx = host.switchToHttp();
-    const request = ctx.getRequest<Request>();
-    const requestId = getRequestId(request);
+    let requestId = FALLBACK_REQUEST_ID;
+    let ctx: ReturnType<ArgumentsHost['switchToHttp']>;
+    try {
+      ctx = host.switchToHttp();
+      const request = ctx.getRequest<Request>();
+      requestId = getRequestId(request);
+    } catch {
+      ctx = null as unknown as ReturnType<ArgumentsHost['switchToHttp']>;
+    }
 
     const isHttpException = exception instanceof HttpException;
     const status = isHttpException
@@ -97,6 +107,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details,
     );
 
-    httpAdapter.reply(ctx.getResponse(), responseBody, status);
+    if (ctx) {
+      try {
+        const response = ctx.getResponse();
+        const isExpressResponse =
+          response &&
+          typeof (response as { status?: unknown }).status === 'function' &&
+          typeof (response as { header?: unknown }).header === 'function';
+        if (isExpressResponse) {
+          httpAdapter.reply(response, responseBody, status);
+        }
+      } catch {
+        // Not an HTTP context (e.g. Telegram bot), response already sent or invalid
+      }
+    }
   }
 }
