@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { getRedisConnectionOptions } from './config/configuration';
 import { AppController } from './app.controller';
@@ -16,6 +16,7 @@ import { UploadModule } from './upload/upload.module';
 import { AdminModule } from './admin/admin.module';
 import { DebugModule } from './debug/debug.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { HttpThrottlerGuard } from './common/guards/http-throttler.guard';
 
 const imports = [
   BullModule.forRoot({
@@ -54,7 +55,7 @@ if (process.env.NODE_ENV !== 'production') {
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: HttpThrottlerGuard },
   ],
 })
 export class AppModule {}
